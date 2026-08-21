@@ -1,0 +1,29 @@
+sequenceDiagram
+    participant CLI as CLI
+    participant Browser as Browser
+    participant GW as Auth Gateway
+    participant Store as authorize-store
+    participant SS as sessions
+
+    CLI->>CLI: generateVerifier() + state
+    CLI->>Browser: open /authorize?challenge=CHALLENGE&state=S
+    Browser->>GW: GET /authorize
+    GW->>GW: validate params (loopback, S256)
+    GW-->>Browser: HTML form (email)
+    Browser->>GW: POST /authorize (email)
+    GW->>Store: createAuthorizationCode()
+    Store-->>GW: code = UUID
+    GW-->>Browser: 302 redirect (code + state)
+    Browser-->>CLI: callback (code + state)
+    CLI->>CLI: verify state
+    CLI->>GW: POST /token (code + verifier)
+    GW->>Store: consumeAuthorizationCode(code)
+    Store-->>GW: PendingAuthorization
+    GW->>GW: SHA256(verifier) == codeChallenge?
+    alt valid
+        GW->>SS: createSession(user)
+        SS-->>GW: { token, expiresIn }
+        GW-->>CLI: { approved: true, token }
+    else invalid
+        GW-->>CLI: { approved: false }
+    end

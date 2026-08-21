@@ -1,0 +1,73 @@
+import { test, expect } from 'bun:test';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { brand, patRegex, homePath, env, envName } from './brand.js';
+import { toolDefinitions } from './tools/index.js';
+import {
+  CREDENTIALS_DIR,
+  CREDENTIALS_FILE,
+  PROJECT_CONFIG_FILE,
+  TOKEN_EXCHANGE_URL,
+} from './constants.js';
+
+// Trava os defaults: mudar qualquer um destes é um rebrand consciente, não um acidente.
+test('defaults da marca reproduzem os valores atuais (NIO)', () => {
+  expect(brand.name).toBe('nio');
+  expect(brand.mcpBinName).toBe('nio-cli');
+  expect(brand.mcpServerKey).toBe('nio');
+  expect(brand.projectConfigFile).toBe('nio.json');
+  expect(brand.homeDirName).toBe('.nio');
+  expect(brand.envPrefix).toBe('NIO');
+  expect(brand.patPrefix).toBe('nio_');
+  expect(brand.toolPrefix).toBe('nos_');
+  expect(brand.cliToolPrefix).toBe('nio_');
+});
+
+// Um prefixo com espaço/maiúscula gera nome de tool que os clientes MCP rejeitam —
+// e a falha só apareceria em runtime, com a tool sumindo silenciosamente.
+test('prefixos de tool têm formato aceito pelo MCP', () => {
+  for (const p of [brand.toolPrefix, brand.cliToolPrefix]) {
+    expect(p).toMatch(/^[a-z][a-z0-9]*_$/);
+  }
+});
+
+test('as 20 tools continuam registradas com os nomes de sempre', () => {
+  const names = toolDefinitions.map((t) => t.name).sort();
+  expect(names).toHaveLength(20);
+  // Amostra âncora das duas famílias + garante que nenhum nome saiu torto.
+  expect(names).toContain('nos_list_tasks');
+  expect(names).toContain('nos_set_project');
+  expect(names).toContain('nio_plan');
+  expect(names).toContain('nio_delegate_exec');
+  for (const n of names) {
+    expect(n).toMatch(/^(nos_|nio_)[a-z_]+$/);
+    expect(n).not.toContain('__');
+  }
+});
+
+test('constants derivados batem com os caminhos atuais', () => {
+  expect(CREDENTIALS_DIR).toBe(join(homedir(), '.nio'));
+  expect(CREDENTIALS_FILE).toBe(join(homedir(), '.nio', 'credentials.json'));
+  expect(PROJECT_CONFIG_FILE).toBe('nio.json');
+  expect(TOKEN_EXCHANGE_URL).toBe(
+    'https://wdshvtlsjoegjvmpqobx.supabase.co/functions/v1/mcp-token-exchange',
+  );
+});
+
+test('patRegex aceita o formato NIO e rejeita o resto', () => {
+  expect(patRegex.test('nio_' + 'a'.repeat(64))).toBe(true);
+  expect(patRegex.test('nio_' + 'A'.repeat(64))).toBe(false); // só hex minúsculo
+  expect(patRegex.test('nio_abc')).toBe(false);
+  expect(patRegex.test('xxx_' + 'a'.repeat(64))).toBe(false);
+  expect(patRegex.test('noc_' + 'a'.repeat(64))).toBe(false); // prefixo antigo não é mais aceito
+});
+
+test('helpers de env e path compõem com o prefixo', () => {
+  expect(envName('CLIENT')).toBe('NIO_CLIENT');
+  expect(homePath('skills')).toBe(join(homedir(), '.nio', 'skills'));
+
+  process.env.NIO_CLIENT = 'cowork';
+  expect(env('CLIENT')).toBe('cowork');
+  delete process.env.NIO_CLIENT;
+  expect(env('CLIENT')).toBeUndefined();
+});

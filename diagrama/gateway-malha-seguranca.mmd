@@ -1,0 +1,78 @@
+flowchart TB
+    subgraph CLI_LAYER["CLI - src/"]
+        AUTH_TS["src/auth.ts<br/>exchangePatForJwt()<br/>loadCredentials() / saveCredentials()<br/>resolveIdentity()"]
+        CONSTANTS["src/constants.ts<br/>TOKEN_EXCHANGE_URL (Supabase)<br/>CREDENTIALS_FILE"]
+        BRAND["src/brand.ts<br/>supabaseUrl, supabaseAnonKey<br/>projectConfigFile"]
+    end
+
+    subgraph MCP_SERVER["MCP Server"]
+        MCP["src/mcp-server.ts<br/>ToolContext { gateway, user, config }"]
+        SESSION_FACTORY["src/session-factory.ts<br/>createSession() → Session { user, gateway }"]
+    end
+
+    subgraph DATA_GATEWAY["Data Gateway (core/ports.ts)"]
+        GW_INTERFACE["Gateway interface<br/>extends ContextGateway<br/>extends TaskGateway<br/>extends AllocationGateway<br/>extends AnalyticsGateway"]
+    end
+
+    subgraph SUPABASE_ADAPTER["Supabase Adapter"]
+        CLIENT["adapters/supabase/client.ts<br/>createAuthenticatedClient()<br/>PAT → JWT → SupabaseClient"]
+        GW_IMPL["adapters/supabase/gateway.ts<br/>createSupabaseGateway()<br/>compõe 4 gateways de domínio"]
+        CONTEXT_GW["context-gateway.ts"]
+        TASK_GW["task-gateway.ts"]
+        ALLOC_GW["allocation-gateway.ts"]
+        ANALYTICS_GW["analytics-gateway.ts"]
+    end
+
+    subgraph AUTH_GATEWAY["Auth Gateway (OAuth2 PKCE)"]
+        GW_SERVER["src/gateway/server.ts<br/>Bun.serve() localhost:8787"]
+        GW_TYPES["types.ts"]
+        GW_PKCE["pkce.ts"]
+        GW_PAGE["authorize-page.ts"]
+        GW_STORE["authorize-store.ts"]
+        GW_SESSIONS["sessions.ts"]
+        GW_TRACE["traceability.ts"]
+    end
+
+    subgraph EDGE["Edge Filter"]
+        WORKER["workers/edge-filter/src/index.ts<br/>Cloudflare Worker<br/>traceability + proxy"]
+    end
+
+    subgraph SUPABASE["Supabase (NOS)"]
+        POSTGREST["PostgREST API<br/>tasks, projects, users,<br/>allocations, ..."]
+    end
+
+    %% Relações do CLI
+    AUTH_TS --> CONSTANTS
+    AUTH_TS --> BRAND
+    AUTH_TS -->|"PAT → jwt"| SUPABASE
+
+    %% Relações do MCP Server
+    MCP --> SESSION_FACTORY
+    SESSION_FACTORY --> CLIENT
+    SESSION_FACTORY --> GW_INTERFACE
+    CLIENT -->|"PAT login"| SUPABASE
+    GW_IMPL --> GW_INTERFACE
+    GW_IMPL --> CLIENT
+    GW_IMPL --> CONTEXT_GW
+    GW_IMPL --> TASK_GW
+    GW_IMPL --> ALLOC_GW
+    GW_IMPL --> ANALYTICS_GW
+
+    %% Auth Gateway (atual: local-only, spec 0002 pausada)
+    EDGE -->|"proxy /authorize, /token"| GW_SERVER
+    GW_SERVER --> GW_TYPES
+    GW_SERVER --> GW_PKCE
+    GW_SERVER --> GW_PAGE
+    GW_SERVER --> GW_STORE
+    GW_SERVER --> GW_SESSIONS
+    GW_SERVER --> GW_TRACE
+    AUTH_TS -.->|"futuro: TOKEN_EXCHANGE_URL<br/>aponta pro Gateway"| GW_SERVER
+
+    %% Legenda
+    classDef active fill:#2ecc71,color:#fff
+    classDef paused fill:#f39c12,color:#fff
+    classDef supabase fill:#3498db,color:#fff
+
+    class AUTH_TS,CLIENT,GW_IMPL active
+    class GW_SERVER,GW_TYPES,GW_PKCE,GW_PAGE,GW_STORE,GW_SESSIONS,GW_TRACE,WORKER paused
+    class SUPABASE,POSTGREST supabase

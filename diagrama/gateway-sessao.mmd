@@ -1,0 +1,16 @@
+flowchart LR
+    subgraph Mem["In-Memory Maps"]
+        BT["byToken: token → SessionRecord"]
+        BU["byUser: userId → token (1 active)"]
+    end
+    subgraph Fn["Functions"]
+        C["createSession(user)<br/>invalidates prior session"]
+        V["validateSession(token)<br/>null if expired/missing"]
+        R["revokeSession(token)<br/>true if revoked"]
+    end
+    subgraph TTL["Config"]
+        T["SESSION_TTL_MS = 12h"]
+    end
+    C --> BT & BU
+    V --> BT
+    R --> BT & BU

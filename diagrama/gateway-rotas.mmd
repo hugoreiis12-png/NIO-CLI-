@@ -1,0 +1,39 @@
+flowchart LR
+    subgraph Rotas["ROTAS DO AUTH GATEWAY"]
+        direction TB
+
+        subgraph Authorize["/authorize"]
+            GET_A["GET<br/>handleAuthorizeGet()"]
+            POST_A["POST<br/>handleAuthorizePost()"]
+        end
+
+        TOKEN["POST /token<br/>handleToken()"]
+        VALIDATE["POST /auth/validate<br/>handleValidate()"]
+        LOGOUT["POST /auth/logout<br/>handleLogout()"]
+    end
+
+    subgraph Validations["VALIDAÇÕES"]
+        direction TB
+        V1["response_type=code<br/>method=S256"]
+        V2["client_id, redirect_uri,<br/>code_challenge, state<br/>obrigatórios"]
+        V3["redirect_uri loopback<br/>(localhost/127.0.0.1)"]
+        V4["code + verifier +<br/>redirect_uri obrigatórios"]
+        V5["PKCE: SHA256(verifier)<br/>=== codeChallenge"]
+        V6["code uso único<br/>(já consumido)"]
+        V7["token presente?"]
+        V8["token na sessão?<br/>não expirou?"]
+    end
+
+    GET_A --> V1 --> V2 --> V3 -->|"ok"| HTML["renderAuthorizePage()<br/>HTML 200"]
+    POST_A --> V2 --> V3 -->|"ok"| CODE["createAuthorizationCode()<br/>302 redirect"]
+    TOKEN --> V4 -->|"ok"| V5 -->|"ok"| V6 -->|"code válido"| SESS["createSession()<br/>{ approved, token }"]
+    VALIDATE --> V7 -->|"ok"| V8 -->|"válida"| OK1["{ approved: true, user }"]
+    LOGOUT --> V7 -->|"ok"| REVOKE["revokeSession()<br/>{ ok: true }"]
+
+    V1 -.->|"falha"| E400["400 unsupported_response_type"]
+    V2 -.->|"falha"| E400_2["400 invalid_request"]
+    V3 -.->|"falha"| E400_3["400 invalid_request"]
+    V5 -.->|"PKCE mismatch"| E400_4["400 PKCE inválido"]
+    V6 -.->|"code inválido"| E400_5["400 code inválido/expirado"]
+    V7 -.->|"ausente"| E400_6["400 token ausente"]
+    V8 -.->|"inválida/expirada"| E401["401 não autorizado"]

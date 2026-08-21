@@ -1,0 +1,9 @@
+name = "nio-edge-filter"
+main = "src/index.ts"
+compatibility_date = "2026-07-27"
+
+# URL do Gateway core (src/gateway/ no repo principal), hospedado em algum
+# lugar acessível pela internet. Ajuste antes de `wrangler deploy` — sem
+# isto o Worker responde 502 (ver src/index.ts).
+[vars]
+GATEWAY_URL = ""

@@ -1,0 +1,68 @@
+{
+  "name": "@nio-cli/cli",
+  "version": "0.1.0",
+  "description": "MCP server e CLI pra controlar o NOS a partir de assistentes de IA como Claude Code, Codex CLI e GitHub Copilot.",
+  "type": "module",
+  "bin": {
+    "nio": "dist/cli.js",
+    "nio-cli": "dist/mcp-server.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hugoreiis12-png/NIO-CLI.git"
+  },
+  "homepage": "https://github.com/hugoreiis12-png/NIO-CLI#readme",
+  "bugs": {
+    "url": "https://github.com/hugoreiis12-png/NIO-CLI/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "codex",
+    "copilot",
+    "nio",
+    "nos"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc && node --input-type=commonjs -e \"require('fs').cpSync('src/cli/copy','dist/cli/copy',{recursive:true})\" && chmod +x dist/cli.js dist/mcp-server.js",
+    "gen:docs": "bun run scripts/gen-reference.ts",
+    "db:ping": "bun run scripts/db-ping.ts",
+    "dev:cli": "bun run src/cli.ts",
+    "dev:mcp": "bun run src/mcp-server.ts",
+    "dev:gateway": "bun run src/gateway/server.ts",
+    "gen:types": "supabase gen types typescript --project-id wdshvtlsjoegjvmpqobx > src/database.types.ts",
+    "prepublishOnly": "bun run build"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.6.0",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@node-rs/argon2": "^2.1.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "adm-zip": "^0.5.17",
+    "boxen": "^7.1.1",
+    "chalk": "^5.6.2",
+    "commander": "^12.1.0",
+    "pg": "^8.23.0",
+    "smol-toml": "^1.6.1",
+    "update-notifier": "^7.3.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.23.1",
+    "@types/update-notifier": "^6.0.8",
+    "typescript": "^5.4.5"
+  }
+}

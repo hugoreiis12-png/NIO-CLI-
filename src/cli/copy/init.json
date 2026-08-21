@@ -1,0 +1,15 @@
+{
+  "overwrite": "Já existe um nio.json aqui. Sobrescrever?",
+  "patPrompt": "Cole o seu PAT:",
+  "patInvalid": "Token inválido. Formato esperado: nio_ + 64 caracteres hexadecimais.",
+  "pickProject": "Escolha o projeto:",
+  "manualProjectChoice": "(digitar UUID manualmente)",
+  "manualProjectPrompt": "Cole o UUID do projeto:",
+  "manualProjectInvalid": "UUID inválido. Formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "linkRepo": "Vincular a um repositório?",
+  "noRepoChoice": "(nenhum — não vincular a repositório específico)",
+  "clientsPrompt": "Configurar clientes MCP? (espaço pra marcar, enter pra confirmar)",
+  "clientChoices": {
+    "opencodeGlobal": "OpenCode — pra mim, todos os projetos (~/.config/opencode/opencode.json)"
+  }
+}

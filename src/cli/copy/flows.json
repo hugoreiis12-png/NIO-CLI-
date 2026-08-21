@@ -1,0 +1,6 @@
+{
+  "installDep": "Instalar {title}?",
+  "installClient": "Instalar {label} agora?",
+  "coworkManual": "Instalar manualmente (gera o .mcpb + passos)?",
+  "disableCoAuthored": "Desligar isso globalmente? (includeCoAuthoredBy=false)"
+}

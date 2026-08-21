@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap NIO — Fluxograma</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    background: #fafafa;
+    color: #1c1917;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 14px 20px;
+    background: rgba(250,250,250,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid #e7e5e4;
+  }
+  h1 { font-size: 15px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+  .sub { font-size: 12.5px; color: #78716c; }
+  .spacer { flex: 1; }
+  button {
+    font: inherit; font-size: 12.5px;
+    padding: 6px 12px; border-radius: 7px;
+    border: 1px solid #d6d3d1; background: #fff; color: #292524;
+    cursor: pointer;
+  }
+  button:hover { background: #f5f5f4; }
+  #stage { overflow: hidden; cursor: grab; height: calc(100vh - 57px); }
+  #stage.dragging { cursor: grabbing; }
+  #pan { transform-origin: 0 0; }
+  #pan svg { max-width: none !important; height: auto; display: block; }
+</style>
+<body>
+<header>
+  <h1>Roadmap NIO</h1>
+  <span class="sub">read-only + análise profunda · fonte: docs/ROADMAP.md</span>
+  <span class="spacer"></span>
+  <button id="zin">+</button>
+  <button id="zout">−</button>
+  <button id="fit">Ajustar</button>
+  <button id="dl">Baixar SVG</button>
+</header>
+<div id="stage"><div id="pan"><div class="mermaid" id="graph">
+---
+title: Roadmap NIO — escopo atualizado
+---
+flowchart TB
+    A(["Direcionamento atualizado<br/>NIO read-only + análise profunda"]):::indigo
+    subgraph P0["Fase 0 — Decisões confirmadas"]
+        direction TB
+        P01["Dois IPs de banco<br/>IP antigo e IP novo"]:::orange
+        P02["Cada projeto pode estar<br/>em um dos bancos"]:::orange
+        P03["NIO deve alternar o alvo<br/>e aprofundar a pesquisa"]:::orange
+        P04["Acesso somente DQL<br/>consultas, observabilidade,<br/>monitoramento e rastreio"]:::orange
+        P05["Time tracking inicialmente<br/>local em ~/.nio/"]:::orange
+        P06["Usuário escolhe seus grupos<br/>no cadastro do nio init"]:::orange
+        P01 --> P02 --> P03
+        P04 --> P05 --> P06
+    end
+    subgraph P1["Fase 1 — Fundação read-only dual-IP"]
+        direction TB
+        F11["Rebrand noclaf → nio<br/>@nio-cli/cli, @nio-cli/skills e NIO_"]:::teal
+        F12["Adapter PostgreSQL<br/>com dois destinos configuráveis"]:::teal
+        F13["Seleção de banco por projeto<br/>ou contexto de consulta"]:::teal
+        F14["Descoberta de schema e conteúdo<br/>information_schema + tabelas"]:::teal
+        F15["Role sem DML, DDL e DTL<br/>permitir somente DQL"]:::teal
+        F16["Observabilidade da consulta<br/>tempo, origem, banco e rastreio"]:::teal
+        F11 --> F12 --> F13 --> F14
+        F14 --> F15 --> F16
+    end
+    subgraph P2["Fase 2 — Identidade, grupos e contexto"]
+        direction TB
+        U21["nio init<br/>email, usuário e identidade local"]:::green
+        U22["Listar grupos disponíveis<br/>para o usuário escolher"]:::green
+        U23["Persistir memberships<br/>many-to-many em nio.json"]:::green
+        U24["Derivar tool prefix<br/>por usuário"]:::green
+        U25["Selecionar projetos, bancos<br/>e escopos de investigação"]:::green
+        U26["Revalidar grupos e conexão<br/>sem alterar o PostgreSQL"]:::green
+        U21 --> U22 --> U23 --> U24 --> U25 --> U26
+    end
+    subgraph P3["Fase 3 — Tools do core read-only"]
+        direction TB
+        T31["Manter tools de contexto<br/>projetos e seleção ativa"]:::cyan
+        T32["Manter tools de consulta de tasks<br/>list, get e relações"]:::cyan
+        T33["Manter tools de alocação<br/>leitura e consulta de histórico"]:::cyan
+        T34["Manter tools de análise<br/>datasets, contexto e rastreio"]:::cyan
+        T35["Time tracking local<br/>sem persistência no banco"]:::cyan
+        T36["Remover somente a execução<br/>de escrita no PostgreSQL"]:::red
+        T31 --> T32 --> T33 --> T34
+        T34 --> T35
+        T36 --> T35
+    end
+    subgraph P4["Fase 4 — Sistema interno"]
+        direction TB
+        I41["Implementar operations de tasks<br/>no sistema interno"]:::violet
+        I42["createTask, updateTask,<br/>moveTask e commentTask"]:::violet
+        I43["recordDelivery e operações<br/>de workflow interno"]:::violet
+        I44["Adapter interno separado<br/>HTTP ou gRPC"]:::violet
+        I45["Manter o adapter PostgreSQL<br/>exclusivamente read-only"]:::violet
+        I46["Roteamento por capacidade<br/>consulta externa versus operação interna"]:::violet
+        I41 --> I42 --> I43 --> I44 --> I45 --> I46
+    end
+    subgraph P5["Fase 5 — Investigação e engenharia de dados"]
+        direction TB
+        D51["Explorar conteúdo das tabelas<br/>não apenas nomes e metadados"]:::sky
+        D52["Consultas complexas<br/>joins, filtros e agregações"]:::sky
+        D53["Monitoramento e observabilidade<br/>por banco, projeto e consulta"]:::sky
+        D54["Análise de datasets<br/>pipelines e dependências"]:::sky
+        D55["Skill review-sql<br/>e validações de runtime"]:::sky
+        D51 --> D52 --> D53 --> D54 --> D55
+    end
+    subgraph P6["Fase 6 — Refatoração estrutural controlada"]
+        direction TB
+        R61["R1 — Organizar src/lib<br/>por domínio"]:::fuchsia
+        R62["R2 — Consolidar skills<br/>model, cache, serve e filter"]:::fuchsia
+        R63["R4 — Centralizar clientes IA<br/>targets, instalação e configs"]:::fuchsia
+        R64["R5/R6 — Organizar dependencies<br/>e hooks"]:::fuchsia
+        R65["R3 — Unificar engines<br/>de execução local"]:::fuchsia
+        R66["R10 — Dividir task-gateway<br/>sem alterar ports públicos"]:::yellow
+        R61 --> R62 --> R63
+        R61 --> R64
+        R61 --> R65
+        R66 -.-> R61
+    end
+    subgraph P7["Fase 7 — Escala futura"]
+        direction TB
+        G71["SQLite local<br/>quando JSON atingir limite"]:::lime
+        G72["Cache de consultas com TTL"]:::lime
+        G73["Lock e controle de concorrência<br/>no MCP"]:::lime
+        G74["Lineage passivo e alertas<br/>de dados desatualizados"]:::lime
+        G75["Catálogo corporativo<br/>DataHub, Amundsen ou OpenMetadata"]:::lime
+        G71 --> G72 --> G73 --> G74 --> G75
+    end
+    A --> P0
+    P06 --> P1
+    P1 --> P2
+    P2 --> P3
+    P3 --> P4
+    P3 --> P5
+    P4 --> P5
+    P5 --> P6
+    P6 --> P7
+    classDef indigo fill:#eef2ff,stroke:#818cf8,color:#1e1b4b,stroke-width:2px
+    classDef orange fill:#fff7ed,stroke:#fb923c,color:#431407
+    classDef teal fill:#f0fdfa,stroke:#2dd4bf,color:#134e4a
+    classDef green fill:#f0fdf4,stroke:#4ade80,color:#14532d
+    classDef red fill:#fef2f2,stroke:#f87171,color:#7f1d1d
+    classDef cyan fill:#ecfeff,stroke:#22d3ee,color:#164e63
+    classDef violet fill:#f5f3ff,stroke:#a78bfa,color:#4c1d95
+    classDef sky fill:#f0f9ff,stroke:#38bdf8,color:#0c4a6e
+    classDef fuchsia fill:#fdf4ff,stroke:#e879f9,color:#701a75
+    classDef yellow fill:#fefce8,stroke:#facc15,color:#713f12
+    classDef lime fill:#f7fee7,stroke:#a3e635,color:#365314
+</div></div></div>
+
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+
+mermaid.initialize({
+  startOnLoad: false,
+  securityLevel: "loose",
+  theme: "base",
+  themeVariables: {
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif',
+    fontSize: "13px",
+    primaryColor: "#ffffff",
+    lineColor: "#a8a29e",
+    clusterBkg: "#ffffff",
+    clusterBorder: "#e7e5e4"
+  },
+  flowchart: { curve: "basis", nodeSpacing: 26, rankSpacing: 46, htmlLabels: true, padding: 14 }
+});
+
+await mermaid.run({ nodes: [document.getElementById("graph")] });
+
+const stage = document.getElementById("stage");
+const pan = document.getElementById("pan");
+let s = 1, x = 0, y = 0;
+const apply = () => pan.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+
+function fit() {
+  const svg = pan.querySelector("svg");
+  if (!svg) return;
+  const b = svg.getBoundingClientRect();
+  const w = b.width / s, h = b.height / s;
+  s = Math.min((stage.clientWidth - 60) / w, (stage.clientHeight - 60) / h, 1);
+  x = (stage.clientWidth - w * s) / 2;
+  y = 24;
+  apply();
+}
+fit();
+
+stage.addEventListener("wheel", e => {
+  e.preventDefault();
+  const f = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+  const r = stage.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  x = mx - (mx - x) * f; y = my - (my - y) * f; s *= f;
+  apply();
+}, { passive: false });
+
+let down = false, px = 0, py = 0;
+stage.addEventListener("pointerdown", e => { down = true; px = e.clientX; py = e.clientY; stage.classList.add("dragging"); stage.setPointerCapture(e.pointerId); });
+stage.addEventListener("pointermove", e => { if (!down) return; x += e.clientX - px; y += e.clientY - py; px = e.clientX; py = e.clientY; apply(); });
+stage.addEventListener("pointerup", () => { down = false; stage.classList.remove("dragging"); });
+
+document.getElementById("zin").onclick = () => { s *= 1.2; apply(); };
+document.getElementById("zout").onclick = () => { s /= 1.2; apply(); };
+document.getElementById("fit").onclick = fit;
+document.getElementById("dl").onclick = () => {
+  const svg = pan.querySelector("svg");
+  const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "roadmap-nio.svg";
+  a.click();
+};
+</script>
+</body>
+</html>
