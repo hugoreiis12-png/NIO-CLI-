@@ -11,7 +11,6 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { VERSION } from './version.js';
 import { loadProjectConfig, type ProjectConfig } from './config.js';
-import { createSession, type Session } from './session-factory.js';
 import { tools, toolDefinitions, type ToolContext } from './tools/index.js';
 import { errorResult } from './lib/tool-result.js';
 import { notifyMcpServerIfUpdate } from './lib/version-check.js';
@@ -29,6 +28,9 @@ import { claudeTarget, type ProvisionTarget } from './lib/targets.js';
 import { ensureSkillsCache } from './lib/skills-cache.js';
 import { shouldRunAutoPull, pickProvisionTarget } from './lib/autopull.js';
 import { brand, env } from './brand.js';
+import { loadSession } from './lib/session-store.js';
+import { createUserRepository } from './adapters/pg/user-repository.js';
+import type { UserCli } from './core/session.js';
 
 /** Carrega o config do projeto; erro de parse é degradado (log + null), nunca fatal. */
 function loadConfigStep(): ProjectConfig | null {
@@ -55,13 +57,28 @@ async function initSkillsCache(): Promise<void> {
   }
 }
 
-async function authenticateSession(): Promise<Session | null> {
+/**
+ * Autenticação v2: lê a sessão local (~/.nio/session.json, a mesma fonte do
+ * `nio whoami`) e valida o token contra o banco (`user_cli.token_session`).
+ * Sem arquivo local, token divergente ou banco inacessível → sessão nula
+ * (servidor sobe degradado; toda tool devolve o gate "Não autenticado").
+ */
+async function authenticateSession(): Promise<UserCli | null> {
+  const stored = await loadSession();
+  if (!stored) {
+    console.error(`[${brand.mcpBinName}] aviso: sem sessão local. Rode \`${brand.name} login\`.`);
+    return null;
+  }
   try {
-    const session = await createSession();
-    console.error(`[${brand.mcpBinName}] autenticado como ${session.user.email}`);
-    return session;
+    const user = await createUserRepository().findByName(stored.name);
+    if (!user || user.tokenSession !== stored.token) {
+      console.error(`[${brand.mcpBinName}] aviso: sessão inválida. Rode \`${brand.name} login\` de novo.`);
+      return null;
+    }
+    console.error(`[${brand.mcpBinName}] autenticado como ${user.name}`);
+    return user;
   } catch (err) {
-    console.error(`[${brand.mcpBinName}] aviso: ${(err as Error).message}`);
+    console.error(`[${brand.mcpBinName}] aviso: banco indisponível p/ validar sessão: ${(err as Error).message}`);
     return null;
   }
 }
@@ -74,7 +91,7 @@ function resolveSurface(): string | null {
 
 function registerToolHandlers(
   server: Server,
-  session: Session | null,
+  user: UserCli | null,
   projectConfig: ProjectConfig | null,
 ): void {
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -86,14 +103,13 @@ function registerToolHandlers(
     if (!tool) {
       return errorResult(`Tool desconhecida: ${request.params.name}`);
     }
-    if (!session) {
+    if (!user) {
       return errorResult(
-        `Não autenticado. Rode \`${brand.name} login\` antes de iniciar o Claude Code.`,
+        `Não autenticado. Rode \`${brand.name} login\` antes de iniciar o cliente de IA.`,
       );
     }
     const ctx: ToolContext = {
-      gateway: session.gateway,
-      user: session.user,
+      user,
       config: projectConfig,
     };
     try {
@@ -130,11 +146,7 @@ function registerResourceHandlers(server: Server, surface: string | null): void 
 
 // Prompts: commands/skills como prompts invocáveis. Funciona no Claude Code E no
 // Cowork (que não lê `~/.claude`) — é o caminho de slash-command lá.
-function registerPromptHandlers(
-  server: Server,
-  surface: string | null,
-  session: Session | null,
-): void {
+function registerPromptHandlers(server: Server, surface: string | null): void {
   server.setRequestHandler(ListPromptsRequestSchema, async () => {
     try {
       const { docs } = loadSkills();
@@ -152,13 +164,6 @@ function registerPromptHandlers(
       request.params.arguments,
       visible,
     );
-    // Telemetria de uso (Cowork): qual skill/command foi invocado (id estável + nome).
-    session?.gateway.track({
-      type: 'prompt',
-      client: surface ?? 'unknown',
-      id: visible.find((d) => d.id === request.params.name)?.uid ?? null,
-      name: request.params.name,
-    });
     return {
       description,
       messages: [{ role: 'user', content: { type: 'text', text } }],
@@ -209,7 +214,7 @@ async function runAutoPull(projectConfig: ProjectConfig | null): Promise<void> {
 async function main() {
   const projectConfig = loadConfigStep();
   await initSkillsCache();
-  const session = await authenticateSession();
+  const user = await authenticateSession();
 
   const server = new Server(
     { name: brand.mcpBinName, version: VERSION },
@@ -218,9 +223,9 @@ async function main() {
 
   const surface = resolveSurface();
 
-  registerToolHandlers(server, session, projectConfig);
+  registerToolHandlers(server, user, projectConfig);
   registerResourceHandlers(server, surface);
-  registerPromptHandlers(server, surface, session);
+  registerPromptHandlers(server, surface);
 
   notifyMcpServerIfUpdate();
 

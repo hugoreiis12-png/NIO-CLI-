@@ -8,6 +8,10 @@ export const TOKEN_EXCHANGE_URL = `${SUPABASE_URL}/functions/v1/mcp-token-exchan
 export const CREDENTIALS_DIR = homePath();
 export const CREDENTIALS_FILE = homePath('credentials.json');
 
+/** Sessão local v2 (`nio login` contra `user_cli`/Postgres) — arquivo próprio,
+ * separado do `credentials.json` do fluxo PAT/Supabase v1. */
+export const SESSION_FILE = homePath('session.json');
+
 export const PROJECT_CONFIG_FILE = brand.projectConfigFile;
 
 export const PAT_REGEX = patRegex;

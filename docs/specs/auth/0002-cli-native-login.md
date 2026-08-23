@@ -2,7 +2,7 @@
 id: "0002"
 title: Auth nativa na CLI — Gateway + Edge Filter, OAuth2/PKCE
 area: auth
-status: paused
+status: superseded
 created: 2026-07-26
 issue:
 ---
@@ -171,3 +171,13 @@ como sempre esteve, `src/gateway/**` já estava fora do `tsc`/`dist`
 publicado) e retomar a discussão de hospedagem (local-only vs. VPS/Fly/
 Railway vs. mover pro Cloudflare também) mais adiante. Código fica como
 está — testado, documentado, só não plugado em nada.
+
+**2026-08-23 — superseded por `0003-login-2fa-sms.md`.** Decisão do dono do
+produto: o login real da CLI v2 vai por senha (`user_cli`/argon2id) + 2º
+fator SMS, não por OAuth2/PKCE self-asserted por email. Este fluxo (T6/T7/T9
+nunca fechados, nunca plugado em `nio login`) não vira o mecanismo de auth do
+v2. **Código não removido ainda** — nada depende dele hoje, e alguns padrões
+(`authorize-store.ts`: Map em memória com TTL e consumo único;
+`traceability.ts`: log estruturado em stderr) são candidatos a reuso direto
+no Gateway core da 0003. Remoção definitiva (ou reaproveitamento explícito)
+fica pra quando a 0003 sair do rascunho.

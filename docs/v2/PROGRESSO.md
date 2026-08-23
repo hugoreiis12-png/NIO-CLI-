@@ -63,3 +63,45 @@ Deps novas: `pg@8.23.0`, `@types/pg`, `@node-rs/argon2@2.1.0`.
 1. Rodar `NIO_DATABASE_URL=... bun run db:ping` contra o `nio_cli` vivo.
 2. Aplicar `db/migrations/0001_*.sql` no banco.
 3. Modelar `SessionRepository` (CRUD de sessões) sobre o mesmo Pool.
+
+---
+
+## 2026-08-23 — Comandos de auth v2 na CLI (`register`/`login`/`logout`/`whoami`)
+
+### Contexto
+Banco remoto (`192.168.0.142`) está numa LAN diferente da máquina de dev —
+timeout de rede, não erro de credencial. Decisão: banco de **teste local**
+(Postgres via Homebrew, `nio_cli` com `db/schema.sql` aplicado) até a VPN/rede
+até o remoto estar disponível; portar depois é só trocar a `NIO_DATABASE_URL`.
+
+Decisão do dono do projeto: a CLI vai usar **100% comandos v2** — o fluxo
+PAT→Supabase (`src/auth.ts`) não é mais o caminho de auth exposto, mesmo
+ainda existindo no repo (ver `docs/v2/TASK-remocao-v1.md`, tarefa separada
+pra desligar o v1 por completo).
+
+### Código adicionado/alterado
+| Arquivo | Papel |
+|---|---|
+| `src/lib/session-store.ts` (+ `.test.ts`) | Sessão local v2: `~/.nio/session.json` (chmod 600), separado do `credentials.json` do v1 |
+| `src/cli/commands/auth.ts` (reescrito) | `nio register` (cria em `user_cli` via `UserRepository`), `nio login` (verifica credenciais, gera token, grava `token_session` no banco + sessão local), `nio logout` (limpa os dois), `nio whoami` (lê a sessão local) |
+| `src/cli/copy/auth.json`, `src/cli/copy.ts` | Copy de `register`/`login` trocada de PAT pra usuário/senha |
+| `src/constants.ts` | `SESSION_FILE = homePath('session.json')` |
+| `src/cli/commands/auth.test.ts` | Removido — testava helpers do fluxo PAT que não existem mais; substituído por `src/lib/session-store.test.ts` |
+
+`src/auth.ts` (PAT/Supabase) **não foi tocado** — continua no repo, sem uso
+pelo comando `auth` da CLI, candidato a remoção pela tarefa de limpeza v1.
+
+### Verificação
+- `bunx tsc --noEmit` → verde.
+- `bun test src/lib/session-store.test.ts src/adapters/pg/ src/lib/password.test.ts` → 19/19 passam.
+- Smoke test via CLI real (não script solto), driblando o raw-mode do
+  `@clack/prompts` com `expect` (precisa de TTY, pipe direto não funciona):
+  `register` → `login` → `whoami --json` → `logout` → `whoami` (rejeita, exit 1).
+  Confirmado no banco: hash argon2id gravado, `token_session` setado no login
+  e limpo no logout, `timestamp_last_session` atualizado.
+
+### Próximo passo
+1. Migrar `.env` do banco de teste local pro remoto (`192.168.0.142`) assim
+   que a rede/VPN estiver disponível — trocar só `NIO_DATABASE_URL`.
+2. Seguir `docs/v2/TASK-remocao-v1.md` pra desligar o v1.
+3. `SessionRepository` (CRUD de `sessions`) continua pendente do passo anterior.

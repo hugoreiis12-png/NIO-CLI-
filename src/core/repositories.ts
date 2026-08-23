@@ -6,7 +6,7 @@
  * Contrato de erro: métodos de leitura por chave retornam `null` quando não acham
  * (não lançam); falha de infra (conexão, SQL inválido) propaga como throw.
  */
-import type { UserCli } from './session.js';
+import type { UserCli, Session, Profile, SessionStatus, Ide, EnvironmentConfig } from './session.js';
 
 /** Dados para criar um usuário. `password` é texto puro — o adapter hasheia (argon2id). */
 export interface NewUserInput {
@@ -33,4 +33,43 @@ export interface UserRepository {
 
   /** Marca `timestamp_last_session = now()`. */
   touchLastSession(userId: number): Promise<void>;
+}
+
+/** Dados para criar uma sessão de ambiente. `status` nasce sempre `active`. */
+export interface NewSessionInput {
+  userId: number;
+  name: string;
+  profile: Profile;
+  projectPath: string;
+  ide: Ide;
+  config?: EnvironmentConfig;
+}
+
+export interface SessionRepository {
+  /**
+   * Cria a sessão como `active` e arquiva as outras ativas do mesmo usuário
+   * (invariante: **1 sessão ativa por usuário**) — atomicamente.
+   */
+  create(input: NewSessionInput): Promise<Session>;
+
+  /** Busca por UUID. `null` se não existe (de outro usuário ou apagada). */
+  findById(id: string): Promise<Session | null>;
+
+  /** Todas as sessões do usuário, mais recentes primeiro (`updated_at DESC`). */
+  listByUser(userId: number): Promise<Session[]>;
+
+  /** A sessão ativa do usuário, se houver. */
+  findActiveByUser(userId: number): Promise<Session | null>;
+
+  /** Ativa a sessão (de qualquer status) e arquiva as demais ativas do usuário — atômico. */
+  activate(id: string, userId: number): Promise<Session | null>;
+
+  /** Muda o status (pause/archive). Sem regra de unicidade aqui. */
+  setStatus(id: string, status: SessionStatus): Promise<void>;
+
+  /** Substitui o `config` JSONB da sessão. */
+  updateConfig(id: string, config: EnvironmentConfig): Promise<void>;
+
+  /** Remove a sessão (logs/atividades/dependency_events caem por CASCADE). */
+  delete(id: string): Promise<void>;
 }

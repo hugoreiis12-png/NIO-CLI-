@@ -15,7 +15,8 @@ function loadCopy<T>(name: string): T {
 }
 
 export interface AuthCopy {
-  login: { patPrompt: string; patInvalid: string };
+  register: { namePrompt: string; nameInvalid: string; passwordPrompt: string; passwordInvalid: string };
+  login: { namePrompt: string; passwordPrompt: string; invalidCredentials: string };
 }
 export interface InitCopy {
   overwrite: string;
