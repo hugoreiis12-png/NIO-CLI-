@@ -19,11 +19,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hugoreiis12-png/NIO-CLI.git"
+    "url": "git+https://github.com/hugoreiis12-png/NIO-CLI-.git"
   },
-  "homepage": "https://github.com/hugoreiis12-png/NIO-CLI#readme",
+  "homepage": "https://github.com/hugoreiis12-png/NIO-CLI-#readme",
   "bugs": {
-    "url": "https://github.com/hugoreiis12-png/NIO-CLI/issues"
+    "url": "https://github.com/hugoreiis12-png/NIO-CLI-/issues"
   },
   "keywords": [
     "mcp",

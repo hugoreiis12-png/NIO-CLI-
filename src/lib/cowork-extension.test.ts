@@ -12,9 +12,9 @@ test('metadados fixos do manifest', () => {
   expect(manifest.name).toBe('nio-cli');
   expect(manifest.display_name).toBe('nio (NOS)');
   expect(manifest.version).toBe(VERSION);
-  expect(manifest.homepage).toBe('https://github.com/hugoreiis12-png/NIO-CLI#readme');
-  expect(manifest.documentation).toBe('https://github.com/hugoreiis12-png/NIO-CLI#readme');
-  expect(manifest.support).toBe('https://github.com/hugoreiis12-png/NIO-CLI/issues');
+  expect(manifest.homepage).toBe('https://github.com/hugoreiis12-png/NIO-CLI-#readme');
+  expect(manifest.documentation).toBe('https://github.com/hugoreiis12-png/NIO-CLI-#readme');
+  expect(manifest.support).toBe('https://github.com/hugoreiis12-png/NIO-CLI-/issues');
   expect(manifest.author).toEqual({ name: 'Falcao-Tech', url: 'https://github.com/hugoreiis12-png' });
   expect(manifest.keywords).toEqual(['mcp', 'nio', 'nos', 'tasks', 'kanban', 'time-tracking']);
 });

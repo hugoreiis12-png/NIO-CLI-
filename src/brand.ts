@@ -24,8 +24,8 @@ export const brand = {
 
   /** Org/usuário do GitHub que hospeda o repo atual da CLI. */
   githubOrg: 'hugoreiis12-png',
-  /** Nome do repo no GitHub (casing exato, como criado). */
-  githubRepo: 'NIO-CLI',
+  /** Nome do repo no GitHub (casing exato, como criado — inclui o hífen final, é assim que o repo real se chama). */
+  githubRepo: 'NIO-CLI-',
   /** Pacote npm — usado nas mensagens de atualização. Org real confirmada: `nio-cli` (não `nio`). */
   packageName: '@nio-cli/cli',
   /** Binário do servidor MCP (segundo `bin` do package.json). */
