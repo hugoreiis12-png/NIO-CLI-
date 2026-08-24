@@ -105,3 +105,128 @@ pelo comando `auth` da CLI, candidato a remoção pela tarefa de limpeza v1.
    que a rede/VPN estiver disponível — trocar só `NIO_DATABASE_URL`.
 2. Seguir `docs/v2/TASK-remocao-v1.md` pra desligar o v1.
 3. `SessionRepository` (CRUD de `sessions`) continua pendente do passo anterior.
+
+---
+
+## 2026-08-23/24 — Remoção das 16 tools v1, `SessionRepository`, e Gateway JWT (`auth_sessions`)
+
+### Remoção das tools v1 do MCP server
+As 16 tools de tarefas/sprints/ponto (`comment_task`, `create_task`, `*_allocation*`,
+etc.) foram removidas de `src/tools/index.ts` — só sobram as 4 genéricas de
+execução (`nio_delegate_exec`, `nio_exec_status`, `nio_plan`, `nio_validate_plan`).
+`src/session-factory.ts` (só suportava backend `supabase`) foi apagado.
+`mcp-server.ts` reescrito: autentica lendo `~/.nio/session.json` (mesma fonte
+do `nio whoami`) e validando contra `user_cli.token_session` — sem Supabase.
+`ToolContext` passou a carregar `UserCli` (v2) em vez de `Gateway`/`User` (v1).
+
+**Ainda no repo, sem uso pelos caminhos ativos**: `src/adapters/supabase/*`,
+`src/auth.ts`, `src/database.types.ts`, dependência `@supabase/supabase-js` e
+script `gen:types` no `package.json` — resto da `TASK-remocao-v1.md`.
+
+### `SessionRepository` (CRUD de `sessions`, ambiente)
+`src/adapters/pg/session-repository.ts` implementa a porta em
+`core/repositories.ts`: `create`/`activate` arquivam atomicamente (via
+`withTransaction`) as demais sessões `active` do usuário — invariante de
+**1 sessão ativa por usuário**. Ainda **sem nenhum comando de CLI ou tool MCP
+que o exponha** — só o backend existe.
+
+### Gateway de autenticação — `auth_sessions` (JWT) + `services/login.ts` + `middleware/auth.ts`
+Depois de avaliar Kong/Keycloak/Kong AI Gateway (descartados — ver
+`docs/v2/ARQUITETURA-GATEWAY.md`) e desenhar o fluxo senha+SMS
+(`docs/specs/auth/0003-login-2fa-sms.md`), a primeira peça concreta do
+Gateway v2 foi construída: emissão e validação de JWT de sessão, **separado**
+de `sessions` (ambiente) de propósito — ver decisão abaixo.
+
+| Arquivo | Papel |
+|---|---|
+| `db/schema.sql` + `db/migrations/0002_auth_sessions.sql` | Tabela `auth_sessions` — `id` (UUID) dobra como `jti`; `user_id`, `expires_at`, `revoked_at`, `created_at`. Sem invariante de unicidade (multi-dispositivo: várias linhas ativas por usuário) |
+| `src/core/session.ts` | Entidade `AuthSession` |
+| `src/core/repositories.ts` | Porta `AuthSessionRepository` (`create`, `findById`, `revoke`, `listActiveByUser`, `revokeAllByUser`) |
+| `src/adapters/pg/auth-session-repository.ts` (+ teste do mapper) | Implementação Postgres |
+| `src/gateway/config.ts` | `getJwtSecret()`, `JWT_EXPIRES_IN` (env vars **sem** prefixo `NIO_` — segredo distribuído pela equipe, igual em toda máquina) |
+| `src/gateway/services/login.ts` (+ teste) | `login()`: verifica credencial → cria `auth_session` → assina JWT (`jti = auth_session.id`, HS256). `logout()`: revoga |
+| `src/gateway/middleware/auth.ts` (+ teste) | `authenticate()`: valida assinatura+exp do JWT, depois confere `revoked_at`/`expires_at` no Postgres (pega revogação que o JWT sozinho não sabe) |
+
+**Decisão de design (a mais importante desta entrada)**: o desenho original
+reaproveitava `sessions.id` como `jti`. Revisado porque `sessions` já carrega
+a invariante de 1-ativa-por-usuário (ambiente), que colide direto com
+multi-dispositivo no login (logar num 2º aparelho arquivaria a sessão do
+1º). `auth_sessions` nasceu como tabela irmã, não filha — relaciona só com
+`user_cli`, sem FK pra `sessions`.
+
+**`tsconfig.json`**: `exclude` mudou de `"src/gateway/**"` (pasta inteira,
+por causa do `Bun.serve()` do `server.ts` antigo/spec 0002) para
+`"src/gateway/server.ts"` (só o arquivo que de fato usa Bun) — o resto da
+pasta, incluindo os arquivos novos, é Node-compatível e entra no build normal.
+
+**Dependência nova**: `jsonwebtoken` (+ `@types/jsonwebtoken`).
+
+### Verificação
+- `bunx tsc --noEmit` → verde.
+- `bun test` → 211/213 (as 2 falhas são dívida pré-existente documentada,
+  não relacionada — `cowork-extension.test.ts`/`display_name`).
+- Smoke tests manuais (scripts descartáveis, criados e apagados) contra o
+  banco de teste local: `AuthSessionRepository` — dois "logins" do mesmo
+  usuário coexistem, revogar um não afeta o outro, `revokeAllByUser` limpa
+  tudo. Fluxo completo `login()` → `authenticate()` → `logout()` →
+  `authenticate()` rejeita com `sessao_revogada` mesmo com assinatura/exp do
+  JWT ainda válidos — confirma que a checagem no Postgres está no caminho de
+  verdade, não só o JWT sozinho.
+
+### Débito conhecido, não resolvido nesta entrada
+- **`login()`/`authenticate()` (JWT) ainda não estão plugados em lugar
+  nenhum.** `src/cli/commands/auth.ts` (`nio login`) continua no fluxo
+  anterior — `UserRepository.verifyCredentials` direto + `token_session` em
+  `user_cli` + `~/.nio/session.json`, sem JWT, sem `auth_sessions`. O Gateway
+  novo existe testado e isolado, mas nada da CLI ou do MCP server o chama
+  ainda.
+- Rota HTTP do Gateway (`nio-gateway`, porta 3000, do desenho em
+  `ARQUITETURA-GATEWAY.md`) não foi criada — só a lógica de serviço/middleware.
+- Coluna de telefone, conta Twilio Verify, e o resto da spec 0003 (SMS/2FA)
+  seguem pendentes.
+
+### Próximo passo
+1. Decidir e plugar `services/login.ts`/`middleware/auth.ts` em algum
+   consumidor real — `nio login` da CLI, e/ou o `mcp-server.ts` — hoje são
+   código morto do ponto de vista de uso (só rodam em teste).
+2. Resto da `TASK-remocao-v1.md` (Supabase/`auth.ts`/`database.types.ts`/
+   `package.json`).
+3. `nio init` — redesenho pendente (hoje ainda vincula a projeto do NOS).
+
+---
+
+## 2026-08-24 — JWT plugado: só um mecanismo de sessão de login agora
+
+Fechado o débito da entrada anterior. `services/login.ts`/`middleware/auth.ts`
+deixaram de ser código isolado — agora são o único caminho de login.
+
+### Código alterado
+| Arquivo | Mudança |
+|---|---|
+| `src/gateway/services/login.ts` | `login()` passou a chamar `touchLastSession(user.id)` (comportamento que existia no fluxo antigo, independente do mecanismo de sessão) |
+| `src/lib/session-store.ts` (+ teste) | `StoredSession` ganhou `sessionId` (= `jti`, usado no logout pra revogar sem decodificar o token) e `expiresAt`. Sessões locais no formato anterior (sem esses dois campos) passam a ser tratadas como inválidas por `parseStoredSession` — efeito colateral esperado, força um `nio login` novo |
+| `src/cli/commands/auth.ts` | `login`/`logout` trocaram `UserRepository.verifyCredentials`+`token_session` por `gateway/services/login.ts` (`login`/`logout`) — `nio login` agora emite e guarda um JWT de verdade |
+| `src/mcp-server.ts` | `authenticateSession()` trocou a checagem `user.tokenSession !== stored.token` por `authenticate()` do middleware (valida JWT + `auth_sessions` no Postgres) |
+
+`user_cli.token_session`/`UserRepository.setSessionToken` **não foram
+removidos** nesta entrada — ficaram só sem uso (nenhum código escreve mais
+neles). Remoção fica pro "Passo 0" da `TASK-remocao-v1.md`, que já foi
+atualizado pra refletir isso como próximo passo do segundo agente.
+
+### Verificação
+- `bunx tsc --noEmit` → verde.
+- `bun test` → 212/214 (mesmas 2 falhas pré-existentes de sempre,
+  `cowork-extension.test.ts`).
+- Smoke test via CLI real (`expect`, não pipe — `@clack/prompts` exige TTY):
+  `register` → `login` → `whoami --json` (confirma `sessionId` batendo com a
+  linha em `auth_sessions`, `token_session` em `user_cli` continua `NULL`,
+  `timestamp_last_session` setado) → MCP server sobe e loga "autenticado
+  como" de verdade → `logout` → `auth_sessions.revoked_at` preenchido →
+  `whoami` rejeita → MCP server degrada com aviso claro.
+
+### Próximo passo
+1. `docs/v2/TASK-remocao-v1.md`, "Passo 0": remover `token_session`/
+   `setSessionToken` (agora seguro — o JWT está validado em produção).
+2. Resto da `TASK-remocao-v1.md` (Supabase/`auth.ts`/`database.types.ts`/
+   `package.json`/arquivos órfãos de `src/gateway/*` da spec 0002).
+3. `nio init` — redesenho pendente (hoje ainda vincula a projeto do NOS).

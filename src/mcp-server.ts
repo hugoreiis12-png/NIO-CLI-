@@ -30,6 +30,7 @@ import { shouldRunAutoPull, pickProvisionTarget } from './lib/autopull.js';
 import { brand, env } from './brand.js';
 import { loadSession } from './lib/session-store.js';
 import { createUserRepository } from './adapters/pg/user-repository.js';
+import { authenticate } from './gateway/middleware/auth.js';
 import type { UserCli } from './core/session.js';
 
 /** Carrega o config do projeto; erro de parse é degradado (log + null), nunca fatal. */
@@ -59,9 +60,11 @@ async function initSkillsCache(): Promise<void> {
 
 /**
  * Autenticação v2: lê a sessão local (~/.nio/session.json, a mesma fonte do
- * `nio whoami`) e valida o token contra o banco (`user_cli.token_session`).
- * Sem arquivo local, token divergente ou banco inacessível → sessão nula
- * (servidor sobe degradado; toda tool devolve o gate "Não autenticado").
+ * `nio whoami`) e valida o JWT — assinatura+exp primeiro, depois confere
+ * `revoked_at`/`expires_at` da `auth_session` no Postgres (pega logout que o
+ * JWT sozinho não sabe). Sem arquivo local, token inválido/revogado/expirado,
+ * ou banco inacessível → sessão nula (servidor sobe degradado; toda tool
+ * devolve o gate "Não autenticado").
  */
 async function authenticateSession(): Promise<UserCli | null> {
   const stored = await loadSession();
@@ -70,9 +73,14 @@ async function authenticateSession(): Promise<UserCli | null> {
     return null;
   }
   try {
+    const result = await authenticate(`Bearer ${stored.token}`);
+    if (!result.ok) {
+      console.error(`[${brand.mcpBinName}] aviso: sessão inválida (${result.reason}). Rode \`${brand.name} login\` de novo.`);
+      return null;
+    }
     const user = await createUserRepository().findByName(stored.name);
-    if (!user || user.tokenSession !== stored.token) {
-      console.error(`[${brand.mcpBinName}] aviso: sessão inválida. Rode \`${brand.name} login\` de novo.`);
+    if (!user) {
+      console.error(`[${brand.mcpBinName}] aviso: usuário da sessão não existe mais. Rode \`${brand.name} login\` de novo.`);
       return null;
     }
     console.error(`[${brand.mcpBinName}] autenticado como ${user.name}`);

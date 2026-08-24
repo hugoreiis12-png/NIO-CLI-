@@ -1,9 +1,17 @@
 import { test, expect } from "bun:test";
 import { parseStoredSession } from "./session-store.js";
 
+const VALID = {
+  userId: 1,
+  name: "hugo",
+  token: "eyJhbGciOiJIUzI1NiJ9.tok.sig",
+  sessionId: "a1b2c3d4-0000-4000-8000-000000000001",
+  loggedInAt: "2026-08-23T00:00:00.000Z",
+  expiresAt: "2026-08-23T12:00:00.000Z",
+};
+
 test("parseStoredSession: aceita um shape válido", () => {
-  const raw = { userId: 1, name: "hugo", token: "tok", loggedInAt: "2026-08-23T00:00:00.000Z" };
-  expect(parseStoredSession(raw)).toEqual(raw);
+  expect(parseStoredSession(VALID)).toEqual(VALID);
 });
 
 test("parseStoredSession: null para valor não-objeto", () => {
@@ -13,15 +21,19 @@ test("parseStoredSession: null para valor não-objeto", () => {
 });
 
 test("parseStoredSession: null quando falta um campo", () => {
-  expect(parseStoredSession({ userId: 1, name: "hugo", token: "tok" })).toBeNull();
+  const { expiresAt, ...semExpiresAt } = VALID;
+  expect(parseStoredSession(semExpiresAt)).toBeNull();
 });
 
 test("parseStoredSession: null quando o tipo de um campo está errado", () => {
-  expect(
-    parseStoredSession({ userId: "1", name: "hugo", token: "tok", loggedInAt: "2026-08-23" }),
-  ).toBeNull();
+  expect(parseStoredSession({ ...VALID, userId: "1" })).toBeNull();
 });
 
 test("parseStoredSession: null para o shape antigo do v1 (pat/user/fetched_at)", () => {
   expect(parseStoredSession({ pat: "nio_x", fetched_at: "2026-08-23" })).toBeNull();
+});
+
+test("parseStoredSession: null para o shape v2 anterior (sem sessionId/expiresAt — token_session)", () => {
+  const { sessionId, expiresAt, ...semJwt } = VALID;
+  expect(parseStoredSession(semJwt)).toBeNull();
 });

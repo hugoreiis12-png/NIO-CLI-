@@ -33,6 +33,7 @@ export async function login(name: string, password: string): Promise<LoginResult
     const users = createUserRepository();
     const user = await users.verifyCredentials(name, password);
     if (!user) return null;
+    await users.touchLastSession(user.id);
 
     const authSessions = createAuthSessionRepository();
     const ms = expiresInMs(JWT_EXPIRES_IN);

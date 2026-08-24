@@ -1,10 +1,10 @@
 import type { Command } from "commander";
-import { randomUUID } from "node:crypto";
 import { input, password } from "../../lib/prompts.js";
 import { brand } from "../../brand.js";
 import { renderMatrixLogo } from "../../matrix-logo.js";
 import { startSpinner } from "../../spinner.js";
 import { createUserRepository } from "../../adapters/pg/user-repository.js";
+import { login as gatewayLogin, logout as gatewayLogout } from "../../gateway/services/login.js";
 import { loadSession, saveSession, clearSession } from "../../lib/session-store.js";
 import { authCopy } from "../copy.js";
 
@@ -48,33 +48,31 @@ function registerRegisterCommand(program: Command): void {
 function registerLoginCommand(program: Command): void {
   program
     .command("login")
-    .description("Autentica contra o banco (user_cli) e salva a sessão localmente")
+    .description("Autentica contra o banco (user_cli) e salva a sessão localmente (JWT)")
     .action(async () => {
       const name = await input({ message: authCopy.login.namePrompt });
       const pass = await password({ message: authCopy.login.passwordPrompt, mask: "*" });
 
-      const repo = createUserRepository();
       const spinner = startSpinner("Autenticando...");
       try {
-        const user = await repo.verifyCredentials(name.trim(), pass);
-        if (!user) {
+        const result = await gatewayLogin(name.trim(), pass);
+        if (!result) {
           spinner.fail(authCopy.login.invalidCredentials);
           process.exit(1);
         }
-        const token = randomUUID();
-        await repo.setSessionToken(user.id, token);
-        await repo.touchLastSession(user.id);
         await saveSession({
-          userId: user.id,
-          name: user.name,
-          token,
+          userId: result.userId,
+          name: result.name,
+          token: result.token,
+          sessionId: result.sessionId,
           loggedInAt: new Date().toISOString(),
+          expiresAt: result.expiresAt.toISOString(),
         });
         spinner.stop();
         console.log(renderMatrixLogo());
         console.log("[ok] Autenticado!");
-        console.log(`Usuário: ${user.name}`);
-        console.log(`ID:      ${user.id}`);
+        console.log(`Usuário: ${result.name}`);
+        console.log(`ID:      ${result.userId}`);
       } catch (err) {
         spinner.fail(`Falha ao autenticar: ${(err as Error).message}`);
         process.exit(1);
@@ -85,12 +83,12 @@ function registerLoginCommand(program: Command): void {
 function registerLogoutCommand(program: Command): void {
   program
     .command("logout")
-    .description("Encerra a sessão local e limpa o token no banco")
+    .description("Encerra a sessão local e revoga a auth_session no banco")
     .action(async () => {
       const session = await loadSession();
       if (session) {
         try {
-          await createUserRepository().setSessionToken(session.userId, null);
+          await gatewayLogout(session.sessionId);
         } catch {
           // banco fora do ar — ainda assim limpamos a sessão local.
         }
@@ -116,9 +114,10 @@ function registerWhoamiCommand(program: Command): void {
         return;
       }
       console.log(renderMatrixLogo());
-      console.log(`Usuário:  ${session.name}`);
-      console.log(`ID:       ${session.userId}`);
-      console.log(`Login em: ${session.loggedInAt}`);
+      console.log(`Usuário:   ${session.name}`);
+      console.log(`ID:        ${session.userId}`);
+      console.log(`Login em:  ${session.loggedInAt}`);
+      console.log(`Expira em: ${session.expiresAt}`);
     });
 }
 

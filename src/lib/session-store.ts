@@ -1,8 +1,10 @@
 /**
  * Persistência local da sessão v2 (`nio login` contra `user_cli`/Postgres) —
  * separado de `src/auth.ts` (fluxo PAT→Supabase do v1, candidato a remoção).
- * Guarda {userId, name, token, loggedInAt} em `~/.nio/session.json`, chmod
- * 600, mesma convenção de segurança do antigo `credentials.json`.
+ * Guarda {userId, name, token, sessionId, loggedInAt, expiresAt} em
+ * `~/.nio/session.json`, chmod 600, mesma convenção de segurança do antigo
+ * `credentials.json`. `token` é o JWT; `sessionId` é o `jti` embutido nele —
+ * guardado solto pra `logout` revogar sem precisar decodificar o token.
  */
 import { mkdir, readFile, writeFile, rm, chmod } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -12,7 +14,9 @@ export interface StoredSession {
   userId: number;
   name: string;
   token: string;
+  sessionId: string;
   loggedInAt: string;
+  expiresAt: string;
 }
 
 /** Parse tolerante — `null` se o shape não bate (ausente, corrompido, ou de outra versão). */
@@ -23,9 +27,18 @@ export function parseStoredSession(raw: unknown): StoredSession | null {
     typeof s.userId === 'number' &&
     typeof s.name === 'string' &&
     typeof s.token === 'string' &&
-    typeof s.loggedInAt === 'string'
+    typeof s.sessionId === 'string' &&
+    typeof s.loggedInAt === 'string' &&
+    typeof s.expiresAt === 'string'
   ) {
-    return { userId: s.userId, name: s.name, token: s.token, loggedInAt: s.loggedInAt };
+    return {
+      userId: s.userId,
+      name: s.name,
+      token: s.token,
+      sessionId: s.sessionId,
+      loggedInAt: s.loggedInAt,
+      expiresAt: s.expiresAt,
+    };
   }
   return null;
 }
