@@ -6,7 +6,7 @@
  * Contrato de erro: métodos de leitura por chave retornam `null` quando não acham
  * (não lançam); falha de infra (conexão, SQL inválido) propaga como throw.
  */
-import type { UserCli, Session, Profile, SessionStatus, Ide, EnvironmentConfig } from './session.js';
+import type { UserCli, Session, Profile, SessionStatus, Ide, EnvironmentConfig, AuthSession } from './session.js';
 
 /** Dados para criar um usuário. `password` é texto puro — o adapter hasheia (argon2id). */
 export interface NewUserInput {
@@ -72,4 +72,32 @@ export interface SessionRepository {
 
   /** Remove a sessão (logs/atividades/dependency_events caem por CASCADE). */
   delete(id: string): Promise<void>;
+}
+
+/** Dados para criar uma sessão de autenticação (login). `expiresAt` casa com o `exp` do JWT. */
+export interface NewAuthSessionInput {
+  userId: number;
+  expiresAt: Date;
+}
+
+/**
+ * Sessões de login (JWT) — porta separada de `SessionRepository` (ambiente).
+ * Sem invariante de unicidade: `create` nunca afeta outras sessões do mesmo
+ * usuário (é isso que viabiliza multi-dispositivo).
+ */
+export interface AuthSessionRepository {
+  /** Cria uma sessão de login nova; independente de quaisquer outras do usuário. */
+  create(input: NewAuthSessionInput): Promise<AuthSession>;
+
+  /** Busca por id (= `jti` do JWT). `null` se não existe. */
+  findById(id: string): Promise<AuthSession | null>;
+
+  /** Revoga (logout). Idempotente — não erro se já revogada ou inexistente. */
+  revoke(id: string): Promise<void>;
+
+  /** Sessões ativas (não revogadas, não expiradas) do usuário — ex.: listar dispositivos logados. */
+  listActiveByUser(userId: number): Promise<AuthSession[]>;
+
+  /** Revoga todas as sessões ativas do usuário (ex.: "sair de todos os dispositivos"). */
+  revokeAllByUser(userId: number): Promise<void>;
 }

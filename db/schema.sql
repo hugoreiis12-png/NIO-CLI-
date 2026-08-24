@@ -53,6 +53,24 @@ CREATE TRIGGER update_sessions_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 -- ───────────────────────────────────────────────
+-- Tabela: Sessões de Autenticação (JWT — login, não ambiente)
+-- ───────────────────────────────────────────────
+-- Separada de `sessions` (ambiente de desenvolvimento) de propósito: ciclos de
+-- vida diferentes (login expira em horas e é revogado no logout; ambiente é
+-- de longa duração, pausado/arquivado manualmente) e `sessions` já tem a
+-- invariante de 1-ativa-por-usuário, que colide com multi-dispositivo aqui.
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- dobra como `jti` embutido no JWT
+    user_id BIGINT NOT NULL REFERENCES user_cli(id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ, -- NULL = válida; preenchida = revogada (logout)
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_auth_sessions_user ON auth_sessions(user_id);
+CREATE INDEX idx_auth_sessions_expires ON auth_sessions(expires_at);
+
+-- ───────────────────────────────────────────────
 -- Tabela: Logs de Sessão (metadata)
 -- ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS log_session (
@@ -111,6 +129,7 @@ CREATE INDEX idx_dep_events_name ON dependency_events(dependency_name);
 COMMENT ON TABLE user_cli IS 'Usuários autenticados na NIO-CLI';
 COMMENT ON COLUMN user_cli.password IS 'Hash argon2id (PHC string). Hashing e verificação na camada de aplicação; o banco nunca vê a senha em texto puro.';
 COMMENT ON TABLE sessions IS 'Sessões de ambiente de desenvolvimento (fonte da verdade)';
+COMMENT ON TABLE auth_sessions IS 'Sessões de login (JWT) — separada de sessions (ambiente). Multi-dispositivo: várias linhas ativas por usuário. id é o jti do JWT; revoked_at IS NULL = válida.';
 COMMENT ON TABLE log_session IS 'Logs de metadata das sessões ativas';
 COMMENT ON COLUMN log_session.session_id IS 'FK para sessions(id) — a sessão dona deste log.';
 COMMENT ON TABLE session_activity IS 'Atividades individuais dentro de uma sessão';

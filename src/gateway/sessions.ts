@@ -3,9 +3,7 @@ import type { GatewayUser } from './types.js';
 
 /**
  * Sessões em memória do processo — MVP, uso interno (spec 0002). Reiniciar o
- * processo derruba todo mundo; não é distribuído. 1 sessão ativa por
- * usuário: um novo login do mesmo `userId` invalida a anterior (mesmo
- * padrão de `start_task_allocation`).
+ * processo derruba todo mundo; não é distribuído.
  */
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h

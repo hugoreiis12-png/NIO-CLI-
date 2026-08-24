@@ -69,6 +69,19 @@ export interface Session {
   updatedAt: Date;
 }
 
+/**
+ * `auth_sessions` — sessão de login (JWT), separada de `Session` (ambiente).
+ * `id` dobra como `jti` embutido no token; sem invariante de unicidade —
+ * multi-dispositivo é várias linhas ativas ao mesmo tempo para o mesmo usuário.
+ */
+export interface AuthSession {
+  id: string; // UUID, = jti do JWT
+  userId: number;
+  expiresAt: Date;
+  revokedAt: Date | null;
+  createdAt: Date;
+}
+
 /** `log_session` — metadata de execução, ligada à sessão dona (session_id UUID). */
 export interface SessionLog {
   id: number;
