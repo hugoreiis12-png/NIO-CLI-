@@ -16,7 +16,6 @@ interface UserRow {
   id: string; // BIGSERIAL vem como string no pg
   name: string;
   password: string;
-  token_session: string | null;
   timestamp_creation: Date;
   timestamp_password_change: Date | null;
   auth_2: boolean;
@@ -41,7 +40,6 @@ export function mapUserRow(row: UserRow): UserCli {
     id: Number(row.id),
     name: row.name,
     auth2: row.auth_2,
-    tokenSession: row.token_session,
     ipsUsing: parseIps(row.ips_using),
     timestampCreation: row.timestamp_creation,
     timestampPasswordChange: row.timestamp_password_change,
@@ -50,7 +48,7 @@ export function mapUserRow(row: UserRow): UserCli {
 }
 
 const COLS =
-  'id, name, password, token_session, timestamp_creation, ' +
+  'id, name, password, timestamp_creation, ' +
   'timestamp_password_change, auth_2, timestamp_last_session, ips_using';
 
 export function createUserRepository(): UserRepository {
@@ -76,10 +74,6 @@ export function createUserRepository(): UserRepository {
       if (!row) return null;
       const ok = await verifyPassword(row.password, password);
       return ok ? mapUserRow(row) : null;
-    },
-
-    async setSessionToken(userId, token) {
-      await query('UPDATE user_cli SET token_session = $2 WHERE id = $1', [userId, token]);
     },
 
     async touchLastSession(userId) {

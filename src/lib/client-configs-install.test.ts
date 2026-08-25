@@ -7,6 +7,7 @@ import {
   installVSCodeRepo,
   planCodexUpdate,
   planOpencodeUpdate,
+  NIO_OPERATOR_MODEL,
 } from './client-configs.js';
 import { envName } from '../brand.js';
 
@@ -137,16 +138,31 @@ test('planCodexUpdate: preserva outras chaves top-level e outros mcp_servers', (
 
 const opencodeEntry = { command: ['nio-cli'], environment: { [CLIENT_ENV]: 'opencode' } };
 
-test('planOpencodeUpdate: sem mcp existente → não configurado, monta a entrada', () => {
+test('planOpencodeUpdate: sem mcp existente → não configurado, monta a entrada + o model default', () => {
   const { alreadyConfigured, next } = planOpencodeUpdate({}, opencodeEntry);
   expect(alreadyConfigured).toBe(false);
   expect((next.mcp as any).nio).toEqual({ type: 'local', ...opencodeEntry, enabled: true });
+  expect(next.model).toBe(NIO_OPERATOR_MODEL);
 });
 
-test('planOpencodeUpdate: entrada já idêntica (command + environment + enabled) → já configurado', () => {
-  const existing = { mcp: { nio: { type: 'local', ...opencodeEntry, enabled: true } } };
+test('planOpencodeUpdate: entrada já idêntica (command + environment + enabled + model) → já configurado', () => {
+  const existing = { model: NIO_OPERATOR_MODEL, mcp: { nio: { type: 'local', ...opencodeEntry, enabled: true } } };
   const { alreadyConfigured } = planOpencodeUpdate(existing, opencodeEntry);
   expect(alreadyConfigured).toBe(true);
+});
+
+test('planOpencodeUpdate: model ausente → não configurado, next seta o default', () => {
+  const existing = { mcp: { nio: { type: 'local', ...opencodeEntry, enabled: true } } };
+  const { alreadyConfigured, next } = planOpencodeUpdate(existing, opencodeEntry);
+  expect(alreadyConfigured).toBe(false);
+  expect(next.model).toBe(NIO_OPERATOR_MODEL);
+});
+
+test('planOpencodeUpdate: model diferente do default → não configurado, next sobrescreve', () => {
+  const existing = { model: 'outro-modelo', mcp: { nio: { type: 'local', ...opencodeEntry, enabled: true } } };
+  const { alreadyConfigured, next } = planOpencodeUpdate(existing, opencodeEntry);
+  expect(alreadyConfigured).toBe(false);
+  expect(next.model).toBe(NIO_OPERATOR_MODEL);
 });
 
 test('planOpencodeUpdate: command diferente → não configurado, next atualiza a entrada', () => {

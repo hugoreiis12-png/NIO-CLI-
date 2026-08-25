@@ -9,7 +9,6 @@ import { SyncReport, summarizeProvision } from "../../ui/report.js";
 import { track, provisionedItems } from "../../../lib/telemetry.js";
 import { VERSION } from "../../../version.js";
 import type { ProjectConfig } from "../../../config.js";
-import type { AuthenticatedSession } from "../../../adapters/supabase/client.js";
 import type { ClientChoice } from "./clients-step.js";
 
 /** Só OpenCode por enquanto (decisão de 2026-07-27) — qualquer escolha (ou
@@ -53,7 +52,6 @@ export async function fetchSkillsStep(report: SyncReport): Promise<void> {
 export function provisionTargetsStep(
   targets: Set<ProvisionTarget>,
   config: ProjectConfig,
-  session: AuthenticatedSession | null,
   uidByName: Map<string, string | null>,
   report: SyncReport,
 ): void {
@@ -65,7 +63,7 @@ export function provisionTargetsStep(
         { id: `prov-${target.id}`, title: target.label, status, summary },
         () => printProvisionResult(result),
       );
-      track(session?.supabase ?? null, {
+      track(null, {
         type: "provision",
         client: target.id,
         sections: config.selection,

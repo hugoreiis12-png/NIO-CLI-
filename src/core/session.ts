@@ -48,7 +48,6 @@ export interface UserCli {
   id: number;
   name: string;
   auth2: boolean;
-  tokenSession: string | null;
   ipsUsing: string[];
   timestampCreation: Date;
   timestampPasswordChange: Date | null;

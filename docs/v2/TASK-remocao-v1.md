@@ -23,14 +23,22 @@ pro histórico completo):
   `src/tools/index.ts` — só sobram as 4 tools genéricas de execução
   (`nio_plan`, `nio_exec_status`, `nio_delegate_exec`, `nio_validate_plan`).
   `src/session-factory.ts` (só suportava backend `supabase`) já foi apagado.
-- **Dois mecanismos de sessão de login coexistindo, temporariamente**: o
-  antigo (`user_cli.token_session`, escrito por `UserRepository.setSessionToken`)
-  e o novo (JWT + `auth_sessions`). A tarefa mais recente (em andamento nesta
-  data) troca `cli/commands/auth.ts` e `mcp-server.ts` pra usar só o JWT — ver
-  "Passo 0" abaixo, é a **primeira coisa a conferir** antes de tocar no resto.
+- **Passo 0 concluído (25 ago)**: só existe `auth_sessions` (JWT) como
+  mecanismo de sessão agora — `token_session`/`setSessionToken` foram
+  removidos do código, banco e `schema.sql` (migration
+  `0003_drop_token_session.sql`, aplicada). Não é mais o primeiro item a
+  conferir — já está feito.
 - **Ainda 100% v1** (sem uso pelos caminhos ativos, mas presente no repo):
   `src/adapters/supabase/*`, `src/auth.ts`, `src/database.types.ts`,
-  `@supabase/supabase-js` + script `gen:types` no `package.json`.
+  `src/core/ports.ts`, `src/lib/task-history.ts`, `@supabase/supabase-js` +
+  script `gen:types` no `package.json`.
+- **Achado de 25 ago — a ordem original estava errada**: `adapters/supabase/*`
+  **não é removível antes** do redesenho do `nio init` — `context-step.ts` e
+  `provision-step.ts` (que eu tinha classificado errado como "Manter,
+  genérico") também importam tipos de lá, junto com `project-step.ts`/
+  `auth-step.ts`/`index.ts`. `sync.ts` também importava (telemetria +
+  "overview do NOS", ambos best-effort) — **esse já foi corrigido hoje**,
+  removível independente. Ver "Ordem sugerida" atualizada.
 
 Esta tarefa é sobre desligar e remover o que ainda é v1 **e** unificar os
 dois mecanismos de sessão em um só, sem quebrar o que já está em produção.
@@ -51,35 +59,13 @@ dois mecanismos de sessão em um só, sem quebrar o que já está em produção.
 4. **`docs/v2/PROGRESSO.md` é o log.** Registre cada etapa concluída lá, no
    mesmo formato das entradas existentes (data, o que mudou, como verificar).
 
-## Passo 0 — Unificar sessão de login (fazer ANTES do resto)
+## Passo 0 — ✅ Concluído (25 ago)
 
-**Pré-requisito**: `cli/commands/auth.ts` e `mcp-server.ts` já devem estar
-usando o Gateway JWT (`gateway/services/login.ts`/`middleware/auth.ts`) em
-vez do fluxo antigo — se `nio login` ainda escreve em `user_cli.token_session`,
-**pare aqui e confirme isso primeiro** (ver `docs/v2/PROGRESSO.md`, entrada
-mais recente). Removendo o mecanismo antigo antes do novo estar validado em
-produção, o login quebra sem fallback.
-
-Com o JWT confirmado funcionando (login → `nio whoami` mostra `sessionId`/
-`expiresAt` → MCP server autentica), então:
-
-1. Confirmar que nada mais chama `UserRepository.setSessionToken` nem lê
-   `UserCli.tokenSession`:
-   ```bash
-   grep -rn "setSessionToken\|tokenSession\|token_session" src --include="*.ts"
-   ```
-2. Remover `setSessionToken` da porta (`core/repositories.ts`) e da
-   implementação (`adapters/pg/user-repository.ts`).
-3. Remover o campo `tokenSession`/`token_session` da entidade `UserCli`
-   (`core/session.ts`) e do `mapUserRow`.
-4. Migration nova (`db/migrations/0003_drop_token_session.sql`): `ALTER TABLE
-   user_cli DROP COLUMN token_session;` + `DROP INDEX idx_user_cli_token;` +
-   atualizar `db/schema.sql` (fonte da verdade) pra refletir a coluna já
-   removida.
-5. `bunx tsc --noEmit` + `bun test` verdes; registrar em `PROGRESSO.md`.
-
-Resultado: só `auth_sessions` (JWT) como mecanismo de sessão de login —
-multi-dispositivo de verdade, sem os dois sistemas coexistindo.
+Unificação de sessão de login feita: `setSessionToken` removido da porta e
+do adapter, `tokenSession` removido da entidade `UserCli`, migration
+`0003_drop_token_session.sql` criada e **aplicada** no banco de teste,
+`db/schema.sql` atualizado. `tsc`/`bun test` verdes. Só `auth_sessions`
+(JWT) como mecanismo de sessão agora.
 
 ## Inventário classificado
 
@@ -87,10 +73,12 @@ multi-dispositivo de verdade, sem os dois sistemas coexistindo.
 
 | Caminho | Papel | Observação |
 |---|---|---|
-| `src/adapters/supabase/*` (`client.ts`, `gateway.ts`, `context-gateway.ts`, `task-gateway.ts` (+`.test.ts`), `allocation-gateway.ts`, `analytics-gateway.ts`) | Adapter Supabase inteiro | Nada no v2 importa daqui hoje, exceto os módulos listados em "Migrar/Adaptar" abaixo |
+| `src/adapters/supabase/*` (`client.ts`, `gateway.ts`, `context-gateway.ts`, `task-gateway.ts` (+`.test.ts`), `allocation-gateway.ts`, `analytics-gateway.ts`) | Adapter Supabase inteiro | ⚠️ **Bloqueado pelo redesenho do `nio init`** (ver "Migrar/Adaptar") — `context-step.ts`/`provision-step.ts`/`project-step.ts`/`auth-step.ts`/`index.ts` ainda importam daqui. Não é removível primeiro; é a ÚLTIMA coisa desta tabela a sair, não a primeira |
 | ~~16 tools de tasks/sprints/alocação~~ | ✅ **Já removidas** (24 ago) | `src/tools/index.ts` só tem as 4 tools genéricas hoje |
+| `src/lib/task-history.ts` | `HistoryEntry` do histórico de mudança de task (v1) | Só importado por `core/ports.ts` e `adapters/supabase/task-gateway.ts` — remove junto com o adapter |
+| `src/core/ports.ts` — **só as interfaces `ContextGateway`/`TaskGateway`/`AllocationGateway`/`AnalyticsGateway`/`Gateway`** (linhas 40-177 na versão de 25 ago) | Porta `Gateway` do v1 | ⚠️ **NÃO apagar o arquivo inteiro** — o mesmo arquivo tem `InvestigationGateway` (linha 194+), propósito diferente (investigação read-only dual-IP), ainda usado por `adapters/postgres/read-only.ts`. Editar o arquivo removendo só as interfaces v1 + os imports que ficam órfãos (`ProjectConfig`, `ProjectContext`, `HistoryEntry`, `UsageEvent`, `Database`, os tipos de `./types.js`) — `InvestigationGateway` e os imports que ela usa (`DbTarget`, `QueryResult`) ficam |
 | `src/database.types.ts` | Tipos gerados pelo Supabase CLI (`supabase gen types`) | Gerado, não escrito à mão — remover junto com o script que o gera |
-| `src/auth.ts` (+ `src/auth.test.ts`) | Fluxo PAT→JWT do Supabase (`nio login <pat>` antigo) | **Já substituído** por `cli/commands/auth.ts` v2. Confirme que nada mais importa daqui (rodar o grep da seção "Como verificar" abaixo) antes de apagar |
+| `src/auth.ts` (+ `src/auth.test.ts`) | Fluxo PAT→JWT do Supabase (`nio login <pat>` antigo) | **Já substituído** por `cli/commands/auth.ts` v2. Ainda importado por `project-context.ts` (mesmo cluster do `nio init`) — mesma dependência bloqueante do adapter |
 | `package.json`: dependência `@supabase/supabase-js`, script `gen:types` | — | Remover só depois que todo o resto desta tabela já foi removido (senão `tsc` quebra primeiro) |
 | `src/constants.ts`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `TOKEN_EXCHANGE_URL`, `CREDENTIALS_DIR`, `CREDENTIALS_FILE`, `PAT_REGEX` | Constantes só usadas pelo `auth.ts` v1 | `brand.ts` também tem `supabaseUrl`/`supabaseAnonKey`/`patPrefix` — avaliar se sobra alguma razão pra mantê-los lá depois que `auth.ts` sumir |
 
@@ -99,10 +87,11 @@ multi-dispositivo de verdade, sem os dois sistemas coexistindo.
 | Caminho | O que tem de v1 | O que fazer |
 |---|---|---|
 | `src/lib/project-context.ts` | Importa `DbClient` de `adapters/supabase/client.js` e `ExchangeResult` de `auth.js`; todo o shape (`ProjectContextRepository`, `..Member`, etc.) é o domínio NOS (repos, membros, sprints) | Provavelmente morre junto com o domínio de projeto/task — mas confirme que `cli/commands/init/project-step.ts` (que o usa) não vira, antes, uma peça do wizard de perfil do v2. Ver linha abaixo |
-| `src/cli/commands/init/project-step.ts`, `src/cli/commands/init/auth-step.ts`, `src/cli/commands/init/index.ts` | O wizard `nio init` inteiro hoje faz "vincular `nio.json` a um projeto do NOS" — isso não existe no domínio v2 (que é sessão + perfil, não projeto+repo do NOS) | **Não é uma remoção mecânica.** É redesenho: o `nio init` do v2 deveria rodar o wizard de perfil (`Profile`) e criar uma `Session`, não pedir login Supabase nem projeto do NOS. Tratar como uma sub-tarefa de design própria, não só "apagar" |
+| `src/cli/commands/init/project-step.ts`, `auth-step.ts`, `context-step.ts`, `provision-step.ts`, `index.ts` | O wizard `nio init` inteiro hoje faz "vincular `nio.json` a um projeto do NOS" — isso não existe no domínio v2 (que é sessão + perfil, não projeto+repo do NOS). **Correção de 25 ago**: `context-step.ts` (`DbClient` como tipo de parâmetro) e `provision-step.ts` (`AuthenticatedSession`) também importam Supabase — eu tinha classificado os dois errado como "Manter, genérico" na versão anterior deste documento. É o cluster inteiro do `init`, não só 3 arquivos | **Não é uma remoção mecânica.** É redesenho: o `nio init` do v2 deveria rodar o wizard de perfil (`Profile`) e criar uma `Session`, não pedir login Supabase nem projeto do NOS. Tratar como uma sub-tarefa de design própria, não só "apagar" — e é ela que desbloqueia a remoção do adapter Supabase inteiro (ver tabela "Remover") |
 | `src/lib/telemetry.ts` | Importa só o **tipo** `DbClient` de `adapters/supabase/client.js` (pra tipar o client usado em `track()`) | Provavelmente basta trocar a assinatura pra receber o pool `pg` ou um client mais neutro — investigar se telemetria ainda faz sentido no v2 e, se sim, apontar pra onde vai gravar (Postgres `nio_cli`? outro lugar?) |
 | ~~`src/session-factory.ts`~~ | ✅ **Já apagado** (24 ago) | Só tinha o `case 'supabase'`; MCP tools v2 falam direto com os repositórios, como o `cli/commands/auth.ts` já fazia |
-| `src/mcp-server.ts` | ✅ **`authenticateSession()` já não usa mais Supabase** — hoje lê `lib/session-store.ts` | 🟡 Mas está no meio de uma segunda troca (fluxo antigo `token_session` → JWT/`auth_sessions`) — ver "Passo 0" acima antes de considerar este item resolvido |
+| ~~`src/mcp-server.ts`~~ | ✅ **Resolvido** (25 ago) — `authenticateSession()` usa JWT/`auth_sessions` via `lib/session-store.ts`, Passo 0 concluído | — |
+| ~~`src/cli/commands/sync.ts`~~ | ✅ **Resolvido** (25 ago) — importava `createAuthenticatedClient` pra telemetria + "overview do NOS" no harness, ambos best-effort (nunca bloqueavam). Removido; `track(null, ...)` já é no-op seguro | Confirmado com `nio sync --dry-run` rodando limpo até o fim |
 
 ### Resolvido — não é v1, mas está superseded (decisão de 23 ago 2026)
 
@@ -130,20 +119,28 @@ Não remover — servem tanto v1 quanto v2, sem dependência de Supabase:
 - `src/tools/plan.ts`, `validate-plan.ts`, `delegate-exec.ts`, `exec-status.ts` — delegam a um engine de execução externo (`lib/exec-delegate.ts`, `lib/plan-delegate.ts`, `lib/exec-engines.ts`); zero import de `adapters/supabase` ou `Gateway`.
 - `src/lib/skills.ts`, `skill-serve.ts`, `skills-cache.ts`, `rules.ts`, `sections.ts`, `hooks.ts`, `provision*.ts`, `client-configs*.ts`, `dependencies.ts`, `dependency-install.ts`, `file-merge.ts`, `harness.ts`, `cowork-extension.ts`, `autopull.ts`, `patterns.ts`, `duration.ts`, `colors.ts`, `prompts.ts`, `require-config.ts`, `targets.ts` — infraestrutura de provisionamento/skills/CLI, sem vínculo de domínio.
 - `src/cli/commands/sync.ts`, `skills.ts`, `clean.ts`, `exec.ts`, `plan.ts`, `validate-plan.ts`, `completion.ts` — comandos de CLI genéricos.
-- `src/cli/commands/init/clients-step.ts`, `provision-step.ts` — passos do wizard que escolhem cliente de IA / provisionam arquivos, sem tocar em Supabase.
+- `src/cli/commands/init/clients-step.ts` — passo do wizard que escolhe cliente de IA, sem tocar em Supabase. **Correção (25 ago)**: `provision-step.ts` **saiu** desta lista — importa `AuthenticatedSession` de Supabase, faz parte do cluster do `init` (ver "Migrar/Adaptar").
 - `src/core/session.ts`, `src/core/repositories.ts`, `src/adapters/pg/*`, `src/gateway/config.ts`, `src/gateway/services/`, `src/gateway/middleware/` — é o v2, óbvio, mas citado aqui pra registrar que **não é candidato a remoção**, é o destino.
 
-## Ordem sugerida (atualizada 24 ago — passos 1-2 e 5 originais já concluídos)
+## Ordem sugerida (reordenada 25 ago — a versão anterior tinha a dependência invertida)
 
-0. ~~Passo 0 (unificar sessão)~~ — ver seção própria acima, é pré-requisito
-   pra tudo daqui pra baixo que toca `mcp-server.ts`/`user_cli`.
-1. Apagar `src/adapters/supabase/*.ts` — nesse ponto só devem sobrar erros de
-   `tsc` em `project-context.ts`, `telemetry.ts`, `cli/commands/init/*` (a
-   tabela "Migrar/Adaptar" — `session-factory.ts` e o `mcp-server.ts` antigo
-   já não estão mais na lista, foram resolvidos).
-2. Resolver `telemetry.ts` (trocar o tipo do client) e decidir o destino de
-   `project-context.ts` + o wizard `init` (provavelmente uma sub-tarefa
-   separada de design, não mecânica — ver "Riscos conhecidos").
+0. ~~Passo 0 (unificar sessão)~~ — ✅ concluído.
+0.1. ~~`sync.ts`~~ — ✅ concluído (25 ago) — era o único item independente
+   fora do cluster do `init`; resolvido primeiro por ser rápido e seguro.
+1. **Redesenhar `nio init`** (`project-step.ts`, `auth-step.ts`,
+   `context-step.ts`, `provision-step.ts`, `index.ts`, + o que fazer de
+   `project-context.ts`/`telemetry.ts`) — **isto é o bloqueio real**, não um
+   passo qualquer no meio da lista. Enquanto o `init` depender de Supabase
+   pra vincular projeto do NOS, nada no passo 2 é seguro de fazer. É sub-tarefa
+   de design (o que o `init` do v2 faz — provavelmente o wizard de perfil +
+   `Session`, ver `docs/v2/ARQUITETURA-CLIENTE-IA.md` sobre o handoff pro
+   operador de IA), não mecânica — tratar como conversa própria com o dono
+   do projeto antes de codar.
+2. **Só depois** de 1 resolvido: apagar `src/adapters/supabase/*.ts` e
+   `src/lib/task-history.ts`; **editar** (não apagar) `src/core/ports.ts`
+   removendo só as interfaces v1 (`InvestigationGateway` fica — ver tabela
+   "Remover" acima). Nesse ponto não deve sobrar nenhum import v1 apontando
+   pra lá — confirme com o grep abaixo.
 3. Apagar `src/auth.ts` (+ teste) e as constantes órfãs em `constants.ts`.
 4. Tirar `@supabase/supabase-js` do `package.json` e o script `gen:types`;
    apagar `src/database.types.ts`.
@@ -180,9 +177,11 @@ grep -rln "supabase" src package.json --include="*.ts" -i
   propósito **diferente** do `UserRepository`/`sessions` (investigação
   read-only dual-IP, não é o mesmo domínio) — não confundir os dois ao mexer
   em `adapters/postgres/` vs `adapters/pg/`.
-- Este documento foi atualizado em 24 ago 2026 (commits até `c2aaa8b` — v1
-  tools removidas, `SessionRepository`, `AuthSessionRepository`/Gateway JWT).
-  Se o código já andou desde então (em especial o Passo 0, que pode já estar
-  concluído por quem ler isto depois), confira os imports de novo antes de
-  seguir a tabela cegamente — é o mesmo aviso de sempre, só que agora é a
-  segunda vez que este documento fica pra trás do código real.
+- Este documento foi atualizado em 25 ago 2026, numa auditoria de progresso
+  (Passo 0 confirmado concluído; achei e corrigi 3 classificações erradas —
+  `sync.ts`, `context-step.ts`, `provision-step.ts` não eram tão genéricos
+  quanto a versão anterior dizia; `task-history.ts`/`core/ports.ts` faltavam
+  na tabela "Remover"). É a terceira vez que este documento fica pra trás do
+  código real — se você está lendo isto depois de 25 ago, refaça os greps
+  desta seção antes de confiar nas tabelas cegamente, principalmente na
+  ressalva do `core/ports.ts` acima (editar, não apagar).

@@ -16,6 +16,12 @@ export interface ProjectConfig {
    */
   project_id?: string;
   repository_id?: string | null;
+  /**
+   * `Session` v2 vinculada (UUID, `sessions.id`). Gravado pelo `nio init` novo —
+   * substitui `project_id`/`repository_id` como binding, que ficam só pro fluxo
+   * v1/Supabase em migração.
+   */
+  session_id?: string;
   /** Seleção unificada role → área → stack (`nio init`). Dita skills, rules e deps. */
   selection?: Selection;
   /** IDE escolhido no `nio init` — dirige integrações específicas de editor. */
@@ -178,6 +184,11 @@ function shapeProjectConfig(obj: Record<string, unknown>): ProjectConfig {
     throw new Error(`${PROJECT_CONFIG_FILE}: campo "repository_id" deve ser UUID, null ou ausente.`);
   }
 
+  const sessionId = obj.session_id;
+  if (sessionId !== undefined && (typeof sessionId !== 'string' || !UUID_REGEX.test(sessionId))) {
+    throw new Error(`${PROJECT_CONFIG_FILE}: campo "session_id", quando presente, deve ser um UUID válido.`);
+  }
+
   const config: ProjectConfig = {};
   if (typeof projectId === 'string') config.project_id = projectId;
   if (typeof repositoryId === 'string') {
@@ -185,6 +196,7 @@ function shapeProjectConfig(obj: Record<string, unknown>): ProjectConfig {
   } else if (repositoryId === null) {
     config.repository_id = null;
   }
+  if (typeof sessionId === 'string') config.session_id = sessionId;
   const selection = parseSelection(obj.selection) ?? migrateLegacySelection(obj);
   if (selection) config.selection = selection;
   if (obj.ide === 'vscode' || obj.ide === 'xcode' || obj.ide === 'other') {
@@ -216,6 +228,7 @@ export function writeProjectConfig(config: ProjectConfig, cwd: string = process.
   const repo: Record<string, unknown> = {};
   if (config.project_id) repo.project_id = config.project_id;
   if (config.repository_id !== undefined) repo.repository_id = config.repository_id;
+  if (config.session_id) repo.session_id = config.session_id;
   if (config.selection) repo.selection = config.selection;
   writeFileSync(getProjectConfigPath(cwd), JSON.stringify(repo, null, 2) + "\n", "utf8");
 }

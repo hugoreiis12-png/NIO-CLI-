@@ -1,24 +1,23 @@
+import { spawn } from "node:child_process";
 import type { Command } from "commander";
 import { brand } from "../../../brand.js";
-import { getProjectConfigPath, type ProjectConfig } from "../../../config.js";
+import { renderMatrixLogo } from "../../../matrix-logo.js";
+import { getProjectConfigPath, type ProjectConfig, type Ide } from "../../../config.js";
+import type { Session, Ide as SessionIde, Profile } from "../../../core/session.js";
+import { createSessionRepository } from "../../../adapters/pg/session-repository.js";
 import { readDependencies, skillIdMap } from "../../../lib/skills.js";
 import { collectRuleSkills } from "../../../lib/rules.js";
 import { offerDependencyInstall, offerRuleSkills } from "../../flows/dependencies.js";
 import { offerShellCompletion } from "../../flows/completion.js";
 import { ensureCoreClients } from "../../flows/clients.js";
-import { section } from "../../../lib/colors.js";
+import { section, c, sym } from "../../../lib/colors.js";
+import { startSpinner } from "../../../spinner.js";
+import { isBinaryInstalled } from "../../../lib/client-install.js";
 import { SyncReport, renderReport, browseReport, resolveReportMode } from "../../ui/report.js";
 import { flushTelemetry } from "../../../lib/telemetry.js";
-import type { AuthenticatedSession } from "../../../adapters/supabase/client.js";
-import { hasCredentials, createSessionStep } from "./auth-step.js";
-import {
-  fetchMemberProjectsStep,
-  pickProject,
-  pickRepository,
-  buildBaseConfig,
-  pickIde,
-} from "./project-step.js";
-import { confirmOverwriteIfExists, persistConfigStep, loadContextStep, writeHarnessStep } from "./context-step.js";
+import { requireLocalSessionStep } from "./auth-step.js";
+import { pickProfile, pickSessionName, pickIde } from "./profile-step.js";
+import { confirmOverwriteIfExists, persistConfigStep, writeHarnessStep } from "./context-step.js";
 import {
   promptClientChoices,
   installClients,
@@ -32,62 +31,54 @@ import {
   provisionHooksStep,
 } from "./provision-step.js";
 import { promptSelection } from "../../flows/sections.js";
+import type { StoredSession } from "../../../lib/session-store.js";
 
-/** Fluxo autenticado: projeto/repositório do NOS + contexto, além de seleção/IDE/harness. */
-async function resolveProjectSetup(): Promise<{
-  config: ProjectConfig;
-  session: AuthenticatedSession;
-}> {
-  const session = await createSessionStep();
-  const { supabase } = session;
-
-  const projects = await fetchMemberProjectsStep(supabase, session.user.id);
-  const selectedProject = await pickProject(projects);
-  const repositoryId = await pickRepository(supabase, selectedProject.id);
-  const config = buildBaseConfig(selectedProject.id, repositoryId);
-
-  config.selection = await promptSelection();
-  config.ide = await pickIde();
-
-  persistConfigStep(config, selectedProject.name);
-  const overview = await loadContextStep(supabase, config, session.user);
-  writeHarnessStep(config, overview);
-
-  return { config, session };
+/** `Session.ide` não distingue Xcode — cai em `other` como qualquer editor não-VS Code. */
+function toSessionIde(ide: Ide | undefined): SessionIde {
+  return ide === "vscode" ? "vscode" : "other";
 }
 
 /**
- * Fluxo local (sem credenciais): pula projeto/contexto do NOS — que exigem
- * sessão — e configura só o que é local: seleção role/stack, IDE, `nio.json`
- * sem binding e o harness com as rules. É o caminho padrão enquanto a auth
- * está pausada; `nio login` + `nio init` de novo faz o vínculo depois.
+ * Escolhas do wizard (perfil, nome, seleção role/stack, IDE) + criação da
+ * `Session` v2 (primeiro consumidor real do `SessionRepository`) + persistência
+ * do binding (`nio.json` com `session_id`) e do harness.
  */
-async function resolveLocalSetup(): Promise<{
-  config: ProjectConfig;
-  session: null;
-}> {
-  section("Setup local", "sem autenticação — projeto do NOS fica pra depois");
-  console.log(
-    "Você ainda não está autenticado, então vou configurar só o que é local " +
-      `(clientes, skills, seleção e IDE). Rode \`${brand.name} login\` e \`${brand.name} init\` ` +
-      "de novo quando quiser vincular um projeto do NOS.",
-  );
+async function resolveSessionSetup(
+  local: StoredSession,
+): Promise<{ config: ProjectConfig; session: Session }> {
+  const profile: Profile = await pickProfile();
+  const sessionName = await pickSessionName();
 
   const config: ProjectConfig = {};
   config.selection = await promptSelection();
   config.ide = await pickIde();
 
-  persistConfigStep(config);
+  const sessionRepo = createSessionRepository();
+  const spinner = startSpinner("Criando sessão...");
+  let session: Session;
+  try {
+    session = await sessionRepo.create({
+      userId: local.userId,
+      name: sessionName,
+      profile,
+      projectPath: process.cwd(),
+      ide: toSessionIde(config.ide),
+    });
+    spinner.stop();
+  } catch (err) {
+    spinner.fail(`Falha ao criar a sessão: ${(err as Error).message}`);
+    process.exit(1);
+  }
+
+  config.session_id = session.id;
+  persistConfigStep(config, session.name);
   writeHarnessStep(config, "");
 
-  return { config, session: null };
+  return { config, session };
 }
 
 /** Escolha e instalação dos clientes de IA + provisionamento de skills/commands/hooks. */
-async function installAndProvisionClients(
-  config: ProjectConfig,
-  session: AuthenticatedSession | null,
-): Promise<void> {
+async function installAndProvisionClients(config: ProjectConfig): Promise<void> {
   const clientConfigs = await promptClientChoices();
   installClients(clientConfigs, process.cwd());
 
@@ -99,7 +90,7 @@ async function installAndProvisionClients(
   section("Skills & commands", "provisionando pros clientes");
   const report = new SyncReport();
   await fetchSkillsStep(report);
-  provisionTargetsStep(provisionTargets, config, session, skillIdMap(), report);
+  provisionTargetsStep(provisionTargets, config, skillIdMap(), report);
   provisionHooksStep(provisionTargets, config, report);
 
   const mode = resolveReportMode({});
@@ -118,27 +109,53 @@ async function offerFollowUps(config: ProjectConfig): Promise<void> {
   await flushTelemetry();
 }
 
+/**
+ * Handoff final: entrega o ambiente materializado pro operador de IA fixo
+ * (OpenCode — decisão de 2026-07-27). Se o binário não estiver no PATH (usuário
+ * recusou a instalação lá em `ensureCoreClients`), só orienta em vez de falhar.
+ */
+async function handoffToOperator(): Promise<void> {
+  console.log("");
+  section("Handoff", "entregando a sessão pro OpenCode");
+  if (!isBinaryInstalled("opencode")) {
+    console.log(
+      `  ${c.yellow(sym.warn)} OpenCode não encontrado no PATH. Instale e rode \`opencode\` ` +
+        "nesta pasta pra continuar.",
+    );
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    const child = spawn("opencode", [], { stdio: "inherit" });
+    child.on("exit", () => resolve());
+    child.on("error", (err) => {
+      console.error(`[erro] Falha ao iniciar o OpenCode: ${err.message}`);
+      resolve();
+    });
+  });
+}
+
 async function runInitWizard(): Promise<void> {
   const configPath = getProjectConfigPath();
   if (!(await confirmOverwriteIfExists(configPath))) return;
 
+  console.log(renderMatrixLogo());
+  console.log(`${brand.name} init — monta o ambiente desta sessão.`);
+
   // Logo no início: confere OpenCode e oferece instalar se faltar.
   await ensureCoreClients({ interactive: true });
 
-  // Auth pausada: usa a sessão se já houver credenciais (`nio login`), senão
-  // segue no setup local sem vincular projeto do NOS.
-  const { config, session } = (await hasCredentials())
-    ? await resolveProjectSetup()
-    : await resolveLocalSetup();
-  await installAndProvisionClients(config, session);
+  // Sem login inline: exige `nio register`/`nio login` prévios e sai se faltar.
+  const local = await requireLocalSessionStep();
+
+  const { config } = await resolveSessionSetup(local);
+  await installAndProvisionClients(config);
   await offerFollowUps(config);
+  await handoffToOperator();
 }
 
 export function registerInitCommand(program: Command): void {
   program
     .command("init")
-    .description(
-      `Cria ${brand.projectConfigFile} no diretório atual vinculando a um projeto do ${brand.productName}`,
-    )
+    .description(`Cria ${brand.projectConfigFile} no diretório atual e materializa o ambiente da sessão`)
     .action(runInitWizard);
 }

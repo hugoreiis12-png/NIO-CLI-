@@ -3,7 +3,6 @@ import { brand } from "../../brand.js";
 import { spawnSync } from "node:child_process";
 import { confirm } from "../../lib/prompts.js";
 import { loadProjectConfig } from "../../config.js";
-import { createAuthenticatedClient } from "../../adapters/supabase/client.js";
 import { checkForUpdate } from "../../lib/version-check.js";
 import { uninstallProvision, provision } from "../../lib/provision.js";
 import { provisionHooks, uninstallHooks } from "../../lib/hooks.js";
@@ -14,7 +13,6 @@ import { writeRepoHarness } from "../../lib/harness.js";
 import { patternsExist, runPatternsAnalysis } from "../../lib/patterns.js";
 import { offerShellCompletion } from "../flows/completion.js";
 import { ensureUserConfig } from "../flows/user-config.js";
-import { fetchProjectContext, buildProjectOverview } from "../../lib/project-context.js";
 import { startSpinner } from "../../spinner.js";
 import { track, provisionedItems, flushTelemetry } from "../../lib/telemetry.js";
 import { VERSION } from "../../version.js";
@@ -184,17 +182,10 @@ export function registerSyncCommand(program: Command): void {
             });
           }
 
-          // Sessão best-effort — telemetria de adoção + overview do NOS (não bloqueia).
-          let session = null;
-          let telemetry = null;
-          if (!opts.dryRun) {
-            try {
-              session = await createAuthenticatedClient();
-              telemetry = session.supabase;
-            } catch {
-              /* sem login → sem telemetria/overview */
-            }
-          }
+          // Telemetria v1 (Supabase) removida daqui — sem sessão autenticada
+          // nesse caminho hoje (nio_cli/JWT não alimenta isto ainda).
+          // `track(null, ...)` já é no-op seguro (lib/telemetry.ts).
+          const telemetry = null;
           const uidByName = skillIdMap();
 
           // ---- Fase informativa: coleta cada etapa como seção (não imprime na hora) ----
@@ -250,20 +241,12 @@ export function registerSyncCommand(program: Command): void {
 
           // Harness no repo (rules + AGENTS.md + CLAUDE.md). Idempotente.
           if (!opts.dryRun && config) {
-            let overview = "";
-            if (session) {
-              try {
-                overview = buildProjectOverview(
-                  await fetchProjectContext(session.supabase, config, session.user),
-                );
-              } catch {
-                /* sem contexto → não toca o bloco de overview */
-              }
-            }
+            // Overview do NOS (Supabase) removido — sem fonte de contexto de
+            // projeto v1 nesse caminho hoje; harness segue só com as rules.
             try {
               const h = writeRepoHarness(process.cwd(), {
                 rulesMarkdown: concatenateRules(config.selection ?? { roles: [], stacks: {} }),
-                overview,
+                overview: "",
               });
               const changed = [h.rules, h.agents, h.claude].some(
                 (a) => a !== "unchanged" && a !== "empty",

@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS user_cli (
     id BIGSERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL, -- hash argon2id ($argon2id$v=19$m=...,t=...,p=...$salt$hash) — NUNCA senha em texto puro
-    token_session TEXT,
     timestamp_creation TIMESTAMPTZ DEFAULT NOW(),
     timestamp_password_change TIMESTAMPTZ,
     auth_2 BOOLEAN DEFAULT FALSE,
@@ -15,7 +14,8 @@ CREATE TABLE IF NOT EXISTS user_cli (
 );
 
 CREATE INDEX idx_user_cli_name ON user_cli(name);
-CREATE INDEX idx_user_cli_token ON user_cli(token_session);
+-- token_session removida (migration 0003_drop_token_session.sql) — login é
+-- só JWT + auth_sessions agora, ver src/gateway/services/login.ts.
 
 -- ───────────────────────────────────────────────
 -- Tabela: Sessões (estado do ambiente)

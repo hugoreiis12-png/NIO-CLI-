@@ -28,9 +28,6 @@ export interface UserRepository {
    */
   verifyCredentials(name: string, password: string): Promise<UserCli | null>;
 
-  /** Grava (ou limpa, com `null`) o token de sessão do usuário. */
-  setSessionToken(userId: number, token: string | null): Promise<void>;
-
   /** Marca `timestamp_last_session = now()`. */
   touchLastSession(userId: number): Promise<void>;
 }

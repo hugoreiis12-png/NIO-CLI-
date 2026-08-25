@@ -5,7 +5,6 @@ const baseRow = {
   id: '42',
   name: 'hugo',
   password: '$argon2id$v=19$m=19456,t=2,p=1$abc$def',
-  token_session: 'tok_123',
   timestamp_creation: new Date('2026-08-21T10:00:00Z'),
   timestamp_password_change: null,
   auth_2: false,
@@ -31,8 +30,7 @@ test('mapUserRow tolera ips_using nulo ou inválido → []', () => {
   expect(mapUserRow({ ...baseRow, ips_using: 'não-json' }).ipsUsing).toEqual([]);
 });
 
-test('mapUserRow preserva token e flags', () => {
+test('mapUserRow preserva flags', () => {
   const user = mapUserRow({ ...baseRow, auth_2: true });
-  expect(user.tokenSession).toBe('tok_123');
   expect(user.auth2).toBe(true);
 });

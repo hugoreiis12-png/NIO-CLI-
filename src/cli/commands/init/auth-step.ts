@@ -1,27 +1,24 @@
-import { loadCredentials } from "../../../auth.js";
-import { createAuthenticatedClient, type AuthenticatedSession } from "../../../adapters/supabase/client.js";
-import { startSpinner } from "../../../spinner.js";
+import { loadSession, type StoredSession } from "../../../lib/session-store.js";
+import { brand } from "../../../brand.js";
+import { box, c, sym, cmd } from "../../../lib/colors.js";
 
 /**
- * O `init` **não força mais login** — a auth está pausada até termos um backend
- * de alocação de logs (ver roadmap Fase 1/4). Aqui só checamos se já há
- * credenciais salvas de um `nio login` manual: se sim, o wizard segue o fluxo
- * completo (projeto + contexto do NOS); senão, cai no setup local. Nunca pede
- * PAT nem sai do processo.
+ * O `nio init` v2 exige login prévio (`nio register` + `nio login`, JWT via
+ * nio-gateway) — diferente do v1, que tinha um fluxo de auth pausado e caía
+ * num setup local sem vínculo. Aqui não há login inline: se não há sessão
+ * local válida em `~/.nio/session.json`, orienta e sai do processo.
  */
-export async function hasCredentials(): Promise<boolean> {
-  return Boolean(await loadCredentials());
-}
+export async function requireLocalSessionStep(): Promise<StoredSession> {
+  const session = await loadSession();
+  if (session) return session;
 
-/** Cria a sessão autenticada (client Supabase + user) usada pelo resto do wizard. */
-export async function createSessionStep(): Promise<AuthenticatedSession> {
-  const authSpinner = startSpinner("Carregando sessão...");
-  try {
-    const session = await createAuthenticatedClient();
-    authSpinner.stop();
-    return session;
-  } catch (err) {
-    authSpinner.fail((err as Error).message);
-    process.exit(1);
-  }
+  console.log(
+    box(
+      `${c.yellow(sym.warn)} ${c.bold("Você ainda não está autenticado.")}\n` +
+        `${c.dim("crie um usuário:")} ${cmd(`${brand.name} register`)}\n` +
+        `${c.dim("depois entre com:")} ${cmd(`${brand.name} login`)}`,
+      { borderColor: "yellow", title: "Autenticação necessária" },
+    ),
+  );
+  process.exit(1);
 }

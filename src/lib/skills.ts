@@ -148,7 +148,7 @@ function parseFrontmatter(raw: string): { frontmatter: Record<string, string>; b
 }
 
 /** Clientes de IA reconhecidos pra visibilidade de docs. */
-export const KNOWN_CLIENTS = ['claude-code', 'codex', 'cowork'] as const;
+export const KNOWN_CLIENTS = ['claude-code', 'codex', 'cowork', 'opencode'] as const;
 const KNOWN_CLIENTS_SET = new Set<string>(KNOWN_CLIENTS);
 
 /**

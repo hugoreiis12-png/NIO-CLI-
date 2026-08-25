@@ -240,10 +240,19 @@ interface OpencodeServerEntry {
 }
 
 /**
+ * Modelo fixo do operador de IA embutido (ver `docs/v2/ARQUITETURA-CLIENTE-IA.md`).
+ * É só um DEFAULT no `opencode.json` — o OpenCode não trava modelo de
+ * verdade a nível de config de projeto/global (limitação documentada, não
+ * finja que é um lock forte).
+ */
+export const NIO_OPERATOR_MODEL = 'opencode/big-pickle';
+
+/**
  * Decide se o `nio` já está OK no `opencode.json` e monta o próximo objeto se
  * precisar atualizar (pura, sem IO). Mesmo padrão de `planCodexUpdate`, mas o
  * OpenCode usa `mcp` (não `mcpServers`/`mcp_servers`), `command` como array
- * (binário + args juntos) e `environment` (não `env`).
+ * (binário + args juntos) e `environment` (não `env`). Também garante o
+ * `model` default (`NIO_OPERATOR_MODEL`) no nível raiz do config.
  */
 export function planOpencodeUpdate(
   existing: Record<string, unknown>,
@@ -256,11 +265,13 @@ export function planOpencodeUpdate(
     current &&
       current.command?.[0] === nioEntry.command[0] &&
       current.environment?.[envName('CLIENT')] === 'opencode' &&
-      current.enabled !== false,
+      current.enabled !== false &&
+      existing.model === NIO_OPERATOR_MODEL,
   );
 
   const next: Record<string, unknown> = {
     ...existing,
+    model: NIO_OPERATOR_MODEL,
     mcp: {
       ...servers,
       [brand.mcpServerKey]: {
@@ -284,7 +295,10 @@ export function installOpencodeGlobal(): InstallResult {
   const nioEntry = { command: [MCP_COMMAND], environment: { [envName('CLIENT')]: 'opencode' } };
 
   if (!existsSync(path)) {
-    writeJson(path, { mcp: { [brand.mcpServerKey]: { type: 'local', ...nioEntry, enabled: true } } });
+    writeJson(path, {
+      model: NIO_OPERATOR_MODEL,
+      mcp: { [brand.mcpServerKey]: { type: 'local', ...nioEntry, enabled: true } },
+    });
     return { status: 'created', path };
   }
 

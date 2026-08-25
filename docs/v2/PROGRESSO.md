@@ -351,3 +351,62 @@ anterior: brute-force local contra `/login` sem rate limit nenhum.
 2. 2º fator SMS (Twilio).
 3. Permissionamento por `Profile` (Kong `acl`) — só quando houver rota que
    precise disso de verdade.
+
+---
+
+## 2026-08-25 — Auditoria do 2º agente (TASK-remocao-v1.md) + Passo 0 fechado
+
+Dono do projeto pediu pra checar o progresso do segundo agente (opencode) na
+limpeza do v1 e ajudar se estivesse devagar/com muita task. Achado: só o
+Passo 0 tinha sido tocado, e faltava um pedaço (schema.sql desatualizado).
+Resto do checklist não tinha começado. Fechei o Passo 0 e corrigi a
+`TASK-remocao-v1.md`, que tinha a ordem de dependência **invertida**.
+
+### Passo 0 — fechado
+`db/schema.sql` não tinha sido atualizado (só o código + a migration
+existiam, ambos corretos). Adicionei a remoção da coluna `token_session`/
+índice no schema.sql, apliquei a migration `0003_drop_token_session.sql` no
+banco de teste local, confirmei `\d user_cli` sem a coluna e todas as FKs
+(`auth_sessions`, `sessions`, `log_session`) intactas.
+
+### Achado — a ordem documentada estava errada
+`context-step.ts` e `provision-step.ts` (que eu tinha classificado como
+"Manter, genérico") **importam tipos do Supabase** (`DbClient`,
+`AuthenticatedSession`) — fazem parte do mesmo cluster do `nio init` que
+`project-step.ts`/`auth-step.ts`. Isso significa: **remover
+`adapters/supabase/*` está bloqueado pelo redesenho do `nio init`**, não é
+um passo independente que pode vir antes, como o documento dizia.
+
+`sync.ts` também importava Supabase (telemetria + "overview do NOS" no
+harness) — mas esses dois usos eram genuinamente best-effort (try/catch,
+nunca bloqueavam). Corrigi: removidos os imports/blocos, `track(null, ...)`
+já é no-op seguro. `nio sync --dry-run` rodando limpo até o fim confirma.
+
+**Erro que quase cometi e corrigi antes de publicar**: ia listar
+`src/core/ports.ts` inteiro pra remoção junto do adapter Supabase — mas o
+arquivo tem `InvestigationGateway` (dual-IP read-only, propósito diferente,
+ainda usado por `adapters/postgres/read-only.ts`) misturado no mesmo
+arquivo que as interfaces v1. Corrigido na `TASK-remocao-v1.md`: é edição
+parcial do arquivo, não apagar ele inteiro.
+
+### Código alterado
+| Arquivo | Mudança |
+|---|---|
+| `db/schema.sql` | Coluna `token_session`/índice removidos (fechando o Passo 0) |
+| `db/migrations/0003_drop_token_session.sql` | Aplicada no banco de teste local |
+| `src/cli/commands/sync.ts` | Removidos `createAuthenticatedClient`, `fetchProjectContext`/`buildProjectOverview` e o bloco de sessão best-effort — `telemetry` vira sempre `null`, harness sempre sem overview |
+| `docs/v2/TASK-remocao-v1.md` | Reordenado (`nio init` é bloqueio real, não passo 2); `task-history.ts`/`core/ports.ts` (parcial) adicionados à tabela "Remover"; `context-step.ts`/`provision-step.ts` tirados do "Manter" |
+
+### Verificação
+- `bunx tsc --noEmit` → verde. `bun test` → 229/231 (mesmas 2 de sempre).
+- `nio sync --dry-run` rodando até o fim sem erro, sem nenhuma referência a
+  Supabase no arquivo.
+
+### Próximo passo
+1. Redesenho do `nio init` (bloqueio real pro resto da limpeza v1) — sub-tarefa
+   de design, ver `docs/v2/ARQUITETURA-CLIENTE-IA.md`.
+2. Depois disso: `adapters/supabase/*`, `core/ports.ts` (edição parcial),
+   `task-history.ts`, `auth.ts`, `database.types.ts`, `package.json`.
+3. 2º fator — pausado por decisão do dono do projeto (abandonando Twilio,
+   avaliando TOTP self-hosted; ver conversa em andamento, ainda sem entrada
+   própria de arquitetura registrada).
