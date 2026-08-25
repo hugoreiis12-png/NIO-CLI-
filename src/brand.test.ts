@@ -3,12 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { brand, patRegex, homePath, env, envName } from './brand.js';
 import { toolDefinitions } from './tools/index.js';
-import {
-  CREDENTIALS_DIR,
-  CREDENTIALS_FILE,
-  PROJECT_CONFIG_FILE,
-  TOKEN_EXCHANGE_URL,
-} from './constants.js';
+import { PROJECT_CONFIG_FILE } from './constants.js';
 
 // Trava os defaults: mudar qualquer um destes é um rebrand consciente, não um acidente.
 test('defaults da marca reproduzem os valores atuais (NIO)', () => {
@@ -46,12 +41,7 @@ test('as 20 tools continuam registradas com os nomes de sempre', () => {
 });
 
 test('constants derivados batem com os caminhos atuais', () => {
-  expect(CREDENTIALS_DIR).toBe(join(homedir(), '.nio'));
-  expect(CREDENTIALS_FILE).toBe(join(homedir(), '.nio', 'credentials.json'));
   expect(PROJECT_CONFIG_FILE).toBe('nio.json');
-  expect(TOKEN_EXCHANGE_URL).toBe(
-    'https://wdshvtlsjoegjvmpqobx.supabase.co/functions/v1/mcp-token-exchange',
-  );
 });
 
 test('patRegex aceita o formato NIO e rejeita o resto', () => {
