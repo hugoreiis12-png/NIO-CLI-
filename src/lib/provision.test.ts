@@ -184,7 +184,12 @@ test('write-error: path de destino colide com um diretório existente → não a
   }
 });
 
-test('ensureDir: materializa o alvo de um symlink pendurado em vez de estourar ENOENT', () => {
+// Semântica de symlink de dotfile é POSIX: no Windows, `symlinkSync` p/ alvo
+// inexistente cria link tipo-`file` (não `dir`), então `mkdir` através dele nunca
+// funciona — o comportamento que este teste valida não existe lá. Roda no
+// CI/Mac/Linux, onde dotfiles simbolicados são o caso real.
+const posixTest = process.platform === 'win32' ? test.skip : test;
+posixTest('ensureDir: materializa o alvo de um symlink pendurado em vez de estourar ENOENT', () => {
   const base = fresh();
   try {
     const realTarget = join(base, 'real-target');

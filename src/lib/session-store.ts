@@ -1,9 +1,7 @@
 /**
- * Persistência local da sessão v2 (`nio login` contra `user_cli`/Postgres) —
- * separado de `src/auth.ts` (fluxo PAT→Supabase do v1, candidato a remoção).
+ * Persistência local da sessão v2 (`nio login` contra `user_cli`/Postgres).
  * Guarda {userId, name, token, sessionId, loggedInAt, expiresAt} em
- * `~/.nio/session.json`, chmod 600, mesma convenção de segurança do antigo
- * `credentials.json`. `token` é o JWT; `sessionId` é o `jti` embutido nele —
+ * `~/.nio/session.json`, chmod 600. `token` é o JWT; `sessionId` é o `jti` embutido nele —
  * guardado solto pra `logout` revogar sem precisar decodificar o token.
  */
 import { mkdir, readFile, writeFile, rm, chmod } from 'node:fs/promises';

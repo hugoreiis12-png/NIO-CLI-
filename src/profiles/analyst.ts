@@ -4,8 +4,7 @@ import { postgresMcp, powerbiMcp } from './mcps.js';
 
 /**
  * Analyst — análise de dados em Python/SQL. Postgres pro operador consultar +
- * PowerBI (exclusivo de analyst/bi). O comando do PowerBI ainda é placeholder
- * (ver `mcps.ts`).
+ * PowerBI Modeling (exclusivo de analyst/bi).
  */
 export const analystProfile: ProfileDefinition = {
   profile: 'analyst',

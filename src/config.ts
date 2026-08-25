@@ -18,8 +18,8 @@ export interface ProjectConfig {
   repository_id?: string | null;
   /**
    * `Session` v2 vinculada (UUID, `sessions.id`). Gravado pelo `nio init` novo —
-   * substitui `project_id`/`repository_id` como binding, que ficam só pro fluxo
-   * v1/Supabase em migração.
+   * substitui `project_id`/`repository_id` como binding — esses ficam só como
+   * campos legados.
    */
   session_id?: string;
   /** Seleção unificada role → área → stack (`nio init`). Dita skills, rules e deps. */

@@ -26,16 +26,15 @@ test('prefixos de tool têm formato aceito pelo MCP', () => {
   }
 });
 
-test('as 20 tools continuam registradas com os nomes de sempre', () => {
+test('as tools de execução v2 estão registradas — só nio_, sem nos_ (v1 removido)', () => {
   const names = toolDefinitions.map((t) => t.name).sort();
-  expect(names).toHaveLength(20);
-  // Amostra âncora das duas famílias + garante que nenhum nome saiu torto.
-  expect(names).toContain('nos_list_tasks');
-  expect(names).toContain('nos_set_project');
+  // As 16 tools v1 (nos_*, tasks/sprints/alocação) foram removidas na migração;
+  // sobram as 4 genéricas de execução.
+  expect(names).toHaveLength(4);
   expect(names).toContain('nio_plan');
   expect(names).toContain('nio_delegate_exec');
   for (const n of names) {
-    expect(n).toMatch(/^(nos_|nio_)[a-z_]+$/);
+    expect(n).toMatch(/^nio_[a-z_]+$/); // nenhum nome torto e nenhum nos_ sobrando
     expect(n).not.toContain('__');
   }
 });

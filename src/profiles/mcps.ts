@@ -28,18 +28,17 @@ export const postgresMcp: McpSpec = {
 };
 
 /**
- * PowerBI Modeling MCP — modelagem/consulta de PowerBI (DAX, tabular). É
- * **exclusivo dos perfis `analyst` e `bi`** (NÃO é base como o context7 — só faz
- * sentido pra quem trabalha com BI).
- *
- * ⚠️ TODO: `command` abaixo é PLACEHOLDER — falta fixar o launch reproduzível do
- * `powerbi-modeling-mcp` (confirmar com o dono do projeto, que já tem o MCP
- * configurado). Não é um pacote npm verificado; ajustar antes de confiar no
- * `opencode.json` gerado pra BI/analyst.
+ * PowerBI Modeling MCP (Microsoft) — modelagem/consulta de PowerBI (DAX, tabular).
+ * **Exclusivo dos perfis `analyst` e `bi`** (só faz sentido pra quem trabalha com
+ * BI). Comando oficial portável (github.com/microsoft/powerbi-modeling-mcp):
+ * `npx -y @microsoft/powerbi-modeling-mcp@latest --start [--skipconfirmation]`.
+ * Sem auth para conexão com o Power BI Desktop — basta o modelo aberto no Desktop
+ * (auth por env só é necessária p/ service principal/Fabric). `--skipconfirmation`
+ * auto-aprova as operações (mesma config que o dono do projeto já usa).
  */
 export const powerbiMcp: McpSpec = {
   id: 'powerbi-modeling',
-  command: ['npx', '-y', 'powerbi-modeling-mcp'], // TODO: comando real
+  command: ['npx', '-y', '@microsoft/powerbi-modeling-mcp@latest', '--start', '--skipconfirmation'],
 };
 
 /**

@@ -3,10 +3,9 @@ import { env } from "../brand.js";
 /**
  * Telemetria de uso best-effort. Nunca lança nem bloqueia. Desliga com `NIO_TELEMETRY=0`.
  *
- * NOTA (v2): o antigo sink era o Supabase (`functions.invoke("track-usage")`),
- * removido na migração v1→v2. `track()` é **no-op** por ora — a interface segue
- * pros call sites, mas não há destino até um sink v2 existir. Ver
- * `docs/v2/TASK-remocao-v1.md` (telemetry: decouple do DbClient).
+ * NOTA (v2): o sink de telemetria do v1 foi removido na migração. `track()` é
+ * **no-op** por ora — a interface segue pros call sites, mas não há destino até
+ * um sink v2 existir.
  */
 
 /** Um item provisionado: id sequencial estável (frontmatter) + nome de invocação. */

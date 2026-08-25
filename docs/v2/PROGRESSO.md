@@ -873,10 +873,29 @@ apagou `adapters/supabase/*`, `project-step`, `project-context`, `task-history`,
   gateway/types.ts, telemetry.ts) — **zero código/dependência**.
 
 ### Débito residual (não é dependência Supabase)
-- Comentários stale mencionando Supabase (cosmético).
-- `src/core/types.ts` ainda tem tipos v1 (`TaskListItem` etc.) órfãos — não é dep
-  Supabase, é limpeza de tipos morta, fica pra outra passada.
+- Comentários stale mencionando Supabase (`gateway/types.ts`, `telemetry.ts`) — cosmético.
+- ~~`src/core/types.ts` tipos v1 órfãos~~ ✅ **feito**: auditado por uso (só
+  `DbTarget`/`QueryResult` usados); ~20 tipos v1 removidos.
 - `gen:docs` do README pode ser rerodado (tabela de tools) — polish.
+- **PowerBI MCP**: comando placeholder — precisa do launch real (dono do projeto).
+
+## 2026-08-25 — Suíte 100% verde (4 falhas ambientais zeradas)
+
+Matança cirúrgica das 4 falhas pré-existentes → **266 pass / 2 skip / 0 fail**.
+- **`brand.test.ts` "20 tools"** (stale): as 16 tools v1 (`nos_*`) foram removidas;
+  teste atualizado p/ as 4 `nio_` de execução, sem `nos_`.
+- **`cowork-extension.test.ts` metadados** (stale pós-rename): `display_name`
+  `nio (NOS)`→`nio (NIO)`, `author.name` `Falcao-Tech`→`NIO` (brand.productName).
+- **`globExists` no Windows** (bug real): path absoluto Windows caía em `start='/'`
+  + segmento `C:` solto → nunca casava. Corrigido com `isAbsolute` + raiz real
+  (`parse().root`). Mata a falha de `dependencies.test.ts` **E conserta a detecção
+  de toolchain no Windows** (débito #5). 13/13.
+- **`provision.test.ts` ensureDir symlink** (POSIX-only): no Windows `symlinkSync`
+  p/ alvo inexistente cria link tipo-file → `mkdir` através nunca funciona.
+  Pulado no Windows (`test.skip`), roda no CI/Mac/Linux.
+
+As 2 skips restantes são legítimas: homolog opt-in do scaffold + o teste POSIX
+acima.
 
 ---
 

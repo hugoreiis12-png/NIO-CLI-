@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, isAbsolute, parse } from 'node:path';
 import { homePath } from '../brand.js';
 import type { DependencyPlan, ResolvedDependency } from './dependencies.js';
 
@@ -73,10 +73,14 @@ function expandTilde(p: string): string {
  */
 export function globExists(pattern: string): boolean {
   const expanded = expandTilde(pattern.trim());
-  const abs = expanded.startsWith('/') || /^[A-Za-z]:/.test(expanded);
-  const segs = expanded.split(/[/\\]+/).filter(Boolean);
-  const start = abs ? '/' : process.cwd();
-  return matchSegments(start, segs, 0, 0);
+  const abs = isAbsolute(expanded);
+  // Raiz correta: `/` no POSIX, `C:\`/`C:/` no Windows (parse resolve os dois).
+  // Sem isto, um path absoluto Windows caía em `start='/'` + segmento `C:` solto
+  // e nunca casava (bug de detecção de toolchain no Windows).
+  const root = abs ? parse(expanded).root : process.cwd();
+  const rest = abs ? expanded.slice(parse(expanded).root.length) : expanded;
+  const segs = rest.split(/[/\\]+/).filter(Boolean);
+  return matchSegments(root, segs, 0, 0);
 }
 
 function matchSegments(base: string, segs: string[], i: number, depth: number): boolean {
