@@ -4,7 +4,7 @@ import { brand } from "../../brand.js";
 import { renderMatrixLogo } from "../../matrix-logo.js";
 import { startSpinner } from "../../spinner.js";
 import { createUserRepository } from "../../adapters/pg/user-repository.js";
-import { login as gatewayLogin, logout as gatewayLogout } from "../../gateway/services/login.js";
+import { gatewayLogin, gatewayLogout } from "../../lib/gateway-client.js";
 import { loadSession, saveSession, clearSession } from "../../lib/session-store.js";
 import { authCopy } from "../copy.js";
 
@@ -48,7 +48,7 @@ function registerRegisterCommand(program: Command): void {
 function registerLoginCommand(program: Command): void {
   program
     .command("login")
-    .description("Autentica contra o banco (user_cli) e salva a sessão localmente (JWT)")
+    .description("Autentica via nio-gateway (túnel HTTP) e salva a sessão localmente (JWT)")
     .action(async () => {
       const name = await input({ message: authCopy.login.namePrompt });
       const pass = await password({ message: authCopy.login.passwordPrompt, mask: "*" });
@@ -66,7 +66,7 @@ function registerLoginCommand(program: Command): void {
           token: result.token,
           sessionId: result.sessionId,
           loggedInAt: new Date().toISOString(),
-          expiresAt: result.expiresAt.toISOString(),
+          expiresAt: result.expiresAt,
         });
         spinner.stop();
         console.log(renderMatrixLogo());
@@ -90,7 +90,7 @@ function registerLogoutCommand(program: Command): void {
         try {
           await gatewayLogout(session.sessionId);
         } catch {
-          // banco fora do ar — ainda assim limpamos a sessão local.
+          // gateway fora do ar — ainda assim limpamos a sessão local.
         }
       }
       await clearSession();

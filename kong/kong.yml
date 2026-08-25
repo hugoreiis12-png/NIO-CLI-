@@ -1,0 +1,34 @@
+# Config declarativa do Kong (DB-less — sem banco próprio, recarrega no
+# restart do container). Kong entra na FRENTE do `nio-gateway` (porta 3000,
+# roda no host, não no container) — proxy puro, nenhuma mudança de código
+# do lado da aplicação quando isto for ligado/desligado.
+#
+# `host.docker.internal` — como o nio-gateway roda no host (não é outro
+# container), o Kong precisa sair do container pra alcançá-lo. Funciona nativo
+# no Docker Desktop (mac/Windows); no Linux precisa do `extra_hosts` do
+# compose (já configurado em `docker-compose.yml`).
+_format_version: "3.0"
+
+services:
+  - name: nio-gateway
+    url: http://host.docker.internal:3000
+    routes:
+      # /login é o alvo de brute-force identificado em docs/v2/PROGRESSO.md
+      # (24 ago) — único com rate-limiting por enquanto.
+      - name: nio-gateway-login
+        paths:
+          - /login
+        strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 20
+              policy: local
+      - name: nio-gateway-logout
+        paths:
+          - /logout
+        strip_path: false
+      - name: nio-gateway-health
+        paths:
+          - /health
+        strip_path: false

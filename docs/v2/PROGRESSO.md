@@ -230,3 +230,124 @@ atualizado pra refletir isso como próximo passo do segundo agente.
 2. Resto da `TASK-remocao-v1.md` (Supabase/`auth.ts`/`database.types.ts`/
    `package.json`/arquivos órfãos de `src/gateway/*` da spec 0002).
 3. `nio init` — redesenho pendente (hoje ainda vincula a projeto do NOS).
+
+---
+
+## 2026-08-24 — Túnel HTTP: `nio-gateway` + Edge Filter reais (estágios 2-3-5 da esteira)
+
+Primeira parte do "tunelamento": `nio login`/`logout` deixam de chamar
+`gateway/services/login.ts` em processo e passam a falar por HTTP com um
+`nio-gateway` de verdade — que já embute o Edge Filter (não é mais só o
+Cloudflare Worker vazio de `workers/edge-filter/`, que segue órfão).
+Decisão de topologia: **um processo só** (Edge Filter + Gateway core juntos)
+— Kong entra na frente depois, como reverse proxy, sem precisar mudar este
+código.
+
+### Código adicionado/alterado
+| Arquivo | Papel |
+|---|---|
+| `src/gateway/edge-filter.ts` (+ teste) | Trace id, log estruturado (stderr), parse/validação do corpo — primeira triagem antes de qualquer rota |
+| `src/gateway/index.ts` | Entrypoint `nio-gateway` — `http.createServer` nativo, loopback only (`127.0.0.1`), rotas `POST /login`, `POST /logout`, `GET /health` |
+| `src/gateway/config.ts` | `GATEWAY_PORT`/`GATEWAY_URL` (`NIO_GATEWAY_PORT`, convenção normal do projeto — diferente de `JWT_SECRET`/`JWT_EXPIRES_IN`, que são sem prefixo de propósito) |
+| `src/lib/gateway-client.ts` | Cliente HTTP que a CLI usa pra falar com o gateway — erro claro e acionável se o gateway não estiver no ar |
+| `src/cli/commands/auth.ts` | `login`/`logout` trocaram a chamada em processo pelo `gateway-client.ts` |
+| `package.json` | `bin.nio-gateway`, `dev:gateway` aponta pro `index.ts` novo (não mais o `server.ts` órfão da spec 0002) |
+
+### Verificação
+- `bunx tsc --noEmit` → verde.
+- `bun test` → 217/219 (mesmas 2 falhas pré-existentes de sempre).
+- Smoke test real: subiu o `nio-gateway` em background, `register` → `login`
+  → confirmado no **log do gateway** que a request passou de verdade pelo
+  Edge Filter (trace id, `POST /login`) → `whoami --json` → `logout`
+  (também logado no gateway) → `auth_sessions.revoked_at` preenchido.
+  Testado também o caminho de erro: gateway derrubado → `nio login` dá
+  mensagem clara ("Não consegui falar com o nio-gateway... ele está
+  rodando?"), não stack trace cru.
+
+### O que ainda não é isto
+- Kong (estágio 4 da esteira) — zero deploy, entra na frente deste processo
+  depois, sem exigir mudança de código aqui.
+- `nio-gateway` precisa estar rodando manualmente (`nio-gateway` numa outra
+  janela) — não há auto-start/gerenciamento de processo ainda.
+- Edge Filter só loga + valida shape (+ Origin/token, ver abaixo) — sem rate
+  limit/ACL (isso é explicitamente trabalho do Kong, não deste código).
+
+### Adendo (mesmo dia) — Edge Filter passa a identificar quem chama
+
+Pergunta levantada: como impedir bot/script forjando request no Edge Filter?
+Escopo fechado antes de codar — o gateway é loopback-only (`127.0.0.1`), então
+tráfego de rede externa já é bloqueado pelo SO, não pelo app. A ameaça real
+é **processo local não-autorizado** (não outro usuário do SO — isso é limite
+físico da topologia, sem solução em app). Duas defesas concretas, ambas
+implementadas e testadas:
+
+1. **Origin de browser bloqueado** — request com header `Origin` (só browser
+   manda) é rejeitada com 403. Mitiga "localhost drive-by" (página maliciosa
+   chamando `fetch()` contra a porta local).
+2. **Token local compartilhado** (`~/.nio/gateway.token`, chmod 600, gerado
+   por quem sobe primeiro — CLI ou gateway — e lido pelo outro) — exigido em
+   `/login`/`/logout` (não em `/health`), comparado em tempo constante
+   (`timingSafeEqual`). Prova que quem chama conhece a instalação local, não
+   é script genérico. Rejeição usa **403**, não 401 — 401 fica exclusivo de
+   "credencial errada" no `/login`, senão um token de gateway desatualizado
+   pareceria "senha errada" pro usuário.
+
+| Arquivo | Papel |
+|---|---|
+| `src/lib/gateway-token.ts` (+ teste) | Gera/lê o token compartilhado |
+| `src/gateway/edge-filter.ts` | `hasBrowserOrigin`, `extractGatewayToken`, `tokensMatch` (+ testes, 12 casos novos) |
+| `src/gateway/index.ts` | Aplica as duas checagens antes de qualquer rota |
+| `src/lib/gateway-client.ts` | Manda o token automaticamente em todo request |
+
+Verificação: `tsc` limpo, `bun test` 229/231 (mesmas 2 falhas de sempre).
+Smoke real com `curl` simulando ataque: request com `Origin` → 403; request
+sem token → 403; `/health` sem token → 200 (passa, como esperado); `nio
+login` de verdade → token automático, log do gateway sem `rejected`.
+
+### Próximo passo
+1. Kong OSS (DB-less) na frente do `nio-gateway`.
+2. Passo 0 da `TASK-remocao-v1.md` (token_session órfão).
+3. 2º fator SMS (Twilio) — paralelo, sem dependência dos itens acima.
+
+---
+
+## 2026-08-25 — Kong entra na esteira (estágio 4): rate-limiting real no `/login`
+
+Kong OSS, DB-less, via Docker, na frente do `nio-gateway` — sem mudar
+nenhum código de aplicação (é reverse proxy puro, exatamente como
+`ARQUITETURA-GATEWAY.md` previu). Fecha o gap identificado na conversa
+anterior: brute-force local contra `/login` sem rate limit nenhum.
+
+### Código/infra adicionado
+| Arquivo | Papel |
+|---|---|
+| `kong/kong.yml` | Config declarativa — service `nio-gateway` → `http://host.docker.internal:3000`; rota `/login` com plugin `rate-limiting` (20/min, policy local); `/logout`/`/health` sem rate-limit |
+| `kong/docker-compose.yml` | Kong OSS `latest`, portas do host em `127.0.0.1` explícito (não `0.0.0.0` — mesma regra de loopback-only) |
+| `src/gateway/config.ts` | `KONG_PROXY_PORT` (default 8000); `GATEWAY_URL` (o que a CLI chama) agora aponta pro Kong, não mais direto pro `nio-gateway` |
+| `package.json` | Script `dev:kong` |
+
+### Verificação
+- `bunx tsc --noEmit` → verde. `bun test` → 229/231 (mesmas 2 de sempre).
+- Smoke real com os dois processos no ar (nio-gateway no host + Kong no
+  Docker): `/health` via Kong (8000) devolve o mesmo que direto no
+  nio-gateway (3000) — proxy confirmado. `register`→`login` reais pela CLI
+  passam pelo Kong (log do nio-gateway sem `rejected`). **Teste de
+  rate-limit**: 25 tentativas de `/login` em sequência — as 20 primeiras
+  chegam no nio-gateway (rejeitadas por token errado, `403`, de propósito
+  pro teste), as 5 seguintes recebem `429` **do próprio Kong**, sem nem
+  chegar no nosso código. Headers `RateLimit-Remaining`/`Retry-After`
+  confirmados. `/health` seguiu liberado (sem rate-limit), como desenhado.
+
+### O que ainda não é isto
+- `jwt`/`acl` do Kong — não configurados ainda; não há rota protegida por
+  JWT passando pelo Kong hoje (o MCP server valida em processo, não via
+  Kong). Só faz sentido quando existir uma rota assim.
+- Kong precisa subir manualmente (`bun run dev:kong` ou
+  `docker compose -f kong/docker-compose.yml up`) — sem orquestração
+  automática com o `nio-gateway` ainda.
+
+### Próximo passo
+1. Passo 0 da `TASK-remocao-v1.md` (token_session órfão).
+2. 2º fator SMS (Twilio).
+3. Permissionamento por `Profile` (Kong `acl`) — só quando houver rota que
+   precise disso de verdade.
