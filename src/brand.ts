@@ -41,9 +41,6 @@ export const brand = {
    * tratam string vazia sem imprimir link quebrado.
    */
   webUrl: '',
-  supabaseUrl: 'https://wdshvtlsjoegjvmpqobx.supabase.co',
-  /** COPIE o literal de `src/constants.ts:6` — não redigite. */
-  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indkc2h2dGxzam9lZ2p2bXBxb2J4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NDA4OTQsImV4cCI6MjA5MTMxNjg5NH0.4wlAsT_D5gDiBQ19WA-q5zu105fT9TsD1NKI_tGQt-4',
 
   // --- Filesystem / namespacing ---
   /** Dir de dados no home → `~/.nio`. */

@@ -12,7 +12,6 @@ import { type InstallResult } from "../../lib/client-configs.js";
 import { type ProvisionResult } from "../../lib/provision.js";
 import { type HookProvisionResult } from "../../lib/hooks.js";
 import { type ResolvedDependency } from "../../lib/dependencies.js";
-import { type ProjectContext } from "../../lib/project-context.js";
 import { HARNESS_RULES_REL } from "../../lib/harness.js";
 
 export function printInstallResult(label: string, result: InstallResult): void {
@@ -246,82 +245,4 @@ export function printManualSteps(manual: string): void {
       console.log(`    ${bar}   ${c.bold(m[1])}  ${highlightInlineCode(m[2])}`);
     else console.log(`    ${bar}   ${highlightInlineCode(line)}`);
   }
-}
-
-export function printContextSummary(ctx: ProjectContext): void {
-  const dash = "—";
-  const fmtBool = (v: string | null) =>
-    v && v.length > 0 ? `sim (${v.length} caracteres)` : dash;
-  const fmtDate = (v: string | null) => v ?? "?";
-
-  const field = (label: string, value: string) =>
-    `  ${c.dim(label.padEnd(13))}${value}`;
-
-  section("Contexto do projeto");
-  console.log("");
-  console.log(
-    field(
-      "Projeto",
-      `${c.bold(ctx.project.name)} ${c.dim(`(${ctx.project.color})`)}`,
-    ),
-  );
-  console.log(
-    field("Horas/mês", `${ctx.project.monthly_hours ?? c.dim(dash)}`),
-  );
-  console.log(field("Notas", `${ctx.project.notes ?? c.dim(dash)}`));
-  console.log(field("AI context", fmtBool(ctx.project.ai_context)));
-
-  console.log("");
-  if (ctx.current_repository) {
-    const r = ctx.current_repository;
-    console.log(
-      field(
-        "Repositório",
-        `${c.bold(r.name)} ${c.dim(`(branch: ${r.default_branch})`)}`,
-      ),
-    );
-    console.log(field("", link(r.url)));
-    console.log(field("AI context", fmtBool(r.ai_context)));
-  } else {
-    console.log(field("Repositório", c.dim(`${dash} (nenhum vinculado)`)));
-  }
-
-  const otherRepos = ctx.repositories.filter(
-    (r) => r.id !== ctx.current_repository?.id,
-  );
-  if (otherRepos.length > 0) {
-    console.log(
-      field("Outros repos", c.dim(otherRepos.map((r) => r.name).join(", "))),
-    );
-  }
-
-  console.log("");
-  if (ctx.active_sprint) {
-    const s = ctx.active_sprint;
-    console.log(
-      field(
-        "Sprint ativa",
-        `${c.bold(s.name)} ${c.dim(`(${fmtDate(s.start_date)} → ${fmtDate(s.end_date)})`)}`,
-      ),
-    );
-  } else {
-    console.log(field("Sprint ativa", c.dim(dash)));
-  }
-
-  console.log("");
-  console.log(`  ${c.dim(`Membros (${ctx.members.length})`)}`);
-  for (const m of ctx.members) {
-    const name = m.full_name ?? "(sem nome)";
-    const handle = m.username ? c.cyan(`@${m.username}`) : c.dim(dash);
-    console.log(`    ${c.magenta(sym.dot)} ${name.padEnd(26)} ${handle}`);
-  }
-
-  console.log("");
-  const you = ctx.current_user;
-  console.log(
-    field(
-      "Você",
-      `${c.bold(you.full_name ?? "(sem nome)")} ${c.dim(`<${you.email}>`)}`,
-    ),
-  );
 }

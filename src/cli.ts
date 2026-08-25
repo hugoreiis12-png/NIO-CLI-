@@ -13,6 +13,7 @@ import { registerExecCommand } from "./cli/commands/exec.js";
 import { registerPlanCommand } from "./cli/commands/plan.js";
 import { registerValidatePlanCommand } from "./cli/commands/validate-plan.js";
 import { registerCompletionCommand } from "./cli/commands/completion.js";
+import { registerLangCommand } from "./cli/commands/lang.js";
 
 notifyCliIfUpdate();
 
@@ -32,6 +33,7 @@ registerExecCommand(program);
 registerPlanCommand(program);
 registerValidatePlanCommand(program);
 registerCompletionCommand(program);
+registerLangCommand(program);
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(`Erro: ${(err as Error).message}`);

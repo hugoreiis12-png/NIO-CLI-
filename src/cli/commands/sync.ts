@@ -182,10 +182,7 @@ export function registerSyncCommand(program: Command): void {
             });
           }
 
-          // Telemetria v1 (Supabase) removida daqui — sem sessão autenticada
-          // nesse caminho hoje (nio_cli/JWT não alimenta isto ainda).
-          // `track(null, ...)` já é no-op seguro (lib/telemetry.ts).
-          const telemetry = null;
+          // Telemetria v1 (Supabase) removida — `track` é no-op v2 (lib/telemetry.ts).
           const uidByName = skillIdMap();
 
           // ---- Fase informativa: coleta cada etapa como seção (não imprime na hora) ----
@@ -203,7 +200,7 @@ export function registerSyncCommand(program: Command): void {
               { id: `prov-${target.id}`, title: target.label, status, summary },
               () => printProvisionResult(result),
             );
-            track(telemetry, {
+            track({
               type: "provision",
               client: target.id,
               sections: selection,

@@ -5,6 +5,7 @@ import { installOpencodeGlobal, type InstallResult } from "../../../lib/client-c
 import { printInstallResult } from "../../ui/render.js";
 import { ensureClientInstalled } from "../../flows/clients.js";
 import { initCopy } from "../../copy.js";
+import type { McpSpec } from "../../../core/environment.js";
 
 // Só OpenCode por enquanto (decisão de 2026-07-27) — os outros clientes saem
 // da superfície ativa, mas o motor de config deles continua em
@@ -15,9 +16,12 @@ export type ChosenClientId = "opencode";
 
 export const CLIENT_INSTALLERS: Record<
   ClientChoice,
-  { label: string; run: (cwd: string) => InstallResult }
+  { label: string; run: (cwd: string, profileMcps: McpSpec[]) => InstallResult }
 > = {
-  "opencode-global": { label: "OpenCode (global)", run: () => installOpencodeGlobal() },
+  "opencode-global": {
+    label: "OpenCode (global)",
+    run: (_cwd, profileMcps) => installOpencodeGlobal(profileMcps),
+  },
 };
 
 export async function promptClientChoices(): Promise<ClientChoice[]> {
@@ -28,12 +32,16 @@ export async function promptClientChoices(): Promise<ClientChoice[]> {
   });
 }
 
-/** Roda a instalação de cada cliente escolhido. */
-export function installClients(clientConfigs: ClientChoice[], cwd: string): void {
+/** Roda a instalação de cada cliente escolhido, com os MCPs do perfil. */
+export function installClients(
+  clientConfigs: ClientChoice[],
+  cwd: string,
+  profileMcps: McpSpec[] = [],
+): void {
   for (const choice of clientConfigs) {
     const installer = CLIENT_INSTALLERS[choice];
     try {
-      printInstallResult(installer.label, installer.run(cwd));
+      printInstallResult(installer.label, installer.run(cwd, profileMcps));
     } catch (err) {
       console.error(`[erro] Falha ao configurar ${choice}: ${(err as Error).message}`);
     }

@@ -1,9 +1,12 @@
-import type { DbClient } from "../adapters/supabase/client.js";
 import { env } from "../brand.js";
 
 /**
- * Telemetria de uso best-effort: o backend atribui o usuário via `auth.uid()` do JWT,
- * então não mandamos PII. Nunca lança nem bloqueia. Desliga com `NIO_TELEMETRY=0`.
+ * Telemetria de uso best-effort. Nunca lança nem bloqueia. Desliga com `NIO_TELEMETRY=0`.
+ *
+ * NOTA (v2): o antigo sink era o Supabase (`functions.invoke("track-usage")`),
+ * removido na migração v1→v2. `track()` é **no-op** por ora — a interface segue
+ * pros call sites, mas não há destino até um sink v2 existir. Ver
+ * `docs/v2/TASK-remocao-v1.md` (telemetry: decouple do DbClient).
  */
 
 /** Um item provisionado: id sequencial estável (frontmatter) + nome de invocação. */
@@ -58,25 +61,24 @@ export function provisionedItems(
   return items.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Requisições em voo — o CLI é curto e pode encerrar antes do POST completar,
-// então guardamos as promises pra dar flush (`flushTelemetry`) antes de sair.
+// Requisições em voo — reservado pra quando existir um sink v2. Hoje sempre vazio
+// (track é no-op), então `flushTelemetry` retorna de imediato.
 const pending: Promise<unknown>[] = [];
 
-/** Envia um evento de uso pro NOS. Best-effort, nunca lança. */
-export function track(supabase: DbClient | null, event: UsageEvent): void {
-  if (!supabase || !enabled()) return;
-  const p = supabase.functions
-    .invoke("track-usage", { body: { ...event, at: new Date().toISOString() } })
-    .then(() => undefined)
-    .catch(() => {
-      /* telemetria nunca quebra o fluxo */
-    });
-  pending.push(p);
+/**
+ * Registra um evento de uso. **No-op** enquanto não há sink v2 (o backend
+ * Supabase saiu na migração). Mantida a assinatura por evento pros call sites;
+ * `enabled()` continua respeitado pra quando um destino for plugado.
+ */
+export function track(event: UsageEvent): void {
+  if (!enabled()) return;
+  void event; // sem destino ainda — ver nota no topo do arquivo.
 }
 
 /**
  * Espera as requisições de telemetria em voo (com teto de tempo) antes do CLI sair.
- * No servidor MCP (long-lived) não é necessário — o loop já mantém o processo vivo.
+ * Hoje não há requisições (track é no-op) — retorna imediato; mantida pra não
+ * mudar os call sites e pra o dia em que um sink v2 existir.
  */
 export async function flushTelemetry(timeoutMs = 4000): Promise<void> {
   if (pending.length === 0) return;

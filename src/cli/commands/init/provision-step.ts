@@ -63,7 +63,7 @@ export function provisionTargetsStep(
         { id: `prov-${target.id}`, title: target.label, status, summary },
         () => printProvisionResult(result),
       );
-      track(null, {
+      track({
         type: "provision",
         client: target.id,
         sections: config.selection,

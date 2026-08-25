@@ -67,8 +67,11 @@ function expandTilde(p: string): string {
 /**
  * Existe algo casando o glob? Suporta `*` (um segmento) e `**` (qualquer
  * profundidade). Recursão limitada em profundidade pra não varrer demais.
+ *
+ * Exportada pra reuso pelo `adapters/pkg` (detecção de toolchain) — mesma
+ * semântica de `detect:` das dependências.
  */
-function globExists(pattern: string): boolean {
+export function globExists(pattern: string): boolean {
   const expanded = expandTilde(pattern.trim());
   const abs = expanded.startsWith('/') || /^[A-Za-z]:/.test(expanded);
   const segs = expanded.split(/[/\\]+/).filter(Boolean);

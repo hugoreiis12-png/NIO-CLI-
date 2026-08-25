@@ -410,3 +410,478 @@ parcial do arquivo, não apagar ele inteiro.
 3. 2º fator — pausado por decisão do dono do projeto (abandonando Twilio,
    avaliando TOTP self-hosted; ver conversa em andamento, ainda sem entrada
    própria de arquitetura registrada).
+
+---
+
+## 2026-08-25 — Redesenho do `nio init` fechado + `EnvironmentBuilder` mapeado
+
+Auditoria de retomada do redesenho do `nio init`. Achado principal: as três
+tarefas concretas de `TASK-cliente-ia-fixo.md` **já estavam feitas** (não
+tinham entrada de log própria) e nenhum step do `init` importa mais Supabase.
+O que faltava era mapear a peça grande que sobrou — a materialização do
+ambiente.
+
+### Estado confirmado (lendo o código)
+- **`TASK-cliente-ia-fixo` — Tarefas 1-3 concluídas**: `KNOWN_CLIENTS` já inclui
+  `opencode` (`skills.ts:151`); `installOpencodeGlobal`/`planOpencodeUpdate`
+  já escrevem `model: "opencode/big-pickle"` (default soft, `NIO_OPERATOR_MODEL`);
+  `nio init` já faz o handoff (`handoffToOperator` → `spawn('opencode', …,
+  { stdio: 'inherit' })`) e mostra o logo antes do wizard.
+- **`nio init` v2**: `resolveSessionSetup` roda o wizard de perfil + cria a
+  `Session` (1º consumidor real do `SessionRepository`) — sem vínculo a projeto
+  do NOS. Steps `auth/profile/context/provision` sem Supabase.
+- **`project-step.ts` ficou órfão** — o `index.ts` não o importa mais, mas o
+  arquivo (+ `.test.ts`) segue no repo importando Supabase. É o dominó que
+  destrava a remoção do cluster Supabase da `TASK-remocao-v1.md`.
+- `tsc --noEmit` verde; `bun test` 229 pass / 4 fail (as 4 são a dívida
+  ambiental de sempre — 2× `cowork-extension` stale, 2× symlink EPERM no
+  Windows; nenhuma do `init`).
+
+### Mapeado (novo doc)
+`docs/v2/ARQUITETURA-ENVIRONMENT-BUILDER.md` — pipeline `Profile →
+ProfileDefinition (catálogo hardcoded em src/profiles/) → EnvironmentBuilder
+→ materializa toolchains (adapters/pkg) + MCPs (opencode.json global) →
+EnvironmentConfig → sessions.config`. Decisões travadas com o dono do projeto:
+1ª fatia inclui **MCPs + toolchains** (não só MCPs); `opencode.json`
+**global**. O alvo (`EnvironmentConfig`) e a persistência
+(`SessionRepository.updateConfig`) já existem — falta o catálogo, os ports
+(`ProfileCatalog`/`ToolchainGateway`) e o `EnvironmentBuilder` (app layer),
+todos inexistentes hoje.
+
+### Próximo passo
+1. Implementar a fatia 1 do `EnvironmentBuilder` (ver "Ordem de construção" no
+   doc novo): `src/profiles/` + `ProfileDefinition` com **1 perfil** (`dba` ou
+   `analyst`) de ponta a ponta.
+2. Remover `project-step.ts` órfão (destrava o cluster Supabase da
+   `TASK-remocao-v1.md`).
+
+---
+
+## 2026-08-25 — EnvironmentBuilder: fatia 1 (perfil → MCPs) entregue
+
+Primeira fatia vertical do `EnvironmentBuilder` (Tarefas 1-3 da
+`TASK-environment-builder.md`). O `Profile` escolhido no `nio init` agora
+materializa MCPs no `opencode.json` e popula `sessions.config` — antes o
+perfil só virava a string `sessions.profile`. Toolchains (instalação real) e
+envVars/aliases ficam pras próximas fatias (Tarefas 4-5).
+
+### Código adicionado/alterado
+| Arquivo | Papel |
+|---|---|
+| `src/core/environment.ts` (novo) | Vocabulário do ambiente: `ProfileDefinition`, `McpSpec`, `ToolchainSpec` + port `ProfileCatalog`. Core puro, sem IO |
+| `src/profiles/{dba,index}.ts` (+ `profiles.test.ts`) | Catálogo hardcoded; `createProfileCatalog()` implementa `ProfileCatalog.get` (lança claro em perfil não-modelado). 1º perfil: `dba` (MCP postgres + toolchain `psql`) |
+| `src/app/environment-builder.ts` (+ `.test.ts`) | `EnvironmentBuilder.build(profile)` → `{ config: EnvironmentConfig, mcps: McpSpec[] }`. Fatia 1: só MCPs + metadados (languages/frameworks) |
+| `src/lib/client-configs.ts` (+ testes) | `planOpencodeUpdate`/`installOpencodeGlobal` ganharam `profileMcps` — funde os MCPs do perfil junto do `mcp.nio` (spread defensivo, idempotente, preserva chaves do usuário) |
+| `src/cli/commands/init/clients-step.ts` | `installClients`/`CLIENT_INSTALLERS` threadam os `McpSpec[]` até `installOpencodeGlobal` |
+| `src/cli/commands/init/index.ts` | `resolveSessionSetup` chama o builder após criar a `Session`, faz `updateConfig(session.id, env.config)` e passa `env.mcps` adiante. Falha parcial (perfil sem definição) só avisa e segue — a sessão já existe |
+
+### Decisões
+- Port `ProfileCatalog` em `src/core/environment.ts` (novo), **não** em
+  `core/ports.ts` (legado v1) nem em `repositories.ts` (só persistência).
+- `ProfileDefinition` (tipos) fica em `core/` e o catálogo (`src/profiles/`)
+  importa de lá — respeita o hexágono (adapter depende de core, não o inverso).
+- 1º perfil implementado: `dba`. Os outros 5 lançam erro claro no catálogo até
+  serem modelados (Tarefa 6).
+
+### Verificação
+- `tsc --noEmit` verde. `bun test` 231 pass / 4 fail (as mesmas 4 pré-existentes:
+  `cowork-extension` ×2, symlink EPERM ×2 — nenhuma nova).
+- Unit: catálogo (get + erro), `planOpencodeUpdate` (merge/idempotência/preserva
+  chaves), builder (dba resolve, perfil ausente propaga).
+- **Suíte de integração no ambiente real** (`init-fatia1.integration.test.ts`):
+  executa o pipeline do `nio init` pós-prompts contra o **Postgres vivo**
+  (`192.168.0.142/NIO_CLI`) + um `opencode.json` real — cria usuário/sessão
+  descartáveis, materializa, lê de volta do banco (`config.mcps` tem `postgres`,
+  `config.languages` tem `sql`) e valida o `opencode.json` (`model` +
+  `mcp.nio` + `mcp.postgres`), limpando tudo ao fim (0 resíduos confirmado).
+  Gated em `NIO_DATABASE_URL` (pula sem banco). **1 pass / 8 asserts.** Precisou
+  de um seam de path opcional em `installOpencodeGlobal` (não tocar no arquivo
+  real do usuário no teste).
+
+### Próximo passo
+1. Tarefa 4 — `ToolchainGateway` + `adapters/pkg/` (instalação real; o passo de
+   maior risco, isolado).
+2. Tarefas 5-6 — envVars/aliases → dotfiles; completar os 6 perfis.
+
+---
+
+## 2026-08-25 — EnvironmentBuilder: fatia 2 (toolchains) + unblock do telemetry
+
+Tarefa 4 da `TASK-environment-builder.md`: `ToolchainGateway` + `adapters/pkg/`.
+O `EnvironmentBuilder` agora **garante toolchains** (detecta/instala) além dos
+MCPs, e popula `config.toolchains` só com o que materializou.
+
+### Código adicionado/alterado
+| Arquivo | Papel |
+|---|---|
+| `src/core/environment.ts` | + `EnsureResult` (`present`/`installed`/`failed`) e port `ToolchainGateway` (contrato: **nunca lança**) |
+| `src/adapters/pkg/toolchain-gateway.ts` (+ teste) | `ensure(spec)`: detecta por `globExists` (reusado de `dependency-install`, agora exportado); instala via `spawnSync` SEM shell; confirma detecção pós-install; falha → `status: 'failed'` |
+| `src/lib/dependency-install.ts` | `globExists` passou a ser `export` (reuso do adapter — conforme a TASK) |
+| `src/app/environment-builder.ts` (+ testes) | injeta `ToolchainGateway`; `build` garante cada toolchain, entra em `config.toolchains` só `present`/`installed`; devolve `toolchains: EnsureResult[]` pro chamador avisar |
+| `src/cli/commands/init/index.ts` | reporta toolchains com `status: 'failed'` (aviso, não aborta) |
+
+### Unblock — `telemetry.ts` desacoplado (limpeza Supabase do 2º agente, fora de ordem)
+Durante a Tarefa 4, a limpeza concorrente do Supabase apagou `adapters/supabase/*`
+**antes** de desacoplar `telemetry.ts` (invertendo a ordem "de fora pra dentro"
+da `TASK-remocao-v1.md`), deixando o `tsc` vermelho (2 erros: `telemetry.ts`
+importando o adapter apagado; `index.ts` com a chamada `flushTelemetry` mas sem
+o import — este removido indevidamente, `index.ts` não é do escopo Supabase).
+Com autorização do dono do projeto, apliquei o passo documentado:
+- `telemetry.ts`: removido `import DbClient`; `track(supabase, event)` →
+  `track(event)` **no-op** (o sink era o Supabase; sem destino v2 ainda, a
+  interface fica pros call sites). `flushTelemetry` mantida (early-return).
+- Call sites: `provision-step.ts` e `sync.ts` (`track(null/telemetry, …)` →
+  `track(…)`; removido o `const telemetry = null` órfão).
+- `index.ts`: restaurado o import de `flushTelemetry`.
+
+### Verificação
+- `tsc --noEmit` verde. `bun test` 230 pass / 4 fail (as 4 pré-existentes de
+  sempre; o total caiu 2 porque o 2º agente apagou `project-step.test.ts`/
+  `task-gateway.test.ts`). EnvironmentBuilder + integração juntos: **18/18**.
+- Toolchain: adapter (detect present via path relativo — evita o bug conhecido
+  de `globExists` com path absoluto no Windows; no-plan → failed) e builder com
+  gateway fake (materializado entra no config; failed fica fora, não aborta).
+
+### Próximo passo
+1. Tarefas 5-6 — envVars/aliases → dotfiles; completar os 6 perfis do catálogo.
+2. Coordenar com o 2º agente: `telemetry.ts` + call sites já estão feitos
+   (não refazer); `index.ts` é do cluster `init`, não do escopo Supabase.
+
+---
+
+## 2026-08-25 — EnvironmentBuilder: fatia 3 (dotfiles) + 6 perfis — COMPLETO
+
+Tarefas 5 e 6 da `TASK-environment-builder.md` — fecha o EnvironmentBuilder.
+
+### Tarefa 5 — envVars/aliases → dotfiles gerenciados (decisão: arquivo em ~/.nio)
+Decisão do dono do projeto: materializar num **arquivo gerenciado sob `~/.nio`**
+(não no rc do usuário) — não-destrutivo, reversível, cross-platform.
+| Arquivo | Papel |
+|---|---|
+| `src/lib/dotfiles.ts` (+ teste) | `writeManagedDotfiles({envVars,aliases})` → `~/.nio/profile.sh` (bash/zsh) + `profile.ps1` (PowerShell). Bloco entre marcadores `# >>> nio managed >>>`, idempotente e não-destrutivo (preserva o resto do arquivo). Sem envVars/aliases → `skipped`. Seam de path (`opts.dir`) pra teste |
+| `src/app/environment-builder.ts` | `build` passou a incluir `envVars`/`aliases` no `config` (declarativo) |
+| `src/cli/commands/init/index.ts` | após materializar, escreve os dotfiles (best-effort) e orienta o `source` |
+Arquitetura: o `build` só declara (config); quem escreve o arquivo é o `init`
+(espelha o padrão dos MCPs → `installClients`), então `build` não polui `~/.nio`
+real nos testes.
+
+### Tarefa 6 — os 6 perfis no catálogo
+| Arquivo | Perfil |
+|---|---|
+| `src/profiles/{fullstack,analyst,scientist,qa,bi}.ts` | Os 5 restantes (dba já existia) |
+| `src/profiles/{mcps,toolchains}.ts` | Specs compartilhados (postgres MCP; node/python toolchains) — DRY |
+| `src/profiles/index.ts` | `DEFINITIONS` virou `Record<Profile,…>` completo (6/6) |
+Honestidade de catálogo: só entram MCPs com comando verificável (`postgres` =
+reference server). PowerBI (analyst/bi) fica como **TODO comentado**, não spec
+fictícia (evita `opencode.json` quebrado). Toolchains node/python têm `detect`
+Unix; no Windows o `globExists` tem limitação conhecida com path absoluto → o
+toolchain sai `failed` (aviso, não-fatal, por design).
+
+### Verificação
+- `tsc --noEmit` verde. `bun test` **235 pass / 4 fail** (as 4 pré-existentes;
+  a integração da fatia 1 contra o Postgres real segue verde).
+- Testes novos: dotfiles (escreve sh+ps1, idempotente, não-destrutivo, empty→skip),
+  catálogo (os 6 resolvem; inexistente lança), builder (envVars/aliases no config).
+
+### Estado
+**EnvironmentBuilder completo** (fatias 1-3, Tarefas 1-6): perfil → toolchains +
+MCPs + envVars/aliases → `sessions.config` + `opencode.json` + `~/.nio/profile.*`.
+Pendências conhecidas (não bloqueantes): comando real do PowerBI MCP; fix do
+`globExists` p/ path absoluto no Windows; auth interativo dos MCPs (segredo).
+
+---
+
+## 2026-08-25 — Context7 como MCP-base de todo perfil
+
+Melhoria pedida pelo dono do projeto: o operador de IA deve sempre puxar a doc
+mais recente das linguagens/frameworks da stack, em vez de depender só do
+conhecimento congelado do modelo. Implementado com o **Context7** (Upstash,
+`@upstash/context7-mcp` — MCP real e verificável, roda anônimo).
+
+### Decisão de design
+Não é MCP por perfil — é **base de TODOS**. Adicionado em `BASE_MCPS` no
+`EnvironmentBuilder` (`app/environment-builder.ts`), mesclado antes dos MCPs
+específicos (`mergeMcps`, dedupe por `id`, perfil vence se repetir). Assim:
+- Vale para os 6 perfis **e** para qualquer perfil futuro, sem precisar declarar.
+- Cai em `config.mcps` (→ `sessions.config`) e no `opencode.json` como qualquer MCP.
+
+### Código
+| Arquivo | Mudança |
+|---|---|
+| `src/profiles/mcps.ts` | + `context7Mcp` (`npx -y @upstash/context7-mcp`; `CONTEXT7_API_KEY` opcional só sobe limites) |
+| `src/app/environment-builder.ts` | `BASE_MCPS = [context7Mcp]` + `mergeMcps(base, def.mcps)`; `config.mcps` e o retorno usam o merge |
+| `src/app/environment-builder.test.ts` | + caso: context7 presente em `bi` (sem MCP próprio) e junto de `postgres` no `dba` |
+| `init-fatia1.integration.test.ts` | reforço: `context7` no `sessions.config` **e** no `opencode.json` reais |
+
+### Verificação
+- `tsc` verde. `bun test` **236 pass / 4 fail** (as 4 pré-existentes). Integração
+  real (Postgres + opencode.json) confirma context7 materializado ponta a ponta.
+
+---
+
+## 2026-08-25 — Pivô: context7 removido → `nio-lang` (MCP server nativo), fatia 1
+
+Decisão do dono do projeto: **dropar o context7** e criar um **MCP server nativo
+da CLI (`nio-lang`)** que centraliza config/conhecimento das linguagens
+(Python/TS/Node/C#/n8n), vendorando 5 repos via fetch-cache. Ver
+`docs/v2/ARQUITETURA-NIO-LANG.md`. context7 saiu do código (BASE_MCPS vazio →
+agora recebe o `nio-lang`).
+
+### Fatia 1 (camada de conhecimento) — código
+| Arquivo | Papel |
+|---|---|
+| `src/core/lang.ts` | `LanguageId`, `LangReference`, port `KnowledgeStore` (core puro) |
+| `src/adapters/lang/knowledge-store.ts` (+ teste) | Lê o README do repo vendorado em `~/.nio/lang/<repo>/`; cache ausente → `found:false` com "rode `nio lang sync`". Seam de dir pra teste |
+| `src/tools/lang-reference.ts` (+ teste) | Tool `nio_lang_reference(language, topic?)` — handler puro, store injetável |
+| `src/mcp-server-lang.ts` | Entrypoint do server `nio-lang` (TS SDK, stdio, sem auth — conhecimento público) |
+| `src/profiles/mcps.ts` | + `nioLangMcp` (`command: ['nio-lang']`) |
+| `src/app/environment-builder.ts` | `BASE_MCPS = [nioLangMcp]` — base de todo perfil |
+| `package.json` | bin `nio-lang` → `dist/mcp-server-lang.js`; `dev:lang`; chmod no build |
+
+### Verificação
+- `tsc` verde. Testes da fatia (core/adapter/tool/builder/integração): **12/12**.
+- **Smoke real do server**: `bun run src/mcp-server-lang.ts` respondendo
+  JSON-RPC — `initialize` devolve `serverInfo nio-lang`, `tools/list` devolve
+  `nio_lang_reference` com o schema das 5 linguagens. Sobe e responde de verdade.
+- Integração real (Postgres + opencode.json) confirma `nio-lang` no
+  `opencode.json` gerado, como base de todo perfil.
+
+### Próximo passo
+1. Fatia 2 — `nio lang sync`: fetch/vendor dos 5 repos pro cache (git clone,
+   ref fixada), o que enche o `nio_lang_reference` de conteúdo real.
+2. Fatias 3-6 — `LanguageCatalog`+recipes, `ScaffoldGateway`+wizard fullstack,
+   `n8n-mcp` como MCP próprio, expandir camada B.
+
+---
+
+## 2026-08-25 — nio-lang fatia 2: `nio lang sync` (vendoring dos 5 repos)
+
+O `nio_lang_reference` deixou de ser plumbing vazio — agora serve conteúdo real.
+
+### Código
+| Arquivo | Papel |
+|---|---|
+| `src/adapters/lang/repos.ts` | Fonte única linguagem → `{dir, repo, ref}` dos 5 repos (usada por vendor + knowledge-store) |
+| `src/adapters/lang/vendor.ts` (+ teste) | `syncLangRepos()` — baixa cada repo (zipball GitHub via `fetch`+`adm-zip`, sem `git`, timeout, best-effort por repo). Mesmo padrão do `skills-cache`. Seam de dir |
+| `src/adapters/lang/knowledge-store.ts` | Refatorado pra usar `LANG_REPOS` (tira o mapa duplicado) |
+| `src/cli/commands/lang.ts` | `nio lang sync [--force]` — baixa/atualiza o cache, reporta status por repo |
+| `src/cli.ts` | Registra o comando `lang` |
+
+### Verificação
+- `tsc` verde. `bun test` **237 pass / 4 fail** (as 4 pré-existentes). Teste do
+  vendor cobre o caminho `cached` (offline, determinístico).
+- **Smoke real**: `nio lang sync` baixou os **5/5** repos (`main` era o ref certo)
+  → cache em `~/.nio/lang/`. O `KnowledgeStore` passou a devolver `found:true`
+  com conteúdo real (TS 8278, Python 5724, C# 3959, Node 9309, n8n 20775 chars).
+  Pipeline `sync → cache → nio_lang_reference` fechado ponta a ponta.
+
+### Próximo passo
+- Fatia 3 — `LanguageCatalog` + recipes (1 linguagem ponta a ponta).
+- Depois: `ScaffoldGateway` + wizard fullstack de pré-config; `n8n-mcp` como MCP próprio.
+
+---
+
+## 2026-08-25 — nio-lang fatia 3: `LanguageCatalog` + recipes + tool `nio_lang_recipe`
+
+Feita em modo colaborativo (dono do projeto escreveu o catálogo de recipes; eu
+fiz o contrato, a tool e o wiring, e validei/corrigi o catálogo).
+
+### Código
+| Arquivo | Papel |
+|---|---|
+| `src/core/lang.ts` | + `LanguageRecipe` (runtime, `packageManagers[]`, baseLibs, frameworks, orms, typings, mcpSdk?) e port `LanguageCatalog` |
+| `src/adapters/lang/language-catalog.ts` (+ teste) | Recipes hardcoded das 5 linguagens (frameworks/ORMs por linguagem escolhidos pelo dono do projeto); `createLanguageCatalog()` lança em linguagem sem recipe |
+| `src/tools/lang-recipe.ts` (+ teste) | Tool `nio_lang_recipe(language)` — handler puro, catálogo injetável |
+| `src/mcp-server-lang.ts` | Registra a 2ª tool (`nio_lang_recipe`) ao lado da `reference` |
+
+### Validação da parte do dono do projeto (correções aplicadas)
+Catálogo veio com bugs mecânicos: nome do arquivo (`catolog`→`catalog`), import
+`'../..core'`→`'../../core'`, `packageManager` com múltiplos valores (→ contrato
+virou `packageManagers: string[]`), `language:'Node.js e Typescript'`→`'node'`,
+`testing:`→`typings:`, vírgulas faltando em ORMs, `}` sobrando. Dados: `mcpSdk`
+de python/csharp/n8n eram pacotes inventados → corrigidos pros reais
+(`mcp`, `ModelContextProtocol`, `undefined` p/ n8n). Listas de frameworks/ORMs
+preservadas como o dono do projeto escreveu.
+
+### Verificação
+- `tsc` verde. `bun test` **244 pass / 4 fail** (as 4 pré-existentes).
+- **Smoke real** (JSON-RPC): `tools/list` do `nio-lang` agora devolve **2 tools**
+  (`nio_lang_reference` + `nio_lang_recipe`); `tools/call nio_lang_recipe`
+  (typescript) retorna a recipe real (packageManagers, frameworks, ORMs).
+
+### Próximo passo
+- Fatia 4 — `ScaffoldGateway` (instala/gera de verdade) + wizard fullstack de
+  pré-config de linguagens (o passo de maior risco, isolado).
+- Fatias 5-6 — `n8n-mcp` como MCP próprio; refinar `topic` do `reference`.
+
+---
+
+## 2026-08-25 — nio-lang fatia 4a: `ScaffoldGateway` (plano + dry-run, isolado)
+
+Fase de maior risco — feita **com cautela**: só o esqueleto seguro (plano +
+dry-run), homologado em diretório temporário. **Execução real NÃO habilitada
+ainda** (gate pro dono do projeto revisar o plano).
+
+### Código
+| Arquivo | Papel |
+|---|---|
+| `src/core/lang.ts` | + `ScaffoldChoices`, `ScaffoldStep` (run/write), `ScaffoldPlan`, `ScaffoldStepResult`, port `ScaffoldGateway` |
+| `src/adapters/lang/scaffold-gateway.ts` (+ teste) | `plan()` sem IO; `apply({dryRun})` devolve tudo `planned` sem tocar nada; execução real via `spawnSync` sem shell, sempre dentro do `targetDir`; nunca lança |
+
+### Isolamento por construção
+- `plan()` só descreve. `apply(dryRun)` não executa nem escreve — o teste prova
+  (`targetDir` continua vazio depois do dry-run).
+- Framework/ORM **não** são auto-instalados nesta fatia (generators específicos
+  = risco) — ficam registrados num marker `.nio-lang.json`. Plano atual por
+  linguagem: init do package manager + tipagens + marker.
+
+### Homologação (ambiente de teste)
+Dry-run de typescript (Next.js/Prisma) num tmp dir mostra o plano sem executar:
+`npm init -y` · `npm install -D typescript @types/node` · escreve `.nio-lang.json`.
+
+### Verificação
+- `tsc` verde. `bun test` **247 pass / 4 fail** (as 4 pré-existentes). 17 testes lang.
+
+### Débito/gate
+- **Wizard fullstack**: ainda NÃO plugado — próximo passo (fatia 4b).
+- Nota: o arquivo `language-catolog.ts` (typo) reapareceu 1× via editor;
+  removido. O correto é `language-catalog.ts`.
+
+---
+
+## 2026-08-25 — nio-lang fatia 4a (cont.): homologação da execução real (opt-in)
+
+Teste de homologação gated do `apply` real, aprovado pelo dono do projeto.
+
+### Código
+| Arquivo | Papel |
+|---|---|
+| `src/adapters/lang/scaffold-apply.homolog.test.ts` | Homologação opt-in: só roda com `NIO_SCAFFOLD_APPLY=1` (CI nunca seta → pula). Instala de verdade (npm) num tmp dir descartável; guarda que recusa executar fora do temp do SO; cleanup no `finally` |
+
+### Verificação
+- Sem o flag: **pula** (suíte default `247 pass / 1 skip / 4 fail` — nenhuma
+  instalação acidental).
+- **Homologação real** (`NIO_SCAFFOLD_APPLY=1`, rodada 1×): passou — `npm init` +
+  `npm install -D typescript @types/node` ("added 4 packages in 4s") + marker,
+  num tmp dir, limpo depois. `package.json` com `typescript`/`@types/node` em
+  devDependencies confirmado. O `apply` real funciona ponta a ponta, isolado.
+
+### Próximo passo (gate)
+- Fatia 4b — plugar o `ScaffoldGateway` no wizard fullstack do `nio init`
+  (pré-config de linguagens). Agora com a execução real já homologada isolada.
+
+---
+
+## 2026-08-25 — nio-lang fatia 4b: wizard fullstack de pré-config plugado
+
+Modo colaborativo (dono do projeto escreveu os prompts; eu fiz o orquestrador,
+o gate e o wiring). O `nio init` no perfil **fullstack** agora oferece
+pré-configurar linguagens, com preview + confirmação antes de instalar.
+
+### Código
+| Arquivo | Papel |
+|---|---|
+| `src/app/language-configurator.ts` (+ teste) | Orquestra: por linguagem, plano → **preview (dry-run)** → `confirm` → apply REAL só se confirmado. `confirm` injetável. Teste prova: não-confirmado ⇒ zero execução |
+| `src/cli/commands/init/lang-step.ts` | Prompts `pickLanguages` (multi-select) + `pickLanguageChoices` (pm/framework/ORM da recipe). Feito pelo dono do projeto; validei/completei o select de ORM (tinha ficado no placeholder) |
+| `src/cli/commands/init/index.ts` | `preConfigureLanguages()` (só `profile === 'fullstack'`): wizard → configurator com `confirm` real que imprime o preview e pergunta antes de aplicar no `process.cwd()` |
+
+### Verificação
+- `tsc` verde. `bun test` **250 pass / 1 skip / 4 fail** (as 4 pré-existentes; o
+  skip é o homolog opt-in do scaffold). Gate confirm-recusa coberto por unit test.
+- Smoke interativo real (TTY, com `confirm` recusando) fica como passo manual —
+  mesma limitação do resto do wizard `nio init` (@clack exige TTY).
+
+### Próximo passo
+- Fatia 5 — `n8n-mcp` registrado como MCP próprio (server de verdade).
+- Fatia 6 — refinar `topic` do `nio_lang_reference`; instalar framework/ORM de
+  verdade (generators por-framework) — hoje ficam no marker `.nio-lang.json`.
+
+---
+
+## 2026-08-25 — nio-lang fatia 5: `n8n-mcp` como MCP próprio
+
+`n8n-mcp` (czlonkowski) é um server MCP de verdade — registrado **ao lado** (não
+dobrado no `nio-lang`) quando o usuário escolhe a linguagem `n8n` no wizard.
+
+### Verificação do comando (via repo vendorado)
+Li `~/.nio/lang/n8n-mcp/package.json`: pacote npm `n8n-mcp` v2.73.0, bin stdio
+(`dist/mcp/stdio-wrapper.js`). README confirma: roda **sem auth** para as tools
+de documentação de nodes/workflows; `N8N_API_URL`/`N8N_API_KEY` (opcionais) só
+habilitam as de gerenciar workflow ao vivo. Comando: `npx -y n8n-mcp`.
+
+### Código
+| Arquivo | Papel |
+|---|---|
+| `src/profiles/mcps.ts` (+ teste) | + `n8nMcp` (`npx -y n8n-mcp`, sem env — docs sem auth) |
+| `src/cli/commands/init/index.ts` | `preConfigureLanguages()` passou a devolver as linguagens escolhidas; se inclui `n8n`, registra o `n8nMcp` no `opencode.json` (via `mcps`) e adiciona `'n8n'` ao `sessions.config.mcps` |
+| `src/app/environment-builder.test.ts` | teste-guarda: `n8n` **não** é base nem MCP de perfil (só entra por seleção no wizard) |
+
+### Verificação
+- `tsc` verde. `bun test` **253 pass / 1 skip / 4 fail** (as 4 pré-existentes;
+  skip = homolog opt-in). Guarda de "n8n não é base" cobre regressão.
+
+### Próximo passo
+- Fatia 6 — refinar `topic` do `nio_lang_reference` (busca dentro do conteúdo
+  vendorado, não só README); install real de framework/ORM (generators).
+
+---
+
+## 2026-08-25 — nio-lang fatia 6 (FECHA): topic search + install ciente de contexto
+
+Última fatia. Modo colaborativo (dono do projeto: mapa display→pacote; eu:
+contrato, detector, topic search, wiring). **Adendo do dono do projeto**: a CLI
+só instala "de acordo com o projeto que ela estiver relacionada, ou mediante
+perguntas e aprovação" — virou o eixo do design.
+
+### Parte 1 — `topic` no `nio_lang_reference` (read-only)
+`knowledge-store` passou a buscar o `.md` mais relevante dentro do repo vendorado
+(nome do arquivo pesa alto, ocorrências somam), não só o README. Sem match →
+README com aviso. Smoke real: `reference('n8n','authentication')` achou
+`n8n-mcp/data/skills/.../OPERATION_PATTERNS.md`.
+
+### Parte 2 — scaffold ciente de contexto
+| Arquivo | Papel |
+|---|---|
+| `src/core/lang.ts` | + `ProjectContext`, port `ProjectDetector`, port `PackageMap` |
+| `src/adapters/lang/project-detector.ts` (+ teste) | Lê o dir (read-only): vazio? package.json/pyproject/.csproj? pm por lockfile |
+| `src/adapters/lang/package-map.ts` (+ teste) | Mapa display→pacote (TS/Node/Python/C#). Dono do projeto preencheu TS; completei node/python/csharp |
+| `src/adapters/lang/scaffold-gateway.ts` (reescrito, testes) | `plan()` usa detector + mapa: **greenfield** = init+tipagens+instala pacotes; **brownfield compatível** = só adiciona a dep (sem re-init); **incompatível/sem-mapa** = só marker. Sempre via dry-run+confirm |
+
+### Verificação
+- `tsc` verde. `bun test` **263 pass / 1 skip / 4 fail** (as 4 pré-existentes;
+  skip = homolog opt-in do scaffold).
+- Demo dry-run confirmou os 3 contextos: greenfield instala; brownfield só
+  adiciona (sem init, não-destrutivo); Python-em-projeto-Node não instala nada.
+
+## 2026-08-25 — Limpeza do Supabase FECHADA
+
+Auditoria + finalização do que o 2º agente deixou pela metade. Estado achado: ele
+apagou `adapters/supabase/*`, `project-step`, `project-context`, `task-history`,
+`auth.ts`(+teste), editou `ports.ts`/`render.ts` e limpou `constants.ts`. Faltava:
+`database.types.ts` + `@supabase/supabase-js`/`gen:types` no `package.json`.
+
+### Finalizado por mim
+- Apagado `src/database.types.ts` (zero importadores, confirmado).
+- Removidos `@supabase/supabase-js` (dep) e o script `gen:types` do `package.json`;
+  `bun install` (1 package removed, lockfile atualizado).
+- `patPrefix`/`patRegex` em `brand.ts` **mantidos** de propósito (ainda usados por
+  `cowork-extension.ts` — só saem quando o módulo Cowork sair).
+
+### Verificação
+- `tsc` verde. `bun test` **263 pass / 1 skip / 4 fail** (as 4 pré-existentes).
+- `grep -ri supabase src package.json`: só **comentários** (core/types.ts,
+  gateway/types.ts, telemetry.ts) — **zero código/dependência**.
+
+### Débito residual (não é dependência Supabase)
+- Comentários stale mencionando Supabase (cosmético).
+- `src/core/types.ts` ainda tem tipos v1 (`TaskListItem` etc.) órfãos — não é dep
+  Supabase, é limpeza de tipos morta, fica pra outra passada.
+- `gen:docs` do README pode ser rerodado (tabela de tools) — polish.
+
+---
+
+### nio-lang — COMPLETO (fatias 1-6)
+Conhecimento (reference+topic) · `nio lang sync` (vendor) · recipes · scaffold
+(dry-run+confirm+homolog opt-in) · wizard fullstack · n8n-mcp · install ciente
+de contexto. Débito futuro (não-bloqueante): generators de projeto inteiro
+(create-next-app) ficam de fora de propósito — só "add dependency" ao projeto.

@@ -4,6 +4,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { backupFile, readJson, writeJson, readToml, writeToml } from './file-merge.js';
 import { brand, envName } from '../brand.js';
+import type { McpSpec } from '../core/environment.js';
 
 const MCP_COMMAND = brand.mcpBinName;
 
@@ -247,63 +248,99 @@ interface OpencodeServerEntry {
  */
 export const NIO_OPERATOR_MODEL = 'opencode/big-pickle';
 
+/** Monta a entrada OpenCode de um MCP de perfil, preservando campos do usuário. */
+function opencodeMcpEntry(spec: McpSpec, current?: OpencodeServerEntry): OpencodeServerEntry {
+  const entry: OpencodeServerEntry = {
+    type: 'local',
+    ...current,
+    command: spec.command,
+    enabled: true,
+  };
+  if (spec.environment) {
+    entry.environment = { ...current?.environment, ...spec.environment };
+  }
+  return entry;
+}
+
 /**
- * Decide se o `nio` já está OK no `opencode.json` e monta o próximo objeto se
- * precisar atualizar (pura, sem IO). Mesmo padrão de `planCodexUpdate`, mas o
- * OpenCode usa `mcp` (não `mcpServers`/`mcp_servers`), `command` como array
- * (binário + args juntos) e `environment` (não `env`). Também garante o
- * `model` default (`NIO_OPERATOR_MODEL`) no nível raiz do config.
+ * Decide se o `nio` (+ os MCPs do perfil) já estão OK no `opencode.json` e monta
+ * o próximo objeto se precisar atualizar (pura, sem IO). Mesmo padrão de
+ * `planCodexUpdate`, mas o OpenCode usa `mcp` (não `mcpServers`/`mcp_servers`),
+ * `command` como array (binário + args juntos) e `environment` (não `env`).
+ * Também garante o `model` default (`NIO_OPERATOR_MODEL`) no nível raiz.
+ *
+ * `profileMcps` são os MCPs do perfil (do `EnvironmentBuilder`), fundidos junto
+ * do `mcp.nio` com o mesmo spread defensivo — nunca apaga chaves do usuário.
  */
 export function planOpencodeUpdate(
   existing: Record<string, unknown>,
   nioEntry: { command: string[]; environment: Record<string, string> },
+  profileMcps: McpSpec[] = [],
 ): { alreadyConfigured: boolean; next: Record<string, unknown> } {
   const servers = (existing.mcp ?? {}) as Record<string, OpencodeServerEntry | undefined>;
   const current = servers[brand.mcpServerKey];
 
-  const alreadyConfigured = Boolean(
+  const nioOk = Boolean(
     current &&
       current.command?.[0] === nioEntry.command[0] &&
       current.environment?.[envName('CLIENT')] === 'opencode' &&
-      current.enabled !== false &&
-      existing.model === NIO_OPERATOR_MODEL,
+      current.enabled !== false,
   );
+  const mcpsOk = profileMcps.every((spec) => {
+    const cur = servers[spec.id];
+    return Boolean(cur && cur.command?.[0] === spec.command[0] && cur.enabled !== false);
+  });
+  const alreadyConfigured = nioOk && existing.model === NIO_OPERATOR_MODEL && mcpsOk;
+
+  const nextMcp: Record<string, OpencodeServerEntry> = {
+    ...(servers as Record<string, OpencodeServerEntry>),
+    [brand.mcpServerKey]: {
+      type: 'local',
+      ...current,
+      command: nioEntry.command,
+      environment: { ...current?.environment, [envName('CLIENT')]: 'opencode' },
+      enabled: true,
+    },
+  };
+  for (const spec of profileMcps) {
+    nextMcp[spec.id] = opencodeMcpEntry(spec, servers[spec.id]);
+  }
 
   const next: Record<string, unknown> = {
     ...existing,
     model: NIO_OPERATOR_MODEL,
-    mcp: {
-      ...servers,
-      [brand.mcpServerKey]: {
-        type: 'local',
-        ...current,
-        command: nioEntry.command,
-        environment: { ...current?.environment, [envName('CLIENT')]: 'opencode' },
-        enabled: true,
-      },
-    },
+    mcp: nextMcp,
   };
   return { alreadyConfigured, next };
 }
 
-/** `~/.config/opencode/opencode.json` — registro global do MCP pro OpenCode. */
-export function installOpencodeGlobal(): InstallResult {
-  const path = join(homedir(), '.config', 'opencode', 'opencode.json');
+/** Path global do `opencode.json` (~/.config/opencode). Seam pra teste. */
+export function opencodeGlobalPath(): string {
+  return join(homedir(), '.config', 'opencode', 'opencode.json');
+}
 
+/**
+ * `~/.config/opencode/opencode.json` — registro global do MCP `nio` + os MCPs do
+ * perfil (`profileMcps`, do `EnvironmentBuilder`). Sem perfil, escreve só o `nio`
+ * (comportamento anterior preservado). `path` é seam opcional (default = global)
+ * pra teste não tocar no arquivo real do usuário.
+ */
+export function installOpencodeGlobal(
+  profileMcps: McpSpec[] = [],
+  path = opencodeGlobalPath(),
+): InstallResult {
   // `NIO_CLIENT=opencode` avisa o servidor MCP a (1) provisionar/auto-pull pra
   // `~/.config/opencode` e (2) filtrar os docs pelo surface `opencode`.
   const nioEntry = { command: [MCP_COMMAND], environment: { [envName('CLIENT')]: 'opencode' } };
 
   if (!existsSync(path)) {
-    writeJson(path, {
-      model: NIO_OPERATOR_MODEL,
-      mcp: { [brand.mcpServerKey]: { type: 'local', ...nioEntry, enabled: true } },
-    });
+    const { next } = planOpencodeUpdate({}, nioEntry, profileMcps);
+    writeJson(path, next);
     return { status: 'created', path };
   }
 
   const existing = readJsonSafe(path) ?? {};
-  const { alreadyConfigured, next } = planOpencodeUpdate(existing, nioEntry);
+  const { alreadyConfigured, next } = planOpencodeUpdate(existing, nioEntry, profileMcps);
   if (alreadyConfigured) return { status: 'already_configured', path };
 
   const backup = backupFile(path);

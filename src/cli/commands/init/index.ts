@@ -5,6 +5,8 @@ import { renderMatrixLogo } from "../../../matrix-logo.js";
 import { getProjectConfigPath, type ProjectConfig, type Ide } from "../../../config.js";
 import type { Session, Ide as SessionIde, Profile } from "../../../core/session.js";
 import { createSessionRepository } from "../../../adapters/pg/session-repository.js";
+import { EnvironmentBuilder } from "../../../app/environment-builder.js";
+import type { McpSpec } from "../../../core/environment.js";
 import { readDependencies, skillIdMap } from "../../../lib/skills.js";
 import { collectRuleSkills } from "../../../lib/rules.js";
 import { offerDependencyInstall, offerRuleSkills } from "../../flows/dependencies.js";
@@ -15,6 +17,14 @@ import { startSpinner } from "../../../spinner.js";
 import { isBinaryInstalled } from "../../../lib/client-install.js";
 import { SyncReport, renderReport, browseReport, resolveReportMode } from "../../ui/report.js";
 import { flushTelemetry } from "../../../lib/telemetry.js";
+import { writeManagedDotfiles } from "../../../lib/dotfiles.js";
+import { confirm } from "../../../lib/prompts.js";
+import { LanguageConfigurator, type LanguageSelection } from "../../../app/language-configurator.js";
+import { createLanguageCatalog } from "../../../adapters/lang/language-catalog.js";
+import { n8nMcp } from "../../../profiles/mcps.js";
+import type { LanguageId } from "../../../core/lang.js";
+import type { EnvironmentConfig } from "../../../core/session.js";
+import { pickLanguages, pickLanguageChoices } from "./lang-step.js";
 import { requireLocalSessionStep } from "./auth-step.js";
 import { pickProfile, pickSessionName, pickIde } from "./profile-step.js";
 import { confirmOverwriteIfExists, persistConfigStep, writeHarnessStep } from "./context-step.js";
@@ -39,13 +49,52 @@ function toSessionIde(ide: Ide | undefined): SessionIde {
 }
 
 /**
+ * Pré-configuração de linguagens (só fullstack): wizard de escolha →
+ * `LanguageConfigurator`, que mostra o **preview (dry-run)** e só instala de
+ * verdade após confirmação. Nunca aplica sem o gate. Best-effort — falha de uma
+ * linguagem não derruba o init.
+ */
+async function preConfigureLanguages(): Promise<LanguageId[]> {
+  const languages = await pickLanguages();
+  if (languages.length === 0) return [];
+
+  const catalog = createLanguageCatalog();
+  const selections: LanguageSelection[] = [];
+  for (const language of languages) {
+    const choices = await pickLanguageChoices(catalog.recipe(language));
+    selections.push({ language, choices });
+  }
+
+  const confirmFn = async (language: string, preview: string[]): Promise<boolean> => {
+    console.log("");
+    section("Preview", `${language} — o que será feito (nada roda ainda)`);
+    for (const line of preview) console.log(`  ${c.dim(sym.arrow)} ${line}`);
+    return confirm({ message: `Aplicar no projeto (${process.cwd()})?`, default: false });
+  };
+
+  const results = await new LanguageConfigurator().configure(selections, process.cwd(), confirmFn);
+  for (const r of results) {
+    if (!r.applied) {
+      console.log(`  ${c.dim(sym.bullet)} ${r.language}: pulado (não confirmado)`);
+      continue;
+    }
+    const failed = r.steps.filter((s) => s.status === "failed");
+    const icon = failed.length > 0 ? c.yellow(sym.warn) : c.green(sym.ok);
+    const suffix = failed.length > 0 ? ` (${failed.length} passo(s) falharam)` : "";
+    console.log(`  ${icon} ${r.language}: configurado${suffix}`);
+  }
+
+  return languages;
+}
+
+/**
  * Escolhas do wizard (perfil, nome, seleção role/stack, IDE) + criação da
  * `Session` v2 (primeiro consumidor real do `SessionRepository`) + persistência
  * do binding (`nio.json` com `session_id`) e do harness.
  */
 async function resolveSessionSetup(
   local: StoredSession,
-): Promise<{ config: ProjectConfig; session: Session }> {
+): Promise<{ config: ProjectConfig; session: Session; mcps: McpSpec[] }> {
   const profile: Profile = await pickProfile();
   const sessionName = await pickSessionName();
 
@@ -71,16 +120,68 @@ async function resolveSessionSetup(
   }
 
   config.session_id = session.id;
+
+  // Materializa o ambiente do perfil (EnvironmentBuilder). Falha parcial não
+  // aborta: a sessão já existe e o ambiente é incremental — perfil ainda sem
+  // definição no catálogo só avisa e segue sem MCPs de perfil.
+  let mcps: McpSpec[] = [];
+  let envConfig: EnvironmentConfig | undefined;
+  try {
+    const env = await new EnvironmentBuilder().build(profile);
+    envConfig = env.config;
+    await sessionRepo.updateConfig(session.id, env.config);
+    mcps = env.mcps;
+    for (const t of env.toolchains) {
+      if (t.status === "failed") {
+        console.warn(`${c.yellow(sym.warn)} Toolchain "${t.id}" não materializado: ${t.error}`);
+      }
+    }
+
+    // envVars/aliases → ~/.nio/profile.{sh,ps1} (best-effort; não aborta a sessão).
+    try {
+      const dot = writeManagedDotfiles({ envVars: env.config.envVars, aliases: env.config.aliases });
+      if (dot.some((d) => d.status === "written")) {
+        for (const d of dot) console.log(`  ${c.dim(`+ ${d.path}`)}`);
+        console.log(
+          `  ${c.dim("dê `source ~/.nio/profile.sh` (ou . ~/.nio/profile.ps1 no PowerShell) pra ativar envVars/aliases")}`,
+        );
+      }
+    } catch (e) {
+      console.warn(`${c.yellow(sym.warn)} dotfiles do perfil não escritos: ${(e as Error).message}`);
+    }
+  } catch (err) {
+    console.warn(
+      `${c.yellow(sym.warn)} Ambiente do perfil "${profile}" não materializado: ${(err as Error).message}`,
+    );
+  }
+
+  // Pré-configuração de linguagens — só no perfil fullstack (com preview+confirm).
+  if (profile === "fullstack") {
+    const selected = await preConfigureLanguages();
+    // n8n escolhido → registra o n8n-mcp como MCP próprio (docs de nodes/workflows).
+    if (selected.includes("n8n") && !mcps.some((m) => m.id === n8nMcp.id)) {
+      mcps = [...mcps, n8nMcp];
+      if (envConfig) {
+        const cfgMcps = Array.from(new Set([...(envConfig.mcps ?? []), n8nMcp.id]));
+        await sessionRepo.updateConfig(session.id, { ...envConfig, mcps: cfgMcps });
+      }
+      console.log(`  ${c.green(sym.ok)} n8n-mcp registrado (docs de nodes/workflows do n8n).`);
+    }
+  }
+
   persistConfigStep(config, session.name);
   writeHarnessStep(config, "");
 
-  return { config, session };
+  return { config, session, mcps };
 }
 
 /** Escolha e instalação dos clientes de IA + provisionamento de skills/commands/hooks. */
-async function installAndProvisionClients(config: ProjectConfig): Promise<void> {
+async function installAndProvisionClients(
+  config: ProjectConfig,
+  profileMcps: McpSpec[],
+): Promise<void> {
   const clientConfigs = await promptClientChoices();
-  installClients(clientConfigs, process.cwd());
+  installClients(clientConfigs, process.cwd(), profileMcps);
 
   const chosenClientIds = resolveChosenClientIds(clientConfigs);
   await ensureChosenClientsInstalled(chosenClientIds);
@@ -147,8 +248,8 @@ async function runInitWizard(): Promise<void> {
   // Sem login inline: exige `nio register`/`nio login` prévios e sai se faltar.
   const local = await requireLocalSessionStep();
 
-  const { config } = await resolveSessionSetup(local);
-  await installAndProvisionClients(config);
+  const { config, mcps } = await resolveSessionSetup(local);
+  await installAndProvisionClients(config, mcps);
   await offerFollowUps(config);
   await handoffToOperator();
 }

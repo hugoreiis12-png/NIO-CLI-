@@ -1,11 +1,7 @@
 #!/usr/bin/env node
 /**
  * `nio-gateway` — entrypoint HTTP do Gateway. Node nativo (`http.createServer`,
- * sem framework), loopback only (127.0.0.1) — roda na máquina do próprio
- * usuário (ver `docs/v2/ARQUITETURA-GATEWAY.md`). Toda request passa pelo
- * Edge Filter (trace id + log + Origin/token) antes da rota. Kong entra na
- * frente deste processo depois (reverse proxy) — não muda nada aqui quando
- * isso acontecer.
+ * sem framework), sem dependencia externas. Só aceita requests do loopback
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { login, logout } from './services/login.js';

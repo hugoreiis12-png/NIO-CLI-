@@ -2,7 +2,49 @@ import { test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readCoAuthoredBy, disableCoAuthoredBy } from './client-configs.js';
+import { readCoAuthoredBy, disableCoAuthoredBy, planOpencodeUpdate, NIO_OPERATOR_MODEL } from './client-configs.js';
+import type { McpSpec } from '../core/environment.js';
+
+const NIO_ENTRY = { command: ['nio-cli'], environment: {} as Record<string, string> };
+const PG_MCP: McpSpec = {
+  id: 'postgres',
+  command: ['npx', '-y', '@modelcontextprotocol/server-postgres'],
+  environment: { DATABASE_URL: 'x' },
+};
+
+test('planOpencodeUpdate: grava model + mcp.nio + MCPs do perfil num config vazio', () => {
+  const { next } = planOpencodeUpdate({}, NIO_ENTRY, [PG_MCP]);
+  expect(next.model).toBe(NIO_OPERATOR_MODEL);
+  const mcp = next.mcp as Record<string, { command: string[]; enabled?: boolean }>;
+  expect(mcp.nio.command).toEqual(['nio-cli']);
+  expect(mcp.postgres.command).toEqual(PG_MCP.command);
+  expect(mcp.postgres.enabled).toBe(true);
+});
+
+test('planOpencodeUpdate: idempotente — rodar sobre o próprio resultado marca alreadyConfigured', () => {
+  const { next } = planOpencodeUpdate({}, NIO_ENTRY, [PG_MCP]);
+  const again = planOpencodeUpdate(next, NIO_ENTRY, [PG_MCP]);
+  expect(again.alreadyConfigured).toBe(true);
+});
+
+test('planOpencodeUpdate: MCP do perfil ausente → não está configurado ainda', () => {
+  const semPerfil = planOpencodeUpdate({}, NIO_ENTRY, []).next;
+  const { alreadyConfigured } = planOpencodeUpdate(semPerfil, NIO_ENTRY, [PG_MCP]);
+  expect(alreadyConfigured).toBe(false);
+});
+
+test('planOpencodeUpdate: preserva mcp.nio e chaves não-nio do usuário', () => {
+  const existing = {
+    theme: 'dark',
+    mcp: { custom: { type: 'local', command: ['meu-mcp'], enabled: true } },
+  };
+  const { next } = planOpencodeUpdate(existing, NIO_ENTRY, [PG_MCP]);
+  expect(next.theme).toBe('dark');
+  const mcp = next.mcp as Record<string, { command: string[] }>;
+  expect(mcp.custom.command).toEqual(['meu-mcp']); // chave do usuário intacta
+  expect(mcp.nio.command).toEqual(['nio-cli']);
+  expect(mcp.postgres.command).toEqual(PG_MCP.command);
+});
 
 // os.homedir() ignora $HOME no macOS, então passamos o path do settings.json
 // explicitamente (o seam opcional) em vez de tentar sequestrar o home.

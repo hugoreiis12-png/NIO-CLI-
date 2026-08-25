@@ -1,8 +1,4 @@
-
-# `docker compose -f kong/docker-compose.yml up` — Kong OSS, DB-less, na
-# frente do `nio-gateway` (que roda no host, fora do Docker — ver kong.yml).
-# Portas do HOST em 127.0.0.1 explícito, não 0.0.0.0 — mesma regra de
-# loopback-only do resto do Gateway (ver docs/v2/ARQUITETURA-GATEWAY.md).
+# Configuração do Kong Gateway para o NIO-CLI
 services:
   kong:
     image: kong:latest

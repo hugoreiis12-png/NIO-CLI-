@@ -6,7 +6,8 @@
   "bin": {
     "nio": "dist/cli.js",
     "nio-cli": "dist/mcp-server.js",
-    "nio-gateway": "dist/gateway/index.js"
+    "nio-gateway": "dist/gateway/index.js",
+    "nio-lang": "dist/mcp-server-lang.js"
   },
   "files": [
     "dist",
@@ -36,21 +37,20 @@
     "nos"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc && node --input-type=commonjs -e \"require('fs').cpSync('src/cli/copy','dist/cli/copy',{recursive:true})\" && chmod +x dist/cli.js dist/mcp-server.js dist/gateway/index.js",
+    "build": "rm -rf dist && tsc && node --input-type=commonjs -e \"require('fs').cpSync('src/cli/copy','dist/cli/copy',{recursive:true})\" && chmod +x dist/cli.js dist/mcp-server.js dist/gateway/index.js dist/mcp-server-lang.js",
     "gen:docs": "bun run scripts/gen-reference.ts",
     "db:ping": "bun run scripts/db-ping.ts",
     "dev:cli": "bun run src/cli.ts",
     "dev:mcp": "bun run src/mcp-server.ts",
     "dev:gateway": "bun run src/gateway/index.ts",
+    "dev:lang": "bun run src/mcp-server-lang.ts",
     "dev:kong": "docker compose -f kong/docker-compose.yml up",
-    "gen:types": "supabase gen types typescript --project-id wdshvtlsjoegjvmpqobx > src/database.types.ts",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "@clack/prompts": "^1.6.0",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@node-rs/argon2": "^2.1.0",
-    "@supabase/supabase-js": "^2.49.1",
     "adm-zip": "^0.5.17",
     "boxen": "^7.1.1",
     "chalk": "^5.6.2",

@@ -1,3 +1,4 @@
+// Testes unitários para o módulo de sessões do gateway 
 import { test, expect } from 'bun:test';
 import { createSession, validateSession, revokeSession, activeSessionCount } from './sessions.js';
 import type { GatewayUser } from './types.js';
@@ -6,6 +7,7 @@ function user(id: string): GatewayUser {
   return { id, email: `${id}@example.com` };
 }
 
+// Testes unitários para o módulo de sessões do gateway 
 test('createSession: token válido resolve o mesmo usuário em validateSession', () => {
   const u = user('u1');
   const { token, expiresIn } = createSession(u);

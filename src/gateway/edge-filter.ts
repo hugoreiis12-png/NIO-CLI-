@@ -1,5 +1,5 @@
 /**
- * Edge Filter — primeira triagem de toda request que chega no `nio-gateway`,
+ * Edge Filter  primeira triagem de toda request que chega no `nio-gateway`,
  * antes de qualquer rota. 
  */
 import { randomUUID, timingSafeEqual } from 'node:crypto';
