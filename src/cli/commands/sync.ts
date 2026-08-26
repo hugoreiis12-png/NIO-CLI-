@@ -182,7 +182,7 @@ export function registerSyncCommand(program: Command): void {
             });
           }
 
-          // Telemetria v1 (Supabase) removida — `track` é no-op v2 (lib/telemetry.ts).
+          // Telemetria v1 removida — `track` é no-op v2 (lib/telemetry.ts).
           const uidByName = skillIdMap();
 
           // ---- Fase informativa: coleta cada etapa como seção (não imprime na hora) ----
@@ -238,8 +238,8 @@ export function registerSyncCommand(program: Command): void {
 
           // Harness no repo (rules + AGENTS.md + CLAUDE.md). Idempotente.
           if (!opts.dryRun && config) {
-            // Overview do NOS (Supabase) removido — sem fonte de contexto de
-            // projeto v1 nesse caminho hoje; harness segue só com as rules.
+            // Overview de projeto (v1) removido — sem fonte de contexto nesse
+            // caminho hoje; harness segue só com as rules.
             try {
               const h = writeRepoHarness(process.cwd(), {
                 rulesMarkdown: concatenateRules(config.selection ?? { roles: [], stacks: {} }),

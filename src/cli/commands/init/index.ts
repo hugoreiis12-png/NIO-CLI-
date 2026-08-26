@@ -7,6 +7,7 @@ import type { Session, Ide as SessionIde, Profile } from "../../../core/session.
 import { createSessionRepository } from "../../../adapters/pg/session-repository.js";
 import { EnvironmentBuilder } from "../../../app/environment-builder.js";
 import type { McpSpec } from "../../../core/environment.js";
+import { createIdeGateway } from "../../../adapters/ide/ide-gateway.js";
 import { readDependencies, skillIdMap } from "../../../lib/skills.js";
 import { collectRuleSkills } from "../../../lib/rules.js";
 import { offerDependencyInstall, offerRuleSkills } from "../../flows/dependencies.js";
@@ -43,9 +44,22 @@ import {
 import { promptSelection } from "../../flows/sections.js";
 import type { StoredSession } from "../../../lib/session-store.js";
 
-/** `Session.ide` não distingue Xcode — cai em `other` como qualquer editor não-VS Code. */
+/**
+ * Mapeia o `Ide` do wizard (`config.Ide`, superset) pro `Session.ide` (domínio).
+ * `xcode` não existe no `Session.ide` (é só integração do /implement) → `other`;
+ * o resto passa direto (todos são valores válidos do union do domínio).
+ */
 function toSessionIde(ide: Ide | undefined): SessionIde {
-  return ide === "vscode" ? "vscode" : "other";
+  switch (ide) {
+    case "vscode":
+      return "vscode";
+    case "cursor":
+      return "cursor";
+    case "terminal":
+      return "terminal";
+    default:
+      return "other"; // xcode | other | undefined
+  }
 }
 
 /**
@@ -211,6 +225,28 @@ async function offerFollowUps(config: ProjectConfig): Promise<void> {
 }
 
 /**
+ * Abre a IDE da sessão na pasta do projeto (parte da materialização — Sprint 2.2).
+ * Best-effort: `skipped` é silencioso (terminal/other), o resto só avisa — nunca
+ * aborta o init (a sessão já existe e o ambiente está materializado).
+ */
+async function openSessionIde(session: Session): Promise<void> {
+  const result = await createIdeGateway().open(session.ide, session.projectPath);
+  switch (result.status) {
+    case "opened":
+      console.log(`  ${c.green(sym.ok)} Abrindo ${c.bold(result.binary ?? "")} em ${c.dim(session.projectPath)}`);
+      break;
+    case "unavailable":
+      console.log(`  ${c.yellow(sym.warn)} IDE não aberta: ${result.error}`);
+      break;
+    case "failed":
+      console.log(`  ${c.yellow(sym.warn)} Falha ao abrir a IDE: ${result.error}`);
+      break;
+    case "skipped":
+      break; // sem editor pra abrir — segue direto pro handoff.
+  }
+}
+
+/**
  * Handoff final: entrega o ambiente materializado pro operador de IA fixo
  * (OpenCode — decisão de 2026-07-27). Se o binário não estiver no PATH (usuário
  * recusou a instalação lá em `ensureCoreClients`), só orienta em vez de falhar.
@@ -248,9 +284,10 @@ async function runInitWizard(): Promise<void> {
   // Sem login inline: exige `nio register`/`nio login` prévios e sai se faltar.
   const local = await requireLocalSessionStep();
 
-  const { config, mcps } = await resolveSessionSetup(local);
+  const { config, session, mcps } = await resolveSessionSetup(local);
   await installAndProvisionClients(config, mcps);
   await offerFollowUps(config);
+  await openSessionIde(session);
   await handoffToOperator();
 }
 

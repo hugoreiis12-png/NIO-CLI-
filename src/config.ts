@@ -4,8 +4,21 @@ import { PROJECT_CONFIG_FILE } from './constants.js';
 import { brand, env } from './brand.js';
 import { DEV_ROLE, GENERAL, type Selection } from './lib/sections.js';
 
-/** IDE do usuário — habilita integrações (ex.: `/implement` registra o worktree no editor). */
-export type Ide = 'vscode' | 'xcode' | 'other';
+/**
+ * IDE do usuário — habilita integrações (ex.: `/implement` registra o worktree no
+ * editor; o `IdeGateway` abre a pasta no editor). Superset alinhado ao
+ * `Session.ide` (`terminal|vscode|cursor|other`) + `xcode` (só integração do
+ * `/implement`, que o `Session.ide` colapsa em `other`).
+ */
+export type Ide = 'vscode' | 'cursor' | 'xcode' | 'terminal' | 'other';
+
+/** Fonte única dos valores de `Ide` — usada pelos guards de parse (sem literais repetidos). */
+export const IDE_VALUES: readonly Ide[] = ['vscode', 'cursor', 'xcode', 'terminal', 'other'];
+
+/** Type guard de `Ide` — narra `unknown` (JSON parseado) pro union. */
+export function isIde(value: unknown): value is Ide {
+  return typeof value === 'string' && (IDE_VALUES as readonly string[]).includes(value);
+}
 
 export interface ProjectConfig {
   /**
@@ -51,7 +64,7 @@ function readUserIde(dir: string): Ide | undefined {
   if (!existsSync(path)) return undefined;
   try {
     const u = JSON.parse(readFileSync(path, "utf8")) as { ide?: unknown };
-    if (u.ide === "vscode" || u.ide === "xcode" || u.ide === "other") return u.ide;
+    if (isIde(u.ide)) return u.ide;
   } catch {
     /* user file inválido → ignora */
   }
@@ -199,9 +212,7 @@ function shapeProjectConfig(obj: Record<string, unknown>): ProjectConfig {
   if (typeof sessionId === 'string') config.session_id = sessionId;
   const selection = parseSelection(obj.selection) ?? migrateLegacySelection(obj);
   if (selection) config.selection = selection;
-  if (obj.ide === 'vscode' || obj.ide === 'xcode' || obj.ide === 'other') {
-    config.ide = obj.ide;
-  }
+  if (isIde(obj.ide)) config.ide = obj.ide;
   return config;
 }
 
@@ -261,7 +272,7 @@ export function migrateConfigSplit(cwd: string = process.cwd()): boolean {
   delete obj.rules;
   writeFileSync(repoPath, JSON.stringify(obj, null, 2) + "\n", "utf8");
 
-  if ((ide === "vscode" || ide === "xcode" || ide === "other") && !readUserIde(cwd)) {
+  if (isIde(ide) && !readUserIde(cwd)) {
     writeUserConfig({ ide }, cwd);
   }
   return true;

@@ -39,12 +39,14 @@ export async function pickIde(): Promise<Ide> {
   section("IDE", "habilita integrações de editor");
   return select<Ide>({
     message:
-      "Qual IDE você usa? Isso habilita integrações — ex.: o /implement " +
-      "registra o worktree criado no editor (VS Code: adiciona ao Source Control; " +
-      "Xcode: abre o projeto em janela própria). Mais integrações no futuro.",
+      "Qual IDE você usa? Isso habilita integrações — ex.: o `nio open` abre a " +
+      "pasta no editor e o /implement registra o worktree criado. VS Code e Cursor " +
+      "abrem direto pela CLI; Terminal/Outra não abrem editor.",
     choices: [
       { name: "VS Code", value: "vscode" },
+      { name: "Cursor", value: "cursor" },
       { name: "Xcode", value: "xcode" },
+      { name: "Terminal (sem editor)", value: "terminal" },
       { name: "Outra", value: "other" },
     ],
   });

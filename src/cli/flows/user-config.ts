@@ -36,7 +36,9 @@ export async function ensureUserConfig(opts: {
     message: "Qual IDE você usa? (habilita integrações do /implement)",
     choices: [
       { name: "VS Code", value: "vscode" },
+      { name: "Cursor", value: "cursor" },
       { name: "Xcode", value: "xcode" },
+      { name: "Terminal (sem editor)", value: "terminal" },
       { name: "Outra", value: "other" },
     ],
   });

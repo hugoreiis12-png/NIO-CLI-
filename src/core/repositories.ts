@@ -6,7 +6,17 @@
  * Contrato de erro: métodos de leitura por chave retornam `null` quando não acham
  * (não lançam); falha de infra (conexão, SQL inválido) propaga como throw.
  */
-import type { UserCli, Session, Profile, SessionStatus, Ide, EnvironmentConfig, AuthSession } from './session.js';
+import type {
+  UserCli,
+  Session,
+  Profile,
+  SessionStatus,
+  Ide,
+  EnvironmentConfig,
+  AuthSession,
+  DependencyEvent,
+  DependencyType,
+} from './session.js';
 
 /** Dados para criar um usuário. `password` é texto puro — o adapter hasheia (argon2id). */
 export interface NewUserInput {
@@ -97,4 +107,32 @@ export interface AuthSessionRepository {
 
   /** Revoga todas as sessões ativas do usuário (ex.: "sair de todos os dispositivos"). */
   revokeAllByUser(userId: number): Promise<void>;
+}
+
+/** Dados para registrar um evento de dependência detectada pelo watcher. */
+export interface NewDependencyEventInput {
+  sessionId: string;
+  filePath: string;
+  dependencyName: string;
+  dependencyType: DependencyType;
+}
+
+/**
+ * Eventos de dependência (`dependency_events`) detectados pelo watcher.
+ * `recordIfNew` é a chave da idempotência: o watcher roda a cada 10s e re-detecta
+ * as mesmas deps — só a PRIMEIRA vez vira evento novo (por session+file+name),
+ * senão a tabela encheria de duplicatas.
+ */
+export interface DependencyEventRepository {
+  /**
+   * Registra o evento se ainda não houver um pro trio (session, file, name).
+   * `created: false` + o evento existente quando já registrado (não duplica).
+   */
+  recordIfNew(input: NewDependencyEventInput): Promise<{ event: DependencyEvent; created: boolean }>;
+
+  /** Marca um evento como instalado (`installed = true`, `installed_at = now()`). */
+  markInstalled(id: string): Promise<void>;
+
+  /** Eventos da sessão, mais recentes primeiro. */
+  listBySession(sessionId: string): Promise<DependencyEvent[]>;
 }

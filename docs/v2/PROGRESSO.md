@@ -897,6 +897,46 @@ Matança cirúrgica das 4 falhas pré-existentes → **266 pass / 2 skip / 0 fai
 As 2 skips restantes são legítimas: homolog opt-in do scaffold + o teste POSIX
 acima.
 
+## 2026-08-26 — Órfãos do Gateway removidos + comentários Supabase zerados
+
+- **Gateway spec 0002 (OAuth/PKCE superseded)** — apagados após auditar que nada
+  ativo os importa: `server.ts`, `sessions.ts`(+test), `pkce.ts`(+test),
+  `authorize-page.ts`, `authorize-store.ts`, `traceability.ts`, `types.ts`.
+  `tsconfig` exclude limpo (não precisa mais excluir `server.ts`). Gateway ativo
+  intacto: `config`, `edge-filter`, `index`, `middleware/auth`, `services/login`.
+- **Comentários stale de Supabase/NOS** — zerados em `config.ts`, `constants.ts`,
+  `core/types.ts`, `session-store.ts`, `telemetry.ts` (2×), `sync.ts` (2×).
+  `grep -ri supabase src package.json` → **zero**.
+- **PowerBI MCP** — comando oficial portável fixado
+  (`npx -y @microsoft/powerbi-modeling-mcp@latest --start --skipconfirmation`),
+  placeholder removido.
+- `tsc` verde. `bun test` **258 pass / 2 skip / 0 fail** (órfãos removidos tiraram
+  ~8 testes de spec 0002).
+
+## 2026-08-26 — 4 comandos novos de CLI (sessions/debug/agents/command)
+
+- **`nio sessions`** — expõe o `SessionRepository` (que já estava pronto e ocioso):
+  `list` (default), `activate <id>`, `pause <id>`, `delete <id>`. Resolução por
+  prefixo de id (`matchByIdPrefix`, pura + testada). Exige login; erros de banco
+  amigáveis.
+- **`nio debug`** — doctor de diagnóstico (read-only): `nio.json`, login local,
+  Postgres (ping), sessão ativa, OpenCode no PATH, `opencode.json`, cache de
+  skills — cada um ✓/⚠/✗ com dica acionável. Smoke real apontou os problemas certos.
+- **`nio agents`** — lista os agentes (`type: 'agent'`) do cache de skills. Smoke:
+  5 agentes reais listados com descrição.
+- **`nio command [name]`** — cria um slash-command personalizado em
+  `~/.config/opencode/commands/<nome>.md` (frontmatter + corpo, interativo).
+- `tsc` verde. `bun test` **259 pass / 2 skip / 0 fail**. Teste do helper puro
+  `matchByIdPrefix`. Registrados no `cli.ts`.
+
+### Teste de integração do SessionRepository (Postgres real)
+`session-repository.integration.test.ts` (gated em `NIO_DATABASE_URL`, usuário
+descartável) cobre o ciclo de vida completo + a invariante 1-ativa-por-usuário:
+criar B arquiva A · list · findActive · activate (troca) · pause (zera ativa) ·
+updateConfig (JSONB) · delete. **1 pass, 9 asserts**, limpeza confirmada (0
+resíduos). Nota: em rodada cheia os 2 testes de DB remoto (fatia-1 + sessions)
+às vezes flakeiam por latência de rede; em isolamento passam sólidos.
+
 ---
 
 ### nio-lang — COMPLETO (fatias 1-6)
@@ -904,3 +944,126 @@ Conhecimento (reference+topic) · `nio lang sync` (vendor) · recipes · scaffol
 (dry-run+confirm+homolog opt-in) · wizard fullstack · n8n-mcp · install ciente
 de contexto. Débito futuro (não-bloqueante): generators de projeto inteiro
 (create-next-app) ficam de fora de propósito — só "add dependency" ao projeto.
+
+---
+
+## 2026-08-26 — Sprint 2.2: `IdeGateway` (abre a IDE na pasta do projeto)
+
+Fecha a peça que faltava da materialização (Sprint 2.2 do doc de transição):
+depois de montar o ambiente, abrir o editor na `session.projectPath`. Espelha o
+padrão do `ToolchainGateway` (port em `core/` + adapter em `adapters/` + wiring
+no `init`).
+
+### Código adicionado/alterado
+| Arquivo | Papel |
+|---|---|
+| `src/core/environment.ts` | + `OpenResult` (`opened`/`unavailable`/`skipped`/`failed`) e port `IdeGateway` (contrato: **nunca lança**, igual ao ToolchainGateway) |
+| `src/adapters/ide/ide-gateway.ts` (+ teste) | `resolveLauncher(ide)` puro (vscode→`code`, cursor→`cursor`, terminal/other→null); detecta o binário por `--version` SEM shell (no Windows tenta `code.cmd` antes de `code`); abre **detached + unref** (a IDE sobrevive ao fim da CLI) |
+| `src/cli/commands/init/index.ts` | `openSessionIde(session)` chamado antes do handoff — best-effort (`skipped` silencioso, resto só avisa, nunca aborta) |
+| `src/cli/commands/open.ts` (novo) | `nio open` — abre a IDE da **sessão ativa** (`findActiveByUser`); é o critério de aceite do Sprint 2.2 |
+| `src/cli.ts` | Registra o comando `open` |
+
+### Decisões
+- Launcher keyado no `Session.ide` (`terminal|vscode|cursor|other`) — o tipo de
+  domínio persistido, não o `config.Ide` do wizard (`vscode|xcode|other`). Hoje o
+  `toSessionIde` do `init` colapsa tudo não-vscode em `other`, então na prática só
+  `vscode` abre; o gateway já está pronto pra `cursor` quando o wizard oferecer.
+- Windows: `code`/`cursor` são shims `.cmd`; o spawn sem shell não resolve `.cmd`
+  sozinho, então tentamos `<bin>.cmd` antes do nome cru — mantém `shell: false`
+  (convenção de segurança do repo), sem cair em injeção.
+
+### Verificação
+- `tsc --noEmit` verde. `bun test` **264 pass / 2 skip / 0 fail** (as 4 novas do
+  IdeGateway incluídas; nenhuma regressão).
+- `nio open --help` registra e sobe. Abertura real da IDE fica como smoke manual
+  (depende de `code`/`cursor` no PATH da máquina).
+
+### Débito conhecido (não-bloqueante)
+- `pickIde` do wizard ainda oferece `xcode` (colapsa em `other` → `skipped`) e não
+  oferece `cursor` nem `terminal`. Alinhar o prompt ao union do `Session.ide` é
+  polish separado.
+
+### Próximo passo
+- Sprints grandes que ainda faltam: DependencyWatcher (Sprint 3) e as tools MCP de
+  ambiente (Sprint 4).
+
+---
+
+## 2026-08-26 — `pickIde` alinhado ao union do `Session.ide`
+
+Fecha o débito da entrada anterior. Os dois vocabulários de IDE eram distintos:
+`config.Ide` (`vscode|xcode|other`, integração do /implement) e `Session.ide`
+(`terminal|vscode|cursor|other`, o IdeGateway). Unificados num **superset**.
+
+| Arquivo | Mudança |
+|---|---|
+| `src/config.ts` | `Ide` virou `vscode\|cursor\|xcode\|terminal\|other`; + `IDE_VALUES` e `isIde()` (fonte única — eliminou os 4 guards literais repetidos de parse) |
+| `src/cli/commands/init/profile-step.ts` | `pickIde` oferece VS Code / Cursor / Xcode / Terminal / Outra |
+| `src/cli/commands/init/index.ts` | `toSessionIde` mapeia o superset (cursor/terminal passam direto; xcode→other, que o `Session.ide` não tem) |
+| `src/cli/flows/user-config.ts` | Mesma lista no prompt de prefs do /implement (coerência) |
+
+Verificação: `tsc` verde; `bun test` **264 pass / 2 skip / 0 fail** (guard de parse
+coberto pelo teste existente — `vscode` preservado, `notepad` ignorado).
+
+---
+
+## 2026-08-26 — Sprint 3 fatia 1: scanner de dependências (puro)
+
+Primeira fatia do DependencyWatcher (Sprint 3). Só a detecção de deps DECLARADAS
+nos manifests do projeto — sem decidir instalado, sem persistir, sem loop (fatias
+2-6). Lógica de parse **pura** (recebe conteúdo, não toca disco).
+
+| Arquivo | Papel |
+|---|---|
+| `src/lib/dependency-scan.ts` (+ teste) | `parsePackageJson` (runtime+dev+peer+optional), `parseRequirementsTxt` (tira versão/extras/markers, ignora `#`/`-`/URLs), `parseCargoToml` (via `smol-toml`, já dep do projeto); `scanContent` (puro) + `scanProject` (IO best-effort por manifest). Tipos: npm/pip/cargo (do union `DependencyType`) |
+
+Distinto de `dependencies.ts` (deps de skills no frontmatter) — aqui é o manifest
+do projeto do usuário.
+
+Verificação: `tsc` verde; `bun test` **270 pass / 2 skip / 0 fail** (6 novas do
+scanner). Parsers cobertos por fixtures inline (dedupe, JSON/TOML inválido → vazio).
+
+### Próximo passo (fatias 2-6, envolvem escrita no banco + processo em background)
+2. Diff de instalados (o que falta). 3. `DependencyEventRepository` (pg →
+`dependency_events`). 4. Auto-install (npm/pip/cargo, spawnSync sem shell).
+5. Loop de 10s da sessão ativa. 6. `nio env detect` (scan manual) + wiring.
+
+---
+
+## 2026-08-26 — Sprint 3 fatias 2-6: DependencyWatcher COMPLETO
+
+Fecha o DependencyWatcher. Pipeline ponta a ponta: scan dos manifests da sessão
+ativa → diff de instalados → registra evento (idempotente) → auto-install opt-in.
+
+### Decisões de escopo (dono do projeto)
+- **Auto-install é opt-in** (`--install`), não automático: detecção + registro de
+  eventos sempre ligados (observabilidade segura); a instalação real (ação
+  destrutiva) só com a flag. Diverge do doc §3.4 ("sem pedir permissão") de
+  propósito — alinha ao padrão de gate do repo (scaffold/language-configurator).
+- **Sem daemon**: `nio deps watch` é loop em foreground (Ctrl+C encerra), não
+  processo em background — gerência de processo cross-platform fica fora de escopo.
+
+### Código adicionado/alterado
+| Arquivo | Papel |
+|---|---|
+| `src/lib/dependency-installed.ts` (+ teste) | `isInstalled` (npm→`node_modules/<name>`; pip→site-packages de venv POSIX+Win; cargo→`Cargo.lock`) + `missingDependencies` (check injetável) |
+| `src/core/repositories.ts` | + port `DependencyEventRepository` (`recordIfNew` idempotente por session+file+name, `markInstalled`, `listBySession`) |
+| `src/adapters/pg/dependency-event-repository.ts` (+ teste do mapper) | Impl Postgres; `recordIfNew` deduplica em transação |
+| `src/lib/dependency-install-project.ts` | `installProjectDeps(type, path)` — instalador do ecossistema no `cwd` (`npm install`/`pip install -r`/`cargo fetch`), spawnSync SEM shell, zero arg do usuário |
+| `src/app/dependency-watcher.ts` (+ teste) | `DependencyWatcher.tick` (scan→diff→recordIfNew→install opt-in) + `watch` (loop 10s abortável via `AbortSignal`); seams de IO injetáveis |
+| `src/cli/commands/deps.ts` + `cli.ts` | `nio deps scan [--install]` (one-shot = o "detect" do doc) e `nio deps watch [--install]` sobre a sessão ativa |
+
+Tabela `dependency_events` já existia no schema — sem migration nova.
+
+### Verificação
+- `tsc --noEmit` verde. `bun test` **276 pass / 2 skip / 0 fail** (6 novas:
+  watcher ×3 com repo/seams fake, diff ×2, mapper ×1). `nio deps --help` lista
+  `scan`/`watch`.
+- Smoke real (`nio deps scan` contra Postgres vivo + sessão ativa) fica como passo
+  manual — gated em `NIO_DATABASE_URL` + login, como os outros fluxos de banco.
+
+### Débito conhecido (não-bloqueante)
+- Detecção de instalado de `pip`/`cargo` é heurística de filesystem (venv comuns /
+  Cargo.lock); `gem`/`composer`/`unknown` ainda não checados nem instalados.
+- Teste de integração do `DependencyEventRepository` contra Postgres real (como o
+  do `SessionRepository`) fica pra uma próxima rodada.

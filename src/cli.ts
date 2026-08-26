@@ -14,6 +14,12 @@ import { registerPlanCommand } from "./cli/commands/plan.js";
 import { registerValidatePlanCommand } from "./cli/commands/validate-plan.js";
 import { registerCompletionCommand } from "./cli/commands/completion.js";
 import { registerLangCommand } from "./cli/commands/lang.js";
+import { registerSessionsCommand } from "./cli/commands/sessions.js";
+import { registerDebugCommand } from "./cli/commands/debug.js";
+import { registerAgentsCommand } from "./cli/commands/agents.js";
+import { registerCommandCommand } from "./cli/commands/command.js";
+import { registerOpenCommand } from "./cli/commands/open.js";
+import { registerDepsCommand } from "./cli/commands/deps.js";
 
 notifyCliIfUpdate();
 
@@ -34,6 +40,12 @@ registerPlanCommand(program);
 registerValidatePlanCommand(program);
 registerCompletionCommand(program);
 registerLangCommand(program);
+registerSessionsCommand(program);
+registerDebugCommand(program);
+registerAgentsCommand(program);
+registerCommandCommand(program);
+registerOpenCommand(program);
+registerDepsCommand(program);
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(`Erro: ${(err as Error).message}`);

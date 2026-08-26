@@ -1,3 +1,4 @@
+/** Limpezo e remove os artefatos legados que versões antigas do nio  */
 import type { Command } from "commander";
 import { rmSync, lstatSync } from "node:fs";
 import { homedir } from "node:os";

@@ -65,9 +65,9 @@ export function provisionedItems(
 const pending: Promise<unknown>[] = [];
 
 /**
- * Registra um evento de uso. **No-op** enquanto não há sink v2 (o backend
- * Supabase saiu na migração). Mantida a assinatura por evento pros call sites;
- * `enabled()` continua respeitado pra quando um destino for plugado.
+ * Registra um evento de uso. **No-op** enquanto não há sink v2 (o do v1 saiu na
+ * migração). Mantida a assinatura por evento pros call sites; `enabled()`
+ * continua respeitado pra quando um destino for plugado.
  */
 export function track(event: UsageEvent): void {
   if (!enabled()) return;

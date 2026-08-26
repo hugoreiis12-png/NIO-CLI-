@@ -48,7 +48,7 @@ const RECIPES: Record<LanguageId, LanguageRecipe> = {
       'Django', 'FastAPI', 'Flask', 'Pyramid', 'Masonite', 'Bottle', 'CherryPy',
       'Sanic', 'Tornado', 'AIOHTTP', 'Django Ninja', 'PyTorch', 'TensorFlow',
       'Scikit-Learn', 'LangChain', 'LangGraph', 'LlamaIndex', 'CrewAI',
-      'Reflex', 'Flet', 'Streamlit', 'Dash',
+      'Reflex', 'Flet', 'Streamlit', 'Dash', 'Pandas', 'Metasploit', 
     ],
     orms: [
       'SQLAlchemy', 'Django ORM', 'SQLModel', 'Tortoise ORM', 'Ormar',

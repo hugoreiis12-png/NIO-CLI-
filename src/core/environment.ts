@@ -7,7 +7,7 @@
  *
  * Ver `docs/v2/ARQUITETURA-ENVIRONMENT-BUILDER.md`.
  */
-import type { Profile } from './session.js';
+import type { Profile, Ide } from './session.js';
 
 /**
  * Um MCP a registrar no cliente de IA. Formato OpenCode: `command` é o binário +
@@ -83,4 +83,29 @@ export interface EnsureResult {
  */
 export interface ToolchainGateway {
   ensure(spec: ToolchainSpec): Promise<EnsureResult>;
+}
+
+/**
+ * Resultado de abrir o editor da sessão na pasta do projeto.
+ *  - `opened`      → editor lançado (processo detached, sobrevive à CLI)
+ *  - `unavailable` → o `Ide` tem launcher mapeado, mas o binário não está no PATH
+ *  - `skipped`     → o `Ide` da sessão não tem editor pra abrir (`terminal`/`other`)
+ *  - `failed`      → o binário existia mas o lançamento falhou
+ */
+export interface OpenResult {
+  ide: Ide;
+  status: 'opened' | 'unavailable' | 'skipped' | 'failed';
+  /** Binário efetivamente usado (ex.: "code", "code.cmd") quando resolvido. */
+  binary?: string;
+  error?: string;
+}
+
+/**
+ * Abre o editor da sessão na pasta do projeto — port. A implementação
+ * (`adapters/ide/`) detecta o binário e dispara detached (a IDE sobrevive ao fim
+ * da CLI). **Nunca lança** (contrato, igual ao `ToolchainGateway`): toda falha
+ * vira um `status` no `OpenResult`.
+ */
+export interface IdeGateway {
+  open(ide: Ide, projectPath: string): Promise<OpenResult>;
 }
