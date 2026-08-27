@@ -200,37 +200,57 @@ export function disableCoAuthoredBy(path = claudeSettingsPath()): InstallResult 
 
 interface CodexServerEntry {
   command?: string;
+  args?: string[];
   env?: Record<string, string>;
 }
 
 /**
- * Decide se o `nio` já está OK no TOML e monta o próximo objeto se precisar
- * atualizar (pura, sem IO). Já-OK só se command bate E env NIO_CLIENT=codex já
- * existe — senão atualiza (instalações antigas ganham o env no próximo run).
+ * Entrada TOML de um MCP de perfil pro Codex — o `command` do `McpSpec` é
+ * `[bin, ...args]`; no TOML do Codex `command` é string e `args` é lista.
+ */
+function codexMcpEntry(spec: McpSpec, current?: CodexServerEntry): CodexServerEntry {
+  const entry: CodexServerEntry = { ...current, command: spec.command[0] };
+  const args = spec.command.slice(1);
+  if (args.length > 0) entry.args = args;
+  if (spec.environment) entry.env = { ...current?.env, ...spec.environment };
+  return entry;
+}
+
+/**
+ * Decide se o `nio` (+ os MCPs do perfil) já estão OK no TOML e monta o próximo
+ * objeto se precisar atualizar (pura, sem IO). Já-OK só se o `nio` bate E env
+ * `NIO_CLIENT=codex` existe E cada MCP do perfil está presente com o bin certo.
+ *
+ * `profileMcps` são os MCPs do `EnvironmentBuilder` — mesma paridade do
+ * `planOpencodeUpdate`; sem eles, uma sessão codex-primária não teria os MCPs.
  */
 export function planCodexUpdate(
   existing: Record<string, unknown>,
   nioEntry: { command: string; env: Record<string, string> },
+  profileMcps: McpSpec[] = [],
 ): { alreadyConfigured: boolean; next: Record<string, unknown> } {
   const servers = (existing.mcp_servers ?? {}) as Record<string, CodexServerEntry | undefined>;
   const current = servers[brand.mcpServerKey];
 
-  const alreadyConfigured = Boolean(
+  const nioOk = Boolean(
     current && current.command === MCP_COMMAND && current.env?.[envName('CLIENT')] === 'codex',
   );
+  const mcpsOk = profileMcps.every((spec) => servers[spec.id]?.command === spec.command[0]);
+  const alreadyConfigured = nioOk && mcpsOk;
 
-  const next: Record<string, unknown> = {
-    ...existing,
-    mcp_servers: {
-      ...servers,
-      [brand.mcpServerKey]: {
-        ...current,
-        ...nioEntry,
-        env: { ...current?.env, [envName('CLIENT')]: 'codex' },
-      },
+  const nextServers: Record<string, CodexServerEntry> = {
+    ...(servers as Record<string, CodexServerEntry>),
+    [brand.mcpServerKey]: {
+      ...current,
+      ...nioEntry,
+      env: { ...current?.env, [envName('CLIENT')]: 'codex' },
     },
   };
-  return { alreadyConfigured, next };
+  for (const spec of profileMcps) {
+    nextServers[spec.id] = codexMcpEntry(spec, servers[spec.id]);
+  }
+
+  return { alreadyConfigured, next: { ...existing, mcp_servers: nextServers } };
 }
 
 interface OpencodeServerEntry {
@@ -348,15 +368,23 @@ export function installOpencodeGlobal(
   return { status: 'updated', path, backup };
 }
 
-export function installCodexGlobal(): InstallResult {
-  const path = join(homedir(), '.codex', 'config.toml');
+/** Path global do `config.toml` do Codex. Seam pra teste. */
+export function codexGlobalPath(): string {
+  return join(homedir(), '.codex', 'config.toml');
+}
+
+export function installCodexGlobal(
+  profileMcps: McpSpec[] = [],
+  path = codexGlobalPath(),
+): InstallResult {
 
   // `NIO_CLIENT=codex` avisa o servidor MCP a (1) provisionar/auto-pull pra
   // `~/.codex` (skills + prompts) e (2) filtrar os docs pelo surface `codex`.
   const nioEntry = { command: MCP_COMMAND, env: { [envName('CLIENT')]: 'codex' } };
 
   if (!existsSync(path)) {
-    writeToml(path, { mcp_servers: { [brand.mcpServerKey]: nioEntry } });
+    const { next } = planCodexUpdate({}, nioEntry, profileMcps);
+    writeToml(path, next);
     return { status: 'created', path };
   }
 
@@ -370,7 +398,7 @@ export function installCodexGlobal(): InstallResult {
     );
   }
 
-  const { alreadyConfigured, next } = planCodexUpdate(existing, nioEntry);
+  const { alreadyConfigured, next } = planCodexUpdate(existing, nioEntry, profileMcps);
   if (alreadyConfigured) return { status: 'already_configured', path };
 
   const backup = backupFile(path);

@@ -134,6 +134,30 @@ test('planCodexUpdate: preserva outras chaves top-level e outros mcp_servers', (
   expect((next.mcp_servers as any).nio.command).toBe('nio-cli');
 });
 
+const PG_MCP = {
+  id: 'postgres',
+  command: ['npx', '-y', '@modelcontextprotocol/server-postgres'],
+  environment: { DATABASE_URL: '' },
+};
+
+test('planCodexUpdate + profileMcps: monta command/args/env separados (formato TOML do Codex)', () => {
+  const { next } = planCodexUpdate({}, nioEntry, [PG_MCP]);
+  const entry = (next.mcp_servers as any).postgres;
+  expect(entry.command).toBe('npx');
+  expect(entry.args).toEqual(['-y', '@modelcontextprotocol/server-postgres']);
+  expect(entry.env).toEqual({ DATABASE_URL: '' });
+});
+
+test('planCodexUpdate + profileMcps: idempotente sobre o próprio next', () => {
+  const first = planCodexUpdate({}, nioEntry, [PG_MCP]).next;
+  expect(planCodexUpdate(first, nioEntry, [PG_MCP]).alreadyConfigured).toBe(true);
+});
+
+test('planCodexUpdate + profileMcps: MCP do perfil ausente → não configurado ainda', () => {
+  const semPerfil = planCodexUpdate({}, nioEntry, []).next;
+  expect(planCodexUpdate(semPerfil, nioEntry, [PG_MCP]).alreadyConfigured).toBe(false);
+});
+
 // --- planOpencodeUpdate(existing, nioEntry) — pura, extraída de installOpencodeGlobal ---
 
 const opencodeEntry = { command: ['nio-cli'], environment: { [CLIENT_ENV]: 'opencode' } };

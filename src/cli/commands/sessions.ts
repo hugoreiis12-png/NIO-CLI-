@@ -1,23 +1,17 @@
-// Sessions CLI: lista, ativa, pausa, deleta. Não cria nem edita (isso é feito pelo nio init)
+// Sessions CLI: lista, ativa, pausa, deleta. Não cria nem edita (isso é o `nio init`).
+// Superfície fina sobre o `SessionManager` (app layer) — a lógica de resolução por
+// prefixo de UUID e a invariante 1-ativa-por-usuário vivem lá.
 import type { Command } from "commander";
 import { loadSession } from "../../lib/session-store.js";
-import { createSessionRepository } from "../../adapters/pg/session-repository.js";
-import type { SessionRepository } from "../../core/repositories.js";
-import type { Session } from "../../core/session.js";
+import {
+  SessionManager,
+  SessionNotFoundError,
+  AmbiguousSessionError,
+} from "../../app/session-manager.js";
+import type { Session, SessionStatus } from "../../core/session.js";
 import { confirm } from "../../lib/prompts.js";
 import { section, c, sym } from "../../lib/colors.js";
 import { brand } from "../../brand.js";
-
-/**
- * `nio sessions` — gerencia as sessões de ambiente (a `Session` v2 no Postgres).
- * O backend (`SessionRepository`) já tem o CRUD + invariante de 1-ativa-por-usuário;
- * aqui é só a superfície de CLI.
- */
-
-/** Match por prefixo de UUID (o usuário não digita o id inteiro). Pura, testável. */
-export function matchByIdPrefix(sessions: Session[], prefix: string): Session[] {
-  return sessions.filter((s) => s.id.startsWith(prefix));
-}
 
 const STATUS_STYLE: Record<string, (t: string) => string> = {
   active: c.green,
@@ -42,38 +36,37 @@ function printRow(s: Session): void {
   );
 }
 
-/** Resolve uma sessão pelo prefixo do id; erro claro se ausente/ambíguo. */
-async function resolve(repo: SessionRepository, userId: number, prefix: string): Promise<Session | null> {
-  const all = await repo.listByUser(userId);
-  const matches = matchByIdPrefix(all, prefix);
-  if (matches.length === 1) return matches[0]!;
-  if (matches.length === 0) {
-    console.error(`${c.red(sym.err)} Nenhuma sessão começa com "${prefix}". Veja ${c.cyan(`${brand.name} sessions`)}.`);
-  } else {
-    console.error(`${c.red(sym.err)} Ambíguo: ${matches.length} sessões começam com "${prefix}". Use mais caracteres.`);
-  }
-  return null;
-}
-
-async function withRepo<T>(fn: (repo: SessionRepository, userId: number) => Promise<T>): Promise<void> {
+/** Roda `fn` com o manager + userId; erros de resolução e de banco viram mensagem + exit 1. */
+async function withManager(fn: (m: SessionManager, userId: number) => Promise<void>): Promise<void> {
   const userId = await requireUserId();
   try {
-    await fn(createSessionRepository(), userId);
+    await fn(new SessionManager(), userId);
   } catch (err) {
-    console.error(`${c.red(sym.err)} Falha no banco: ${(err as Error).message}`);
+    if (err instanceof SessionNotFoundError || err instanceof AmbiguousSessionError) {
+      console.error(`${c.red(sym.err)} ${err.message} Veja ${c.cyan(`${brand.name} sessions`)}.`);
+    } else {
+      console.error(`${c.red(sym.err)} Falha no banco: ${(err as Error).message}`);
+    }
     process.exit(1);
   }
 }
 
 async function list(): Promise<void> {
-  await withRepo(async (repo, userId) => {
-    const sessions = await repo.listByUser(userId);
+  await withManager(async (m, userId) => {
+    const sessions = await m.list(userId);
     if (sessions.length === 0) {
       console.log(`Nenhuma sessão ainda. Rode ${c.cyan(`${brand.name} init`)} pra criar uma.`);
       return;
     }
     section("Sessões", `${sessions.length} do usuário (id abreviado · nome · perfil · status)`);
     for (const s of sessions) printRow(s);
+  });
+}
+
+async function changeStatus(id: string, status: Exclude<SessionStatus, "active">, label: string): Promise<void> {
+  await withManager(async (m, userId) => {
+    const s = await m.setStatus(userId, id, status);
+    console.log(`${c.yellow(sym.ok)} Sessão ${c.bold(s.name)} ${c.yellow(label)}.`);
   });
 }
 
@@ -86,14 +79,8 @@ export function registerSessionsCommand(program: Command): void {
     .command("activate <id>")
     .description("Ativa uma sessão (arquiva as demais ativas)")
     .action(async (id: string) => {
-      await withRepo(async (repo, userId) => {
-        const s = await resolve(repo, userId, id);
-        if (!s) process.exit(1);
-        const updated = await repo.activate(s.id, userId);
-        if (!updated) {
-          console.error(`${c.red(sym.err)} Não consegui ativar "${s.name}".`);
-          process.exit(1);
-        }
+      await withManager(async (m, userId) => {
+        const s = await m.activate(userId, id);
         console.log(`${c.green(sym.ok)} Sessão ${c.bold(s.name)} agora está ${c.green("ativa")}.`);
       });
     });
@@ -101,28 +88,23 @@ export function registerSessionsCommand(program: Command): void {
   cmd
     .command("pause <id>")
     .description("Pausa uma sessão")
-    .action(async (id: string) => {
-      await withRepo(async (repo, userId) => {
-        const s = await resolve(repo, userId, id);
-        if (!s) process.exit(1);
-        await repo.setStatus(s.id, "paused");
-        console.log(`${c.yellow(sym.ok)} Sessão ${c.bold(s.name)} ${c.yellow("pausada")}.`);
-      });
-    });
+    .action((id: string) => changeStatus(id, "paused", "pausada"));
 
   cmd
     .command("delete <id>")
     .description("Remove uma sessão (irreversível)")
     .action(async (id: string) => {
-      await withRepo(async (repo, userId) => {
-        const s = await resolve(repo, userId, id);
-        if (!s) process.exit(1);
-        const ok = await confirm({ message: `Remover a sessão "${s.name}" (${s.profile})? Irreversível.`, default: false });
+      await withManager(async (m, userId) => {
+        const s = await m.resolve(userId, id);
+        const ok = await confirm({
+          message: `Remover a sessão "${s.name}" (${s.profile})? Irreversível.`,
+          default: false,
+        });
         if (!ok) {
           console.log("Cancelado.");
           return;
         }
-        await repo.delete(s.id);
+        await m.delete(userId, s.id);
         console.log(`${c.green(sym.ok)} Sessão ${c.bold(s.name)} removida.`);
       });
     });

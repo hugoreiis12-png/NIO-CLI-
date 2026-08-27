@@ -1,5 +1,13 @@
 # Arquitetura do Cliente de IA Fixo (OpenCode / big-pickle)
 
+> ⚠️ **Superado em parte por "Arquitetura de clientes de IA" (27 ago 2026)** —
+> `~/.claude/plans/cryptic-cooking-mitten.md`. O cliente deixou de ser **fixo**:
+> `nio init` agora detecta OpenCode **ou** Codex no host e sobe o que existir
+> (Parte A, feita — `src/lib/primary-client.ts`, `PROGRESSO.md` 27/ago).
+> Partes B (Headroom proxy) e C (ladder de failover Qwen/Kimi) pendentes. O
+> handoff-pra-sessão-viva e a base-de-conhecimento-NIO-SKILLS deste doc seguem
+> valendo; a exclusividade do OpenCode e o lock de modelo, não.
+
 > Documento de referência — consolida a decisão de 24 ago 2026 de fazer da
 > NIO-CLI um produto **autocontido**: em vez de servir tools MCP pra
 > assistentes externos que o usuário já tem (Claude Code, Codex, Cowork),

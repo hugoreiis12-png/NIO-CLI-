@@ -67,23 +67,43 @@ ainda não implementado — o fluxo completo, as decisões de arquitetura
 9700/NIST/ANPD como guia de conformidade) estão em
 `docs/v2/ARQUITETURA-GATEWAY.md`.
 
+## Cliente de IA
+
+No fim do `nio init`, a CLI entrega a sessão pro **cliente de IA primário** — o
+que estiver instalado no host, entre **OpenCode** e **Codex**. Se os dois
+estiverem, o `nio init` pergunta e grava a escolha em `nio.user.json`; override
+por `NIO_PRIMARY_CLIENT=opencode|codex`. `nio agent status` mostra o que foi
+detectado.
+
+A config MCP do cliente (`~/.config/opencode/opencode.json` ou
+`~/.codex/config.toml`) recebe o server `nio` + os MCPs do perfil da sessão; as
+skills são provisionadas no formato nativo de cada um (`toCodexDocs` traduz pro
+Codex).
+
+> Roadmap (`~/.claude/plans/cryptic-cooking-mitten.md`): camada Headroom
+> (compressão de contexto, proxy Docker) e um **ladder de failover** — quando o
+> primário esgota a quota, sobe um container com Qwen3.8-Flash, depois
+> Kimi-K2.7-Code.
+
 ## Comandos do CLI
 
 Operações do CLI, **sem o binário na frente** (declarado no cabeçalho da tabela). Tabela
 gerada da fonte por `bun run gen:docs`.
 
 <!-- COMMANDS:START -->
-<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 14 comandos. -->
+<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 16 comandos. -->
 
 | Comando | Descrição |
 | --- | --- |
+| `agent` | Cliente de IA da CLI (primário / ladder de failover) |
+| `agent status` | Mostra o cliente primário detectado |
 | `clean-legacy` | Remove commands/skills legados (substituídos) de ~/.claude e ~/.codex |
 | `completion [shell]` | Imprime o script de autocomplete (bash\|zsh\|fish). |
 | `exec` | Delega a implementação a um agente headless num worktree e aguarda. |
 | `exec-status <jobId>` | Estado de um job de execução (`nio exec`), em JSON |
-| `init` | Cria nio.json no diretório atual vinculando a um projeto do NIO |
-| `login` | Autentica contra o banco (user_cli) e salva a sessão localmente |
-| `logout` | Encerra a sessão local e limpa o token no banco |
+| `init` | Cria nio.json no diretório atual e materializa o ambiente da sessão |
+| `login` | Autentica via nio-gateway (túnel HTTP) e salva a sessão localmente (JWT) |
+| `logout` | Encerra a sessão local e revoga a auth_session no banco |
 | `plan` | Roda o engine pensante sobre o projeto e escreve/refina o plan.md da raiz. |
 | `register` | Cria um novo usuário no banco (user_cli) |
 | `skills` | Skills, commands e agents do nio (lidos do repo aberto via cache) |
@@ -114,22 +134,38 @@ Recarregue o shell e `nio <tab>` passa a sugerir comandos, subcomandos e flags.
 
 ## Tools MCP disponíveis
 
-Hoje o servidor MCP expõe só as tools genéricas de execução — as tools de
-domínio de tarefas/sprints/ponto (v1) já foram removidas. Tools de ambiente
-v2 (`nio_session_*`, `nio_env_*`, `nio_profile_*`) ainda não existem — o
-`SessionRepository` que as alimentaria já está pronto no backend, falta
-expô-lo.
+As tools de domínio de tarefas/sprints/ponto (v1) já foram removidas. Além das
+tools genéricas de execução, o servidor MCP expõe as tools de ambiente v2:
+`nio_profile_get` (catálogo de perfis), `nio_session_list` /
+`nio_session_activate` / `nio_session_create` (sessões) e `nio_env_materialize` /
+`nio_env_detect_deps` (ambiente). Todas passam pelo `SessionManager` e exigem
+`nio login`.
+
+### Recipes de ambiente (repo NIO-SKILLS)
+
+Além dos 6 perfis fixos, o repo `NIO-SKILLS-` pode carregar **recipes** em
+`recipes/<slug>.md` — presets nomeados (`profile` + linguagens + frameworks +
+MCPs + envVars/aliases) que **estendem** um perfil, editáveis sem release da CLI.
+O `nio init` oferece a recipe depois do perfil; `nio_session_create` aceita
+`{ recipe: "<slug>" }`. O merge é determinístico (recipe vence em envVars/aliases;
+união em linguagens/frameworks/MCPs). Ver `recipes/README.md` no repo NIO-SKILLS.
 
 <!-- TOOLS:START -->
-<!-- gerado por `bun run gen:docs` — não edite à mão. 4 tools. -->
+<!-- gerado por `bun run gen:docs` — não edite à mão. 10 tools. -->
 
 ### Tools que espelham o CLI — prefixo `nio_`
 
 | Operação | O que faz |
 | --- | --- |
 | `delegate_exec` | Delega a IMPLEMENTAÇÃO a um agente de execução novo (codex ou claude local, na assinatura — sem API) num worktree já criado pelo /implement. |
+| `env_detect_deps` | Roda UM ciclo do watcher de dependências sobre a pasta da sessão: escaneia os manifests (package.json, requirements.txt, Cargo.toml), detecta o que está declarado mas não instalado e registra um evento por dependência nova (idempotente). |
+| `env_materialize` | Re-materializa o ambiente de uma sessão existente a partir do seu perfil: garante os toolchains de novo, re-resolve os MCPs e reescreve o `config` em `sessions.config`. |
 | `exec_status` | Estado de uma execução delegada (`nio_delegate_exec`): running \| done \| failed, com o resumo do agente, os arquivos alterados e os checks determinísticos (tamanho, lint, build, testes). |
 | `plan` | Roda o engine PENSANTE (claude ou codex local, na assinatura — sem API) sobre a raiz do projeto e escreve/refina o `plan.md` de rascunho pré-SDD. |
+| `profile_get` | Consulta o catálogo de perfis de ambiente (hardcoded na CLI). |
+| `session_activate` | Ativa uma sessão de ambiente do usuário por id (o prefixo do UUID basta). |
+| `session_create` | Cria uma sessão de ambiente pro usuário autenticado e materializa o perfil escolhido: garante os toolchains, resolve os MCPs e persiste o `config` em `sessions.config`. |
+| `session_list` | Lista as sessões de ambiente do usuário autenticado (mais recentes primeiro), com id, nome, perfil, status e o `config` materializado. |
 | `validate_plan` | Lê o `plan.md` da raiz do projeto e roda o engine PENSANTE (claude ou codex local, na assinatura — sem API) para julgar se o plano é complexo o bastante para virar uma spec SDD antes de implementar. |
 <!-- TOOLS:END -->
 

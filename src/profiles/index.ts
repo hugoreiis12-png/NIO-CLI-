@@ -4,13 +4,15 @@
  * `DEFINITIONS`. Nenhum IO: só dados + resolução.
  */
 import type { Profile } from '../core/session.js';
-import type { ProfileCatalog, ProfileDefinition } from '../core/environment.js';
+import type { ProfileCatalog, ProfileDefinition, McpSpec, ToolchainSpec } from '../core/environment.js';
 import { dbaProfile } from './dba.js';
 import { fullstackProfile } from './fullstack.js';
 import { analystProfile } from './analyst.js';
 import { scientistProfile } from './scientist.js';
 import { qaProfile } from './qa.js';
 import { biProfile } from './bi.js';
+import { nioLangMcp, postgresMcp, powerbiMcp, n8nMcp } from './mcps.js';
+import { nodeToolchain, pythonToolchain } from './toolchains.js';
 
 /** Catálogo completo dos 6 perfis (`sessions.profile`). */
 const DEFINITIONS: Record<Profile, ProfileDefinition> = {
@@ -34,8 +36,29 @@ class HardcodedProfileCatalog implements ProfileCatalog {
     }
     return def;
   }
+
+  list(): ProfileDefinition[] {
+    return Object.values(DEFINITIONS);
+  }
 }
 
 export function createProfileCatalog(): ProfileCatalog {
   return new HardcodedProfileCatalog();
 }
+
+/**
+ * Specs conhecidos por id — o `EnvironmentBuilder` usa pra resolver os
+ * `toolchainIds`/`mcpIds` de uma `EnvironmentRecipe` (Sprint 5). Cobre os
+ * reutilizados + os inline dos perfis + os que só entram por wizard (n8n). Id
+ * fora daqui numa recipe → aviso, ignora (não gera `opencode.json` quebrado).
+ */
+export const KNOWN_TOOLCHAINS: Record<string, ToolchainSpec> = Object.fromEntries(
+  [nodeToolchain, pythonToolchain, ...Object.values(DEFINITIONS).flatMap((d) => d.toolchains)].map((t) => [
+    t.id,
+    t,
+  ]),
+);
+
+export const KNOWN_MCPS: Record<string, McpSpec> = Object.fromEntries(
+  [nioLangMcp, postgresMcp, powerbiMcp, n8nMcp].map((m) => [m.id, m]),
+);

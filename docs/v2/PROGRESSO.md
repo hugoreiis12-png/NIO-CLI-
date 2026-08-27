@@ -1067,3 +1067,209 @@ Tabela `dependency_events` já existia no schema — sem migration nova.
   Cargo.lock); `gem`/`composer`/`unknown` ainda não checados nem instalados.
 - Teste de integração do `DependencyEventRepository` contra Postgres real (como o
   do `SessionRepository`) fica pra uma próxima rodada.
+
+---
+
+## 2026-08-26 — Sprint 4 fatias 4.0→4.2: `SessionManager` + 3 tools MCP de ambiente
+
+Início do Sprint 4 (tools MCP de ambiente). Decisões do dono do projeto: (a)
+introduzir o `SessionManager` (nomeado na CLAUDE.md, nunca existiu) como base
+única das tools e da CLI; (b) as tools **não** mexem no `opencode.json` — só
+persistem em `sessions.config` e devolvem os `McpSpec[]` como dado; (c) entregar
+4.0→4.2 num bloco.
+
+### Fatia 4.0 — `SessionManager` (app layer) + refactor dos consumidores
+| Arquivo | Papel |
+|---|---|
+| `src/app/session-manager.ts` (+ teste) | Orquestra `SessionRepository` + `EnvironmentBuilder`. Resolução por prefixo de UUID mora aqui, com erros tipados (`SessionNotFoundError`/`AmbiguousSessionError`). Métodos: `list`/`resolve`/`resolveOrActive`/`findActive`/`activate`/`setStatus`/`updateConfig`/`delete`/`create`/`materialize`. Repo + builder injetáveis (default reais) |
+| `src/core/environment.ts` | + `ProfileCatalog.list()` (as 6 definições) |
+| `src/profiles/index.ts` | implementa `list()` |
+| `src/cli/commands/sessions.ts` | reescrito fino sobre o `SessionManager` (sai `matchByIdPrefix` local + `resolve`/`withRepo` duplicados) |
+| `src/cli/commands/init/index.ts` | `resolveSessionSetup` troca `createSessionRepository()` + `new EnvironmentBuilder()` inline por `manager.create()` — `MaterializedSession` carrega `materializeError` p/ preservar a resiliência (sessão criada não se perde se a materialização falha) |
+| `src/cli/commands/sessions.test.ts` | removido — `matchByIdPrefix` agora vive e é testado no `session-manager.ts` |
+
+**`create` vs `materialize`**: `create` faz a materialização best-effort (falha →
+`materializeError`, sessão preservada); `materialize` re-roda numa sessão que já
+existe, então a falha **propaga**.
+
+### Fatia 4.1 — `nio_profile_get` (read-only, sem DB)
+`src/tools/profile-get.ts` (+ teste). Sem arg → os 6 perfis resumidos
+(languages/frameworks/toolchain-ids/mcp-ids); com `{ profile }` → definição
+completa (+ `mcpSpecs`/`toolchainSpecs` com comandos e planos). Perfil inválido →
+`errorResult`, não lança.
+
+### Fatia 4.2 — `nio_session_list` + `nio_session_activate`
+`src/tools/session-list.ts` / `session-activate.ts` (+ `session-shared.ts` com
+`sessionView`/`sessionErrorResult`/`failedToolchains`, + teste). Núcleo testável
+(`runSessionList`/`runSessionActivate`) separado do `handler(args, ctx)` que
+injeta o `SessionManager` real e `ctx.user.id`. Erros de resolução viram mensagem
+direta; falha de banco vira "Falha ao acessar as sessões: …".
+
+As 3 tools registradas em `src/tools/index.ts` (4 → 7). `brand.test.ts`
+atualizado (não checa mais count exato — `arrayContaining` das conhecidas).
+`gen:docs` rodado (README: 7 tools + parágrafo de status atualizado).
+
+### Verificação
+- `tsc --noEmit` verde. `bun test` **297 pass / 1 skip / 2 fail**.
+- As 2 falhas são **ambientais**, não regressão: `.env` local tem
+  `NIO_DATABASE_SSL=true` contra o Postgres do Homebrew (que não faz SSL) →
+  `session-repository.integration` + `init-fatia1.integration` quebram. Com
+  `NIO_DATABASE_SSL=false` os dois passam (confirmado — inclusive o caminho novo
+  do `init` via `SessionManager.create` contra o Postgres real). Fix: comentar
+  `NIO_DATABASE_SSL` no `.env` p/ banco local (o `.env.example` já orienta).
+- Smoke JSON-RPC do `nio-cli` (server principal): `tools/list` devolve as 7 com
+  schema válido, incluindo `nio_profile_get`/`nio_session_list`/`nio_session_activate`.
+
+### Checkpoint (4.0→4.2) — aprovado, seguiu direto pro resto
+
+---
+
+## 2026-08-26 — Sprint 4 fatias 4.3→4.5: `nio_session_create` + `nio_env_*` — SPRINT 4 COMPLETO
+
+Fecha o Sprint 4. As 3 tools restantes + o teste de integração do `SessionManager`.
+Suíte **100% verde** de novo (ver nota do `.env` abaixo).
+
+### Fatia 4.3 — `nio_session_create`
+`src/tools/session-create.ts` (+ testes). Args `{ name, profile, project_path, ide? }`.
+Valida que `project_path` existe. Chama `SessionManager.create` → cria a `Session`
+(vira a `active`, arquiva as outras) + materializa o perfil em `sessions.config`.
+**Headless**: não escreve `opencode.json`, não provisiona cliente, não faz handoff.
+Devolve `{ session, mcps, toolchains_failed, materialize_error, note }` — a `note`
+avisa que os MCPs precisam ser registrados no cliente à mão.
+
+### Fatia 4.4 — `nio_env_materialize` + `nio_env_detect_deps`
+| Arquivo | Tool |
+|---|---|
+| `src/tools/env-materialize.ts` (+ testes) | `nio_env_materialize({ session? })` → `SessionManager.materialize` (re-roda o builder na sessão ativa/por-prefixo, reescreve o config). Devolve config + `toolchains_failed` |
+| `src/tools/env-detect-deps.ts` (+ testes) | `nio_env_detect_deps({ session?, install? })` → um `DependencyWatcher.tick` na sessão. `install` default `false` (igual `nio deps scan --install`). Devolve scanned/missing/recorded/installed. Fábrica do watcher injetável pra teste |
+
+`sessionErrorResult(err, context?)` ganhou o parâmetro de contexto — cada tool
+formata "Falha ao criar a sessão / materializar o ambiente / detectar dependências".
+
+### Fatia 4.5 — Fecho
+- 10 tools registradas em `src/tools/index.ts` (4 → 10). Smoke JSON-RPC do
+  `nio-cli`: `tools/list` devolve as 10 com schema válido.
+- `src/app/session-manager.integration.test.ts` (gated em `NIO_DATABASE_URL`):
+  `create` (materialização real do `dba` via EnvironmentBuilder) → `list` →
+  `resolve` por prefixo → `activate` → `materialize` → pause → delete, contra o
+  Postgres real. **1 pass / 12 asserts**, usuário descartável limpo no `finally`.
+- `gen:docs` (README: 10 tools + parágrafo de status reescrito).
+- Task 4.7 (registrar o `nio-cli` no Claude Code / OpenCode e round-trip nas
+  tools) fica como smoke manual do dono do projeto.
+
+### Nota — `.env` local (fechou as "2 falhas de sempre")
+O `.env` estava com `NIO_DATABASE_SSL=true` apontando pro Postgres do Homebrew
+(que não faz SSL) — origem das 2 (depois 3) falhas de integração "ambientais"
+que vinham aparecendo. Comentado (`# NIO_DATABASE_SSL=true`), alinhado ao
+`.env.example`. **Suíte: 310 pass / 1 skip / 0 fail.**
+
+### Estado do Sprint 4
+**COMPLETO.** Tasks 4.1-4.6 do doc de transição feitas via `SessionManager` (app
+layer nova, base única da CLI e das tools). 4.7 = smoke manual nos clientes.
+Restam do roadmap: Sprint 5 (receitas do NIO-SKILLS no wizard) e Sprint 6
+(polish + publish 2.0.0).
+
+### Débito conhecido (não-bloqueante)
+- `nio_session_create`/`nio_env_materialize` devolvem os `McpSpec[]` como dado —
+  quem escreve o `opencode.json` continua sendo só o `nio init` (decisão de
+  design: a tool não mexe na config do cliente que a está chamando).
+- Teste de integração das tools em si (via JSON-RPC com login real) não existe —
+  o `SessionManager` real é coberto pelo integration test; as tools são casca fina.
+
+---
+
+## 2026-08-27 — Sprint 5: Integração NIO-SKILLS (escopo original) — recipes de ambiente
+
+Decisão do dono: manter o escopo original do Sprint 5 (5.1–5.5), **incluindo** o
+parser de receitas que eu tinha sugerido descontinuar. Integração
+mattpocock/skills fica como melhoria futura (Apêndice do plano).
+
+### 5.5 — TTL no cache de skills
+`src/lib/skills-cache.ts`: `ensureSkillsCache()` (start do MCP) agora re-baixa se
+`cacheMeta().fetchedAt` > `SKILLS_TTL_MS` (**7 dias**). `nio sync` segue
+`force:true`. Pura `isFetchedAtStale(fetchedAt, ttl?, now?)` testada isolada.
+
+### 5.2 — `EnvironmentRecipe` + `RecipeCatalog`
+| Arquivo | Papel |
+|---|---|
+| `src/core/environment.ts` | + `EnvironmentRecipe` (slug/profile/languages/frameworks/toolchainIds/mcpIds/envVars/aliases/notes) + port `RecipeCatalog` (`list(profile?)`, `get(slug)`) |
+| `src/adapters/skills/recipe-catalog.ts` (+ teste) | Lê `<skillsDir()>/recipes/*.md` (novo kind no repo NIO-SKILLS, **não** provisionado pros clientes). Reusa `parseFrontmatter` (exportado de `lib/skills.ts`). `profile` inválido → aviso no stderr, pula. `recipes/` ausente / skills não baixadas → `[]` (não quebra) |
+| `src/profiles/index.ts` | + `KNOWN_TOOLCHAINS` / `KNOWN_MCPS` (registro por id — deriva dos 6 perfis + n8n) pra resolver os ids da recipe |
+
+Distinta da `LanguageRecipe` do nio-lang (hardcoded, nível-SDK): a
+`EnvironmentRecipe` é um preset **do repo**, editável sem release, que **estende**
+um perfil fixo (nunca cria perfil — regra da CLAUDE.md). Compõem: recipe declara
+`languages`, o `LanguageConfigurator` faz o scaffold.
+
+### 5.3 — Merge no `EnvironmentBuilder` + wizard + threading
+| Arquivo | Mudança |
+|---|---|
+| `src/app/environment-builder.ts` (+ testes) | `build(profile, recipe?)`: toolchains = perfil + recipe (resolvidos em `KNOWN_TOOLCHAINS`); mcps = base + perfil + recipe; languages/frameworks = união; envVars/aliases = `{...perfil, ...recipe}` (recipe vence); `config.extra.recipe = slug`. Id desconhecido → `recipeWarnings[]`, ignora (não gera `opencode.json` quebrado). `BuiltEnvironment` + `recipeWarnings` |
+| `src/app/session-manager.ts` (+ testes) | `CreateSessionInput` + `recipe?`; constructor + `RecipeCatalog` (default real, catch → vazio); `create` passa a recipe; `materialize` relê `config.extra.recipe` do catálogo e reaplica (pega mudança de recipe no repo); `MaterializedSession` + `recipeWarnings` |
+| `src/cli/commands/init/recipe-step.ts` (novo) | `pickRecipe(profile)` — `select` entre as recipes do perfil + "Nenhuma". Sem recipe → `null` sem perguntar |
+| `src/cli/commands/init/index.ts` | `pickRecipe` entre `pickProfile` e `manager.create`; reporta recipe + `recipeWarnings` |
+| `src/tools/session-create.ts` (+ testes) | arg `recipe` (slug) → resolve via `RecipeCatalog`; rejeita slug inexistente ou de perfil errado; `recipe_warnings` na saída |
+| `src/tools/env-materialize.ts` | `recipe_warnings` na saída |
+
+### 5.4 — `nio sync` fecha o ciclo
+- `fetchSkills` já traz `recipes/` (é subdir do zipball) — sem código.
+- `src/cli/commands/sync.ts`: após provision, se a sessão ativa tem
+  `config.extra.recipe`, oferece `[y/N]` re-materializar (best-effort — sem
+  login/banco → silencioso).
+
+### 5.1 — já feito (`fetchSkills`), só confirmado
+
+### Verificação
+- `tsc --noEmit` verde. `bun test` **329 pass / 1 skip / 0 fail** (+13 novas:
+  skills-cache TTL ×6, recipe-catalog ×7, builder merge ×4, session-manager
+  threading ×3, tools ×2).
+- Smoke real (`nio init` com `recipes/` no NIO-SKILLS) + integração Postgres:
+  passos manuais (gated em login + `NIO_SKILLS_REF`).
+- Exemplos de `recipes/*.md` pro repo NIO-SKILLS: em
+  `scratchpad/nio-skills-recipes/` (o dono commita lá).
+
+### Fora de escopo (registrado)
+- Integração mattpocock/skills — melhoria futura.
+- Skills cientes de `Profile` (ligar `Profile` à taxonomia `Selection`) — sprint própria.
+
+### Sprint 5 — COMPLETO. Resta Sprint 6 (polish + publish 2.0.0).
+
+---
+
+## 2026-08-27 — Arquitetura de clientes de IA, Parte A: multi-primário (OpenCode | Codex)
+
+Início da arquitetura nova de clientes (plano faseado: A detecção multi-primário,
+B Headroom-proxy, C ladder de failover Qwen/Kimi — ver
+`~/.claude/plans/cryptic-cooking-mitten.md`). **Parte A entregue.**
+
+Antes: `handoffToOperator` era `spawn("opencode", [], { stdio: "inherit" })` fixo;
+Codex tinha o motor de config no repo mas dormente (`ALL_TARGETS =
+[opencodeTarget]`, `CLIENTS = { opencode }`).
+
+### Código
+| Arquivo | Mudança |
+|---|---|
+| `src/lib/client-install.ts` | `CLIENTS` ganha `codex` (`@openai/codex`, bin `codex`) |
+| `src/lib/primary-client.ts` (novo, + teste) | `detectPrimaryClient(hint?, isInstalled?)` — PATH + hint (`nio.user.json`) + override `NIO_PRIMARY_CLIENT`; ambos instalados → OpenCode por prioridade. `PrimaryClient = 'opencode'|'codex'` |
+| `src/config.ts` | `UserConfig` + `primaryClient?` (hint per-máquina, sempre re-validado); `readUserConfig()` exportado; `writeUserConfig` faz **merge** (não apaga campos) |
+| `src/lib/client-configs.ts` | `planCodexUpdate` + `profileMcps` (paridade com `planOpencodeUpdate` — split `command`/`args`/`env` do formato TOML do Codex); `installCodexGlobal` + `profileMcps` + seam de path (`codexGlobalPath`) |
+| `src/lib/targets.ts` | `ALL_TARGETS = [opencodeTarget, codexTarget]`; `targetForPrimary(primary)`; `detectConfiguredTargets` checa `~/.codex/config.toml` também |
+| `src/lib/autopull.ts` | `pickProvisionTarget('codex')` → `codexTarget` |
+| `src/cli/flows/clients.ts` | `ensureCoreClients` → **`resolvePrimaryClient`** (detecta, pergunta se ambos, oferece instalar se nenhum, persiste em `nio.user.json`) |
+| `src/cli/commands/init/clients-step.ts` (reescrito) | sai o checkbox de 1 opção; `installPrimaryClient(primary, mcps)` escreve `opencode.json` **ou** `codex/config.toml` |
+| `src/cli/commands/init/provision-step.ts` | `resolveProvisionTargets(primary)` (não mais `clientConfigs`) |
+| `src/cli/commands/init/index.ts` | `runInitWizard` detecta o primário no início e threada; `handoffToOperator(primary)` spawna `opencode` **ou** `codex`; sem primário → avisa, não falha |
+| `src/cli/commands/agent.ts` (novo) + `src/cli.ts` | `nio agent status` — mostra primário detectado, instalados, hint, override. Base pro `next`/`reset`/`tiers` da Parte C |
+
+### Verificação
+- `tsc --noEmit` verde. `bun test` **338 pass / 1 skip / 0 fail** (+13 novas:
+  primary-client ×10, planCodexUpdate+mcps ×3). `clients-step.test.ts` removido
+  (o dispatcher é trivial, coberto pelos testes de `client-configs`).
+- Smoke: `nio agent status` (ambos no PATH → OpenCode principal);
+  `NIO_PRIMARY_CLIENT=codex` inverte. `installCodexGlobal` gera `config.toml`
+  válido com `mcp_servers.nio` + MCPs do perfil (command/args/env separados).
+- Smoke pendente (manual): `nio init` com só `codex` no PATH → escreve `~/.codex`,
+  provisiona skills traduzidas (`toCodexDocs`), handoff spawna `codex`.
+
+### Próximo
+- Checkpoint com o dono → plano detalhado da **Parte B** (Headroom proxy Docker).

@@ -3,6 +3,7 @@ import { join, isAbsolute, dirname } from 'node:path';
 import { PROJECT_CONFIG_FILE } from './constants.js';
 import { brand, env } from './brand.js';
 import { DEV_ROLE, GENERAL, type Selection } from './lib/sections.js';
+import { isPrimaryClient, type PrimaryClient } from './lib/primary-client.js';
 
 /**
  * IDE do usuário — habilita integrações (ex.: `/implement` registra o worktree no
@@ -48,6 +49,12 @@ export interface ProjectConfig {
  */
 export interface UserConfig {
   ide?: Ide;
+  /**
+   * Cliente de IA primário escolhido nesta máquina (`nio init` com OpenCode E
+   * Codex instalados). Só um **hint** — `detectPrimaryClient` sempre re-valida
+   * contra o PATH. Fato per-máquina, por isso fica aqui e não em `sessions`.
+   */
+  primaryClient?: PrimaryClient;
 }
 
 /** Arquivo de config do usuário — `nio.json` → `nio.user.json` (respeita o brand). */
@@ -58,17 +65,24 @@ export function getUserConfigPath(cwd: string = process.cwd()): string {
   return join(base, USER_CONFIG_FILE);
 }
 
-/** Lê o `ide` do `nio.user.json` em `dir`, se houver (parse tolerante). */
-function readUserIde(dir: string): Ide | undefined {
+/** Lê o `nio.user.json` em `dir` (parse tolerante). Campos inválidos são omitidos. */
+export function readUserConfig(dir: string = process.cwd()): UserConfig {
   const path = join(dir, USER_CONFIG_FILE);
-  if (!existsSync(path)) return undefined;
+  if (!existsSync(path)) return {};
   try {
-    const u = JSON.parse(readFileSync(path, "utf8")) as { ide?: unknown };
-    if (isIde(u.ide)) return u.ide;
+    const u = JSON.parse(readFileSync(path, "utf8")) as { ide?: unknown; primaryClient?: unknown };
+    const out: UserConfig = {};
+    if (isIde(u.ide)) out.ide = u.ide;
+    if (isPrimaryClient(u.primaryClient)) out.primaryClient = u.primaryClient;
+    return out;
   } catch {
-    /* user file inválido → ignora */
+    return {}; /* user file inválido → ignora */
   }
-  return undefined;
+}
+
+/** Lê só o `ide` do `nio.user.json` em `dir`. */
+function readUserIde(dir: string): Ide | undefined {
+  return readUserConfig(dir).ide;
 }
 
 /** Parse leniente do bloco `selection` do nio.json. */
@@ -244,10 +258,15 @@ export function writeProjectConfig(config: ProjectConfig, cwd: string = process.
   writeFileSync(getProjectConfigPath(cwd), JSON.stringify(repo, null, 2) + "\n", "utf8");
 }
 
-/** Grava o `nio.user.json` (por-máquina, gitignored): ide + prefs pessoais. */
+/**
+ * Grava o `nio.user.json` (por-máquina, gitignored): ide + prefs pessoais.
+ * **Merge** com o que já existe — passar `{ ide }` não apaga o `primaryClient`.
+ */
 export function writeUserConfig(user: UserConfig, cwd: string = process.cwd()): void {
+  const merged = { ...readUserConfig(cwd), ...user };
   const obj: Record<string, unknown> = {};
-  if (user.ide) obj.ide = user.ide;
+  if (merged.ide) obj.ide = merged.ide;
+  if (merged.primaryClient) obj.primaryClient = merged.primaryClient;
   writeFileSync(getUserConfigPath(cwd), JSON.stringify(obj, null, 2) + "\n", "utf8");
 }
 

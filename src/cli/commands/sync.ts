@@ -2,6 +2,8 @@ import type { Command } from "commander";
 import { brand } from "../../brand.js";
 import { spawnSync } from "node:child_process";
 import { confirm } from "../../lib/prompts.js";
+import { loadSession } from "../../lib/session-store.js";
+import { SessionManager } from "../../app/session-manager.js";
 import { loadProjectConfig } from "../../config.js";
 import { checkForUpdate } from "../../lib/version-check.js";
 import { uninstallProvision, provision } from "../../lib/provision.js";
@@ -29,6 +31,41 @@ import {
 } from "../ui/report.js";
 import { offerDependencyInstall, offerRuleSkills } from "../flows/dependencies.js";
 import { syncCopy } from "../copy.js";
+
+/**
+ * Se a sessão ativa foi criada com uma recipe (`config.extra.recipe`), o `sync`
+ * acabou de baixar uma versão possivelmente nova dela — oferece re-materializar
+ * (Sprint 5.4). Best-effort: sem login / banco fora / sem recipe → silencioso.
+ */
+async function offerRecipeRematerialize(opts: { interactive: boolean; assumeYes?: boolean }): Promise<void> {
+  try {
+    const stored = await loadSession();
+    if (!stored) return;
+    const manager = new SessionManager();
+    const active = await manager.findActive(stored.userId);
+    const slug = (active?.config.extra as { recipe?: string } | undefined)?.recipe;
+    if (!active || !slug) return;
+
+    console.log("");
+    console.log(sectionTitle("Recipe da sessão ativa", `"${slug}" — pode ter mudado no repo`));
+    const approved =
+      opts.assumeYes === true ||
+      (opts.interactive &&
+        (await confirm({
+          message: `Re-materializar a sessão "${active.name}" com a recipe atualizada?`,
+          default: false,
+        })));
+    if (!approved) {
+      console.log(`  ${c.dim("pulado — depois:")} ${cmd(`${brand.name} env materialize`)}`);
+      return;
+    }
+    const built = await manager.materialize(stored.userId);
+    console.log(`  ${c.green(sym.ok)} ${active.name} re-materializada (${built.config.mcps?.length ?? 0} MCPs).`);
+    for (const w of built.recipeWarnings) console.log(`  ${c.yellow(sym.warn)} recipe: ${w} ignorado.`);
+  } catch (err) {
+    console.log(`  ${c.dim(`recipe da sessão ativa não checada: ${(err as Error).message}`)}`);
+  }
+}
 
 export function registerSyncCommand(program: Command): void {
   program
@@ -327,6 +364,14 @@ export function registerSyncCommand(program: Command): void {
               enabled: opts.installDeps !== false && !opts.dryRun,
             },
           );
+
+          // Recipe da sessão ativa pode ter mudado no repo → oferece re-materializar (5.4).
+          if (!opts.dryRun) {
+            await offerRecipeRematerialize({
+              interactive: Boolean(process.stdout.isTTY),
+              assumeYes: opts.yes,
+            });
+          }
 
           // Valida o autocomplete do shell; se faltar, prompta (só interativo).
           if (!opts.dryRun) {

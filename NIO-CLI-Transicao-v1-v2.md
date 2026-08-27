@@ -270,17 +270,23 @@ Cache:       Local filesystem (~/.nio/sessions/) + Postgres
 
 ---
 
-### 🎯 Sprint 5 — Sincronização e Integração NIO-SKILLS
-**Duração:** 2-3 dias  
+### 🎯 Sprint 5 — Sincronização e Integração NIO-SKILLS ✅ CONCLUÍDO (27 ago 2026)
 **Objetivo:** A CLI se alimenta do repo NIO-SKILLS para enriquecer o ambiente.
 
-| # | Task | Critério de aceitação |
-|---|------|----------------------|
-| 5.1 | Implementar fetch do repo NIO-SKILLS (zipball GitHub) | Baixa para `~/.nio/skills/` |
-| 5.2 | Implementar parser de receitas de ambiente do NIO-SKILLS | Interpreta frontmatter de skills como receitas de config |
-| 5.3 | Integrar receitas no wizard de `nio init` | Skills do repo aparecem como opções no wizard |
-| 5.4 | Implementar `nio sync` (nova versão) | Sincroniza receitas do NIO-SKILLS na sessão ativa |
-| 5.5 | Implementar cache de skills com TTL | Skills são reutilizadas sem fetch a cada comando |
+| # | Task | Estado |
+|---|------|--------|
+| 5.1 | Fetch do repo NIO-SKILLS (zipball GitHub) → `~/.nio/skills/` | ✅ `fetchSkills` (herdado do v1) |
+| 5.2 | Parser de receitas de ambiente (`recipes/<slug>.md` → `EnvironmentRecipe`) | ✅ `RecipeCatalog` (`src/adapters/skills/recipe-catalog.ts`) |
+| 5.3 | Receitas no wizard de `nio init` (+ merge no `EnvironmentBuilder`) | ✅ `pickRecipe` + `build(profile, recipe?)` + arg na tool `nio_session_create` |
+| 5.4 | `nio sync` — sincroniza a recipe da sessão ativa | ✅ oferta de re-materialização (best-effort) |
+| 5.5 | Cache de skills com TTL | ✅ `SKILLS_TTL_MS` 7d em `ensureSkillsCache()` |
+
+> Nota: a "receita" aqui é `EnvironmentRecipe` — preset nomeado do repo NIO-SKILLS
+> que **estende** um perfil fixo (nunca cria perfil). Não confundir com a
+> `LanguageRecipe` do `nio-lang` (hardcoded, nível-SDK). Detalhe em
+> `docs/v2/PROGRESSO.md` (entrada de 27 ago). A integração das skills de
+> engenharia de `mattpocock/skills` foi avaliada e adiada como melhoria futura
+> (camada NIO-SKILLS, nunca no motor da CLI).
 
 ---
 

@@ -4,18 +4,18 @@ import { brand } from "../../../brand.js";
 import { renderMatrixLogo } from "../../../matrix-logo.js";
 import { getProjectConfigPath, type ProjectConfig, type Ide } from "../../../config.js";
 import type { Session, Ide as SessionIde, Profile } from "../../../core/session.js";
-import { createSessionRepository } from "../../../adapters/pg/session-repository.js";
-import { EnvironmentBuilder } from "../../../app/environment-builder.js";
+import { SessionManager, type MaterializedSession } from "../../../app/session-manager.js";
 import type { McpSpec } from "../../../core/environment.js";
 import { createIdeGateway } from "../../../adapters/ide/ide-gateway.js";
 import { readDependencies, skillIdMap } from "../../../lib/skills.js";
 import { collectRuleSkills } from "../../../lib/rules.js";
 import { offerDependencyInstall, offerRuleSkills } from "../../flows/dependencies.js";
 import { offerShellCompletion } from "../../flows/completion.js";
-import { ensureCoreClients } from "../../flows/clients.js";
+import { resolvePrimaryClient } from "../../flows/clients.js";
+import type { PrimaryClient } from "../../../lib/primary-client.js";
 import { section, c, sym } from "../../../lib/colors.js";
 import { startSpinner } from "../../../spinner.js";
-import { isBinaryInstalled } from "../../../lib/client-install.js";
+import { isBinaryInstalled, CLIENTS } from "../../../lib/client-install.js";
 import { SyncReport, renderReport, browseReport, resolveReportMode } from "../../ui/report.js";
 import { flushTelemetry } from "../../../lib/telemetry.js";
 import { writeManagedDotfiles } from "../../../lib/dotfiles.js";
@@ -28,13 +28,9 @@ import type { EnvironmentConfig } from "../../../core/session.js";
 import { pickLanguages, pickLanguageChoices } from "./lang-step.js";
 import { requireLocalSessionStep } from "./auth-step.js";
 import { pickProfile, pickSessionName, pickIde } from "./profile-step.js";
+import { pickRecipe } from "./recipe-step.js";
 import { confirmOverwriteIfExists, persistConfigStep, writeHarnessStep } from "./context-step.js";
-import {
-  promptClientChoices,
-  installClients,
-  resolveChosenClientIds,
-  ensureChosenClientsInstalled,
-} from "./clients-step.js";
+import { installPrimaryClient } from "./clients-step.js";
 import {
   resolveProvisionTargets,
   fetchSkillsStep,
@@ -110,22 +106,24 @@ async function resolveSessionSetup(
   local: StoredSession,
 ): Promise<{ config: ProjectConfig; session: Session; mcps: McpSpec[] }> {
   const profile: Profile = await pickProfile();
+  const recipe = await pickRecipe(profile);
   const sessionName = await pickSessionName();
 
   const config: ProjectConfig = {};
   config.selection = await promptSelection();
   config.ide = await pickIde();
 
-  const sessionRepo = createSessionRepository();
+  const manager = new SessionManager();
   const spinner = startSpinner("Criando sessão...");
-  let session: Session;
+  let built: MaterializedSession;
   try {
-    session = await sessionRepo.create({
+    built = await manager.create({
       userId: local.userId,
       name: sessionName,
       profile,
       projectPath: process.cwd(),
       ide: toSessionIde(config.ide),
+      recipe: recipe ?? undefined,
     });
     spinner.stop();
   } catch (err) {
@@ -133,19 +131,24 @@ async function resolveSessionSetup(
     process.exit(1);
   }
 
+  const session = built.session;
   config.session_id = session.id;
 
-  // Materializa o ambiente do perfil (EnvironmentBuilder). Falha parcial não
-  // aborta: a sessão já existe e o ambiente é incremental — perfil ainda sem
-  // definição no catálogo só avisa e segue sem MCPs de perfil.
-  let mcps: McpSpec[] = [];
+  // Materialização do ambiente (EnvironmentBuilder, via SessionManager). Falha
+  // parcial não aborta: a sessão já existe e o ambiente é incremental.
+  let mcps: McpSpec[] = built.mcps;
   let envConfig: EnvironmentConfig | undefined;
-  try {
-    const env = await new EnvironmentBuilder().build(profile);
-    envConfig = env.config;
-    await sessionRepo.updateConfig(session.id, env.config);
-    mcps = env.mcps;
-    for (const t of env.toolchains) {
+  if (built.materializeError) {
+    console.warn(
+      `${c.yellow(sym.warn)} Ambiente do perfil "${profile}" não materializado: ${built.materializeError}`,
+    );
+  } else {
+    envConfig = built.config;
+    if (recipe) console.log(`  ${c.dim(`recipe: ${recipe.title}`)}`);
+    for (const w of built.recipeWarnings) {
+      console.warn(`${c.yellow(sym.warn)} recipe: ${w} não existe no catálogo — ignorado.`);
+    }
+    for (const t of built.toolchains) {
       if (t.status === "failed") {
         console.warn(`${c.yellow(sym.warn)} Toolchain "${t.id}" não materializado: ${t.error}`);
       }
@@ -153,7 +156,7 @@ async function resolveSessionSetup(
 
     // envVars/aliases → ~/.nio/profile.{sh,ps1} (best-effort; não aborta a sessão).
     try {
-      const dot = writeManagedDotfiles({ envVars: env.config.envVars, aliases: env.config.aliases });
+      const dot = writeManagedDotfiles({ envVars: built.config.envVars, aliases: built.config.aliases });
       if (dot.some((d) => d.status === "written")) {
         for (const d of dot) console.log(`  ${c.dim(`+ ${d.path}`)}`);
         console.log(
@@ -163,10 +166,6 @@ async function resolveSessionSetup(
     } catch (e) {
       console.warn(`${c.yellow(sym.warn)} dotfiles do perfil não escritos: ${(e as Error).message}`);
     }
-  } catch (err) {
-    console.warn(
-      `${c.yellow(sym.warn)} Ambiente do perfil "${profile}" não materializado: ${(err as Error).message}`,
-    );
   }
 
   // Pré-configuração de linguagens — só no perfil fullstack (com preview+confirm).
@@ -177,7 +176,7 @@ async function resolveSessionSetup(
       mcps = [...mcps, n8nMcp];
       if (envConfig) {
         const cfgMcps = Array.from(new Set([...(envConfig.mcps ?? []), n8nMcp.id]));
-        await sessionRepo.updateConfig(session.id, { ...envConfig, mcps: cfgMcps });
+        await manager.updateConfig(session.id, { ...envConfig, mcps: cfgMcps });
       }
       console.log(`  ${c.green(sym.ok)} n8n-mcp registrado (docs de nodes/workflows do n8n).`);
     }
@@ -189,20 +188,17 @@ async function resolveSessionSetup(
   return { config, session, mcps };
 }
 
-/** Escolha e instalação dos clientes de IA + provisionamento de skills/commands/hooks. */
+/** Escreve a config MCP do cliente primário + provisiona skills/commands/hooks. */
 async function installAndProvisionClients(
   config: ProjectConfig,
   profileMcps: McpSpec[],
+  primary: PrimaryClient,
 ): Promise<void> {
-  const clientConfigs = await promptClientChoices();
-  installClients(clientConfigs, process.cwd(), profileMcps);
+  installPrimaryClient(primary, profileMcps);
 
-  const chosenClientIds = resolveChosenClientIds(clientConfigs);
-  await ensureChosenClientsInstalled(chosenClientIds);
+  const provisionTargets = resolveProvisionTargets(primary);
 
-  const provisionTargets = resolveProvisionTargets(clientConfigs);
-
-  section("Skills & commands", "provisionando pros clientes");
+  section("Skills & commands", "provisionando pro cliente");
   const report = new SyncReport();
   await fetchSkillsStep(report);
   provisionTargetsStep(provisionTargets, config, skillIdMap(), report);
@@ -247,25 +243,32 @@ async function openSessionIde(session: Session): Promise<void> {
 }
 
 /**
- * Handoff final: entrega o ambiente materializado pro operador de IA fixo
- * (OpenCode — decisão de 2026-07-27). Se o binário não estiver no PATH (usuário
- * recusou a instalação lá em `ensureCoreClients`), só orienta em vez de falhar.
+ * Handoff final: entrega o ambiente materializado pro cliente de IA primário
+ * detectado (OpenCode ou Codex). Sem primário / binário fora do PATH → só
+ * orienta, não falha. (Parte C troca esse `spawn` direto pelo `AgentOrchestrator`
+ * com failover.)
  */
-async function handoffToOperator(): Promise<void> {
+async function handoffToOperator(primary: PrimaryClient | null): Promise<void> {
   console.log("");
-  section("Handoff", "entregando a sessão pro OpenCode");
-  if (!isBinaryInstalled("opencode")) {
+  if (!primary) {
     console.log(
-      `  ${c.yellow(sym.warn)} OpenCode não encontrado no PATH. Instale e rode \`opencode\` ` +
-        "nesta pasta pra continuar.",
+      `  ${c.yellow(sym.warn)} Sem cliente de IA. Instale OpenCode ou Codex e rode-o nesta pasta.`,
+    );
+    return;
+  }
+  const bin = CLIENTS[primary]!.binary!; // 'opencode' | 'codex'
+  section("Handoff", `entregando a sessão pro ${CLIENTS[primary]!.label}`);
+  if (!isBinaryInstalled(bin)) {
+    console.log(
+      `  ${c.yellow(sym.warn)} ${bin} não encontrado no PATH. Instale e rode \`${bin}\` nesta pasta.`,
     );
     return;
   }
   await new Promise<void>((resolve) => {
-    const child = spawn("opencode", [], { stdio: "inherit" });
+    const child = spawn(bin, [], { stdio: "inherit" });
     child.on("exit", () => resolve());
     child.on("error", (err) => {
-      console.error(`[erro] Falha ao iniciar o OpenCode: ${err.message}`);
+      console.error(`[erro] Falha ao iniciar o ${bin}: ${err.message}`);
       resolve();
     });
   });
@@ -278,17 +281,23 @@ async function runInitWizard(): Promise<void> {
   console.log(renderMatrixLogo());
   console.log(`${brand.name} init — monta o ambiente desta sessão.`);
 
-  // Logo no início: confere OpenCode e oferece instalar se faltar.
-  await ensureCoreClients({ interactive: true });
+  // Detecta/instala o cliente de IA primário (OpenCode ou Codex).
+  const primary = await resolvePrimaryClient({ interactive: true });
 
   // Sem login inline: exige `nio register`/`nio login` prévios e sai se faltar.
   const local = await requireLocalSessionStep();
 
   const { config, session, mcps } = await resolveSessionSetup(local);
-  await installAndProvisionClients(config, mcps);
+  if (primary) {
+    await installAndProvisionClients(config, mcps, primary);
+  } else {
+    console.warn(
+      `${c.yellow(sym.warn)} Sem cliente de IA — pulando config/provisão. Instale OpenCode ou Codex.`,
+    );
+  }
   await offerFollowUps(config);
   await openSessionIde(session);
-  await handoffToOperator();
+  await handoffToOperator(primary);
 }
 
 export function registerInitCommand(program: Command): void {

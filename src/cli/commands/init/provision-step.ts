@@ -1,4 +1,5 @@
-import { claudeTarget, opencodeTarget, type ProvisionTarget } from "../../../lib/targets.js";
+import { claudeTarget, targetForPrimary, type ProvisionTarget } from "../../../lib/targets.js";
+import type { PrimaryClient } from "../../../lib/primary-client.js";
 import { provision } from "../../../lib/provision.js";
 import { provisionHooks } from "../../../lib/hooks.js";
 import { fetchSkills } from "../../../lib/skills-cache.js";
@@ -9,12 +10,11 @@ import { SyncReport, summarizeProvision } from "../../ui/report.js";
 import { track, provisionedItems } from "../../../lib/telemetry.js";
 import { VERSION } from "../../../version.js";
 import type { ProjectConfig } from "../../../config.js";
-import type { ClientChoice } from "./clients-step.js";
 
-/** Só OpenCode por enquanto (decisão de 2026-07-27) — qualquer escolha (ou
- * nenhuma) cai no opencodeTarget. */
-export function resolveProvisionTargets(clientConfigs: ClientChoice[]): Set<ProvisionTarget> {
-  return new Set([opencodeTarget]);
+/** Alvo de provisão do cliente primário (opencode → `~/.config/opencode`;
+ * codex → `~/.codex` com skills traduzidas via `toCodexDocs`). */
+export function resolveProvisionTargets(primary: PrimaryClient): Set<ProvisionTarget> {
+  return new Set([targetForPrimary(primary)]);
 }
 
 /** Baixa o repo aberto de skills pro cache e registra a seção no report. */

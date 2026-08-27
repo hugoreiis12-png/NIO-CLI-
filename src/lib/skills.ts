@@ -122,8 +122,9 @@ function unquote(value: string): string {
 /**
  * Parser de frontmatter minimalista: `key: value` de uma linha, mais blocos
  * folded (`>`) e literal (`|`). Suficiente pros metadados (não é YAML completo).
+ * Exportado pro `RecipeCatalog` (`adapters/skills/`) reusar sem duplicar.
  */
-function parseFrontmatter(raw: string): { frontmatter: Record<string, string>; body: string } {
+export function parseFrontmatter(raw: string): { frontmatter: Record<string, string>; body: string } {
   const fm: Record<string, string> = {};
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(raw);
   if (!match) return { frontmatter: fm, body: raw };

@@ -15,9 +15,9 @@ export interface ClientInfo {
   url: string;
 }
 
-// Só OpenCode por enquanto (decisão de 2026-07-27) — Claude Code/Codex/VS
-// Code/Cowork saem da superfície ativa. O motor de config de cada um
-// continua em client-configs.ts (não apagado), só não é mais oferecido.
+// Clientes de IA primários (o `nio init` sobe o que estiver instalado no host —
+// ver `primary-client.ts`). Claude Code / Cowork seguem com motor de config em
+// `client-configs.ts` mas fora da superfície ativa.
 export const CLIENTS: Record<string, ClientInfo> = {
   opencode: {
     id: 'opencode',
@@ -25,6 +25,13 @@ export const CLIENTS: Record<string, ClientInfo> = {
     binary: 'opencode',
     npm: 'opencode-ai',
     url: 'https://opencode.ai/docs',
+  },
+  codex: {
+    id: 'codex',
+    label: 'Codex CLI',
+    binary: 'codex',
+    npm: '@openai/codex',
+    url: 'https://developers.openai.com/codex/cli',
   },
 };
 

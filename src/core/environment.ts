@@ -61,6 +61,45 @@ export interface ProfileCatalog {
    * nem todos têm definição durante a construção incremental.
    */
   get(profile: Profile): ProfileDefinition;
+
+  /** Todas as definições modeladas no catálogo (ordem de declaração). */
+  list(): ProfileDefinition[];
+}
+
+/**
+ * Preset de ambiente **vindo do repo NIO-SKILLS** (`recipes/<slug>.md`),
+ * editável sem release da CLI (Sprint 5.2/5.3). Diferente do `ProfileDefinition`
+ * (hardcoded, base) e da `LanguageRecipe` do nio-lang (nível-SDK): uma recipe é
+ * uma combinação nomeada que **estende** um perfil fixo — nunca cria perfil novo
+ * (regra da `CLAUDE.md`). O `EnvironmentBuilder` funde recipe sobre o perfil.
+ */
+export interface EnvironmentRecipe {
+  slug: string;
+  title: string;
+  description: string;
+  /** Perfil fixo que a recipe estende (um dos 6). */
+  profile: Profile;
+  languages: string[];
+  frameworks: string[];
+  /** Ids de `ToolchainSpec` conhecidos (`src/profiles/`). Id desconhecido → aviso, ignora. */
+  toolchainIds: string[];
+  /** Ids de `McpSpec` conhecidos (`src/profiles/mcps.ts`). Id desconhecido → aviso, ignora. */
+  mcpIds: string[];
+  envVars: Record<string, string>;
+  aliases: Record<string, string>;
+  /** Corpo do `.md` — notas pro operador de IA. */
+  notes: string;
+}
+
+/**
+ * Catálogo de recipes — port. A implementação (`adapters/skills/`) lê o cache
+ * `~/.nio/skills/recipes/`. Best-effort: `recipes/` ausente → `list()` = `[]`.
+ */
+export interface RecipeCatalog {
+  /** Recipes disponíveis; com `profile`, só as daquele perfil. */
+  list(profile?: Profile): EnvironmentRecipe[];
+  /** Recipe por slug, ou `null` se não existe / é inválida. */
+  get(slug: string): EnvironmentRecipe | null;
 }
 
 /**

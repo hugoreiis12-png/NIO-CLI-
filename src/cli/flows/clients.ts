@@ -1,23 +1,65 @@
 import { spawnSync } from "node:child_process";
-import { confirm } from "../../lib/prompts.js";
+import { confirm, select } from "../../lib/prompts.js";
 import { CLIENTS, isBinaryInstalled, type ClientInfo } from "../../lib/client-install.js";
+import {
+  detectPrimaryClient,
+  PRIMARY_PRIORITY,
+  type PrimaryClient,
+} from "../../lib/primary-client.js";
+import { readUserConfig, writeUserConfig } from "../../config.js";
 import { c, sym, cmd, link, box } from "../../lib/colors.js";
 import { flowsCopy, fmt } from "../copy.js";
 
 /**
- * Verificação inicial do `init`: confere se o **OpenCode** está instalado e,
- * se faltar, oferece instalar via `npm i -g` [y/N] (com o comando + docs à
- * mostra). Best-effort; nunca bloqueia o init.
- *
- * Claude Code/Codex/VS Code/Cowork saíram da superfície ativa (decisão de
- * 2026-07-27) — o motor de config deles continua em `client-configs.ts`,
- * não apagado.
+ * Resolve o **cliente de IA primário** do `nio init` (Parte A):
+ * - detecta OpenCode/Codex no PATH (hint do `nio.user.json`, override
+ *   `NIO_PRIMARY_CLIENT`);
+ * - **ambos** instalados sem escolha travada → pergunta e persiste;
+ * - **um** → usa;
+ * - **nenhum** → oferece instalar (default OpenCode, linhagem big-pickle) e
+ *   re-detecta.
+ * Retorna o primário, ou `null` se nada foi instalado e o usuário recusou.
  */
-export async function ensureCoreClients(opts: {
+export async function resolvePrimaryClient(opts: {
   interactive: boolean;
   assumeYes?: boolean;
-}): Promise<void> {
-  await ensureClientInstalled(CLIENTS.opencode, opts);
+}): Promise<PrimaryClient | null> {
+  const hint = readUserConfig().primaryClient;
+  let det = detectPrimaryClient(hint);
+
+  if (det.installed.length > 1 && !hint && !process.env.NIO_PRIMARY_CLIENT && opts.interactive) {
+    const picked = await select<PrimaryClient>({
+      message: "OpenCode e Codex detectados — qual usar como cliente principal?",
+      choices: det.installed.map((id) => ({ name: CLIENTS[id]!.label, value: id })),
+    });
+    writeUserConfig({ primaryClient: picked });
+    console.log(`  ${c.green(sym.ok)} ${c.bold(CLIENTS[picked]!.label)} ${c.dim("como principal (nio.user.json).")}`);
+    return picked;
+  }
+
+  if (det.chosen) {
+    console.log(
+      `  ${c.green(sym.ok)} ${c.bold(CLIENTS[det.chosen]!.label)} ${c.dim("detectado como cliente principal.")}`,
+    );
+    return det.chosen;
+  }
+
+  console.log(`  ${c.yellow(sym.warn)} Nenhum cliente de IA (OpenCode/Codex) no PATH.`);
+  let toInstall: PrimaryClient = "opencode";
+  if (opts.interactive) {
+    toInstall = await select<PrimaryClient>({
+      message: "Instalar qual cliente de IA?",
+      choices: PRIMARY_PRIORITY.map((id) => ({ name: CLIENTS[id]!.label, value: id })),
+    });
+  }
+  await ensureClientInstalled(CLIENTS[toInstall]!, opts);
+
+  det = detectPrimaryClient(toInstall);
+  if (det.chosen) {
+    writeUserConfig({ primaryClient: det.chosen });
+    return det.chosen;
+  }
+  return null;
 }
 
 /** Checa o cliente e, se ausente, orienta: oferece `npm i -g <pkg>` (CLIs) ou mostra o link (apps). */

@@ -29,6 +29,12 @@ test('powerbi-modeling é exclusivo de analyst e bi (nunca nos outros)', () => {
   }
 });
 
+test('ProfileCatalog.list: devolve os 6 perfis modelados', () => {
+  const catalog = createProfileCatalog();
+  const ids = catalog.list().map((d) => d.profile).sort();
+  expect(ids).toEqual([...ALL_PROFILES].sort());
+});
+
 test('ProfileCatalog.get: perfil inexistente lança erro claro', () => {
   const catalog = createProfileCatalog();
   expect(() => catalog.get('inexistente' as Profile)).toThrow(/ainda não tem ambiente definido/);

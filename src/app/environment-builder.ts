@@ -14,8 +14,15 @@
  * Ver `docs/v2/ARQUITETURA-ENVIRONMENT-BUILDER.md` e `TASK-environment-builder.md`.
  */
 import type { Profile, EnvironmentConfig } from '../core/session.js';
-import type { ProfileCatalog, ToolchainGateway, McpSpec, EnsureResult } from '../core/environment.js';
-import { createProfileCatalog } from '../profiles/index.js';
+import type {
+  ProfileCatalog,
+  ToolchainGateway,
+  ToolchainSpec,
+  McpSpec,
+  EnsureResult,
+  EnvironmentRecipe,
+} from '../core/environment.js';
+import { createProfileCatalog, KNOWN_TOOLCHAINS, KNOWN_MCPS } from '../profiles/index.js';
 import { createToolchainGateway } from '../adapters/pkg/toolchain-gateway.js';
 import { nioLangMcp } from '../profiles/mcps.js';
 
@@ -33,13 +40,20 @@ function mergeMcps(base: McpSpec[], profile: McpSpec[]): McpSpec[] {
   return [...byId.values()];
 }
 
+/** Junta as duas listas preservando ordem, sem repetir. */
+function union(a: string[], b: string[]): string[] {
+  return [...new Set([...a, ...b])];
+}
+
 export interface BuiltEnvironment {
   /** Config resolvido pra persistir em `sessions.config` (só o que materializou). */
   config: EnvironmentConfig;
-  /** MCPs do perfil, pra registrar no `opencode.json`. */
+  /** MCPs do perfil (+ recipe), pra registrar no `opencode.json`. */
   mcps: McpSpec[];
   /** Resultado de cada toolchain — o chamador avisa sobre os `failed`. */
   toolchains: EnsureResult[];
+  /** Ids de toolchain/MCP pedidos pela recipe que não existem no registro — o chamador avisa. */
+  recipeWarnings: string[];
 }
 
 export class EnvironmentBuilder {
@@ -49,33 +63,59 @@ export class EnvironmentBuilder {
   ) {}
 
   /**
-   * Resolve o perfil, garante os toolchains e monta o `EnvironmentConfig`.
-   * **Lança** só se o perfil não existe no catálogo (o chamador degrada — a
-   * sessão já existe). Toolchain que falha NÃO lança: sai em `toolchains` com
-   * `status: 'failed'` e fica fora do `config`.
+   * Resolve o perfil (+ uma `EnvironmentRecipe` opcional, do repo NIO-SKILLS),
+   * garante os toolchains e monta o `EnvironmentConfig`. **Lança** só se o perfil
+   * não existe no catálogo. Toolchain que falha NÃO lança. Id de toolchain/MCP da
+   * recipe que não está no registro (`KNOWN_*`) → entra em `recipeWarnings`,
+   * ignorado (não vira `opencode.json` quebrado).
    */
-  async build(profile: Profile): Promise<BuiltEnvironment> {
+  async build(profile: Profile, recipe?: EnvironmentRecipe): Promise<BuiltEnvironment> {
     const def = this.catalog.get(profile);
+    const recipeWarnings: string[] = [];
+
+    // Toolchains: os do perfil + os pedidos pela recipe (resolvidos no registro).
+    const toolchainSpecs: ToolchainSpec[] = [...def.toolchains];
+    for (const id of recipe?.toolchainIds ?? []) {
+      if (toolchainSpecs.some((t) => t.id === id)) continue;
+      const spec = KNOWN_TOOLCHAINS[id];
+      if (spec) toolchainSpecs.push(spec);
+      else recipeWarnings.push(`toolchain "${id}"`);
+    }
 
     const toolchainResults: EnsureResult[] = [];
-    for (const spec of def.toolchains) {
+    for (const spec of toolchainSpecs) {
       toolchainResults.push(await this.toolchains.ensure(spec));
     }
     const materialized = toolchainResults
       .filter((r) => r.status === 'present' || r.status === 'installed')
       .map((r) => r.id);
 
-    const mcps = mergeMcps(BASE_MCPS, def.mcps);
+    // MCPs: base + perfil + os da recipe.
+    let mcps = mergeMcps(BASE_MCPS, def.mcps);
+    if (recipe) {
+      const extra: McpSpec[] = [];
+      for (const id of recipe.mcpIds) {
+        if (mcps.some((m) => m.id === id)) continue;
+        const spec = KNOWN_MCPS[id];
+        if (spec) extra.push(spec);
+        else recipeWarnings.push(`MCP "${id}"`);
+      }
+      mcps = mergeMcps(mcps, extra);
+    }
+
+    const envVars = { ...def.envVars, ...recipe?.envVars };
+    const aliases = { ...def.aliases, ...recipe?.aliases };
 
     const config: EnvironmentConfig = {
-      languages: def.languages,
-      frameworks: def.frameworks,
+      languages: recipe ? union(def.languages, recipe.languages) : def.languages,
+      frameworks: recipe ? union(def.frameworks, recipe.frameworks) : def.frameworks,
       mcps: mcps.map((m) => m.id),
     };
     if (materialized.length > 0) config.toolchains = materialized;
-    if (def.envVars && Object.keys(def.envVars).length > 0) config.envVars = def.envVars;
-    if (def.aliases && Object.keys(def.aliases).length > 0) config.aliases = def.aliases;
+    if (Object.keys(envVars).length > 0) config.envVars = envVars;
+    if (Object.keys(aliases).length > 0) config.aliases = aliases;
+    if (recipe) config.extra = { ...config.extra, recipe: recipe.slug };
 
-    return { config, mcps, toolchains: toolchainResults };
+    return { config, mcps, toolchains: toolchainResults, recipeWarnings };
   }
 }

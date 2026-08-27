@@ -26,13 +26,21 @@ test('prefixos de tool têm formato aceito pelo MCP', () => {
   }
 });
 
-test('as tools de execução v2 estão registradas — só nio_, sem nos_ (v1 removido)', () => {
+test('as tools v2 estão registradas — só nio_, sem nos_ (v1 removido)', () => {
   const names = toolDefinitions.map((t) => t.name).sort();
-  // As 16 tools v1 (nos_*, tasks/sprints/alocação) foram removidas na migração;
-  // sobram as 4 genéricas de execução.
-  expect(names).toHaveLength(4);
-  expect(names).toContain('nio_plan');
-  expect(names).toContain('nio_delegate_exec');
+  // As 16 tools v1 (nos_*, tasks/sprints/alocação) foram removidas na migração.
+  // Sobram as 4 de execução + as tools de ambiente (Sprint 4).
+  expect(names).toEqual(
+    expect.arrayContaining([
+      'nio_delegate_exec',
+      'nio_exec_status',
+      'nio_plan',
+      'nio_validate_plan',
+      'nio_profile_get',
+      'nio_session_list',
+      'nio_session_activate',
+    ]),
+  );
   for (const n of names) {
     expect(n).toMatch(/^nio_[a-z_]+$/); // nenhum nome torto e nenhum nos_ sobrando
     expect(n).not.toContain('__');

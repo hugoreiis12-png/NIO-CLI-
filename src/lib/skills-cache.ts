@@ -61,6 +61,32 @@ export function skillsCached(): boolean {
   return existsSync(join(dir, 'skills')) || existsSync(join(dir, 'commands'));
 }
 
+/**
+ * TTL do cache (Sprint 5.5): num host que só roda o operador e nunca chama
+ * `nio sync`, o cache ficaria velho pra sempre. `ensureSkillsCache()` re-baixa
+ * passado esse tempo. `nio sync` continua forçando (é a atualização explícita).
+ */
+export const SKILLS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Pura: a idade de um `fetchedAt` (ISO) passou o TTL? Ausente/inválido → `true`
+ * (força um fetch, que degrada pro cache se a rede falhar).
+ */
+export function isFetchedAtStale(
+  fetchedAt: string | null | undefined,
+  ttlMs: number = SKILLS_TTL_MS,
+  now: number = Date.now(),
+): boolean {
+  if (!fetchedAt) return true;
+  const age = now - new Date(fetchedAt).getTime();
+  return Number.isNaN(age) || age > ttlMs;
+}
+
+/** O cache local está velho o bastante pra re-baixar? (lê o marker `.nio-skills.json`) */
+export function skillsCacheStale(ttlMs: number = SKILLS_TTL_MS, now: number = Date.now()): boolean {
+  return isFetchedAtStale(cacheMeta()?.fetchedAt, ttlMs, now);
+}
+
 export interface FetchResult {
   /** `fetched` = baixou agora · `cached` = já tinha (ou fetch falhou mas há cache) · `failed` = sem conteúdo. */
   status: 'fetched' | 'cached' | 'failed';
@@ -130,7 +156,14 @@ export async function fetchSkills(
   }
 }
 
-/** Garante que o cache exista (baixa só se ausente). Best-effort pro runtime do MCP. */
+/**
+ * Garante o cache pro runtime do MCP: baixa se ausente **ou velho** (TTL). Cache
+ * fresco → retorno `cached` sem tocar a rede. Best-effort — fetch que falha com
+ * cache presente segue com o cache (`fetchSkills`).
+ */
 export async function ensureSkillsCache(): Promise<FetchResult> {
-  return fetchSkills({ force: false });
+  if (skillsCached() && !skillsCacheStale()) {
+    return fetchSkills({ force: false });
+  }
+  return fetchSkills({ force: true });
 }

@@ -1,11 +1,28 @@
 import { test, expect } from 'bun:test';
 import { EnvironmentBuilder } from './environment-builder.js';
-import type { ToolchainGateway, EnsureResult } from '../core/environment.js';
+import type { ToolchainGateway, EnsureResult, EnvironmentRecipe } from '../core/environment.js';
 import type { Profile } from '../core/session.js';
 
 /** Gateway fake determinístico — devolve sempre o mesmo status por spec. */
 function fakeGateway(status: EnsureResult['status']): ToolchainGateway {
   return { ensure: async (spec) => ({ id: spec.id, status }) };
+}
+
+function mkRecipe(over: Partial<EnvironmentRecipe> = {}): EnvironmentRecipe {
+  return {
+    slug: 'r1',
+    title: 'R1',
+    description: '',
+    profile: 'dba',
+    languages: [],
+    frameworks: [],
+    toolchainIds: [],
+    mcpIds: [],
+    envVars: {},
+    aliases: {},
+    notes: '',
+    ...over,
+  };
 }
 
 test('build(dba): resolve o config com os ids dos MCPs e devolve os specs', async () => {
@@ -50,4 +67,43 @@ test('build(dba): toolchain que falha fica fora do config (não aborta)', async 
   expect(env.config.toolchains).toBeUndefined();
   expect(env.config.mcps).toContain('postgres'); // MCPs seguem materializando
   expect(env.toolchains[0]?.status).toBe('failed');
+});
+
+test('build + recipe: funde languages/frameworks/mcps/toolchains e grava extra.recipe', async () => {
+  const recipe = mkRecipe({
+    slug: 'fullstack-next',
+    profile: 'fullstack',
+    languages: ['typescript'],
+    frameworks: ['next'],
+    toolchainIds: ['python'], // conhecido, não está no perfil fullstack
+    mcpIds: ['postgres'], // conhecido
+    envVars: { NODE_ENV: 'development' },
+    aliases: { nr: 'npm run' },
+  });
+  const env = await new EnvironmentBuilder(undefined, fakeGateway('present')).build('fullstack', recipe);
+
+  expect(env.config.frameworks).toEqual(expect.arrayContaining(['react', 'next']));
+  expect(env.config.mcps).toEqual(expect.arrayContaining(['nio-lang', 'postgres']));
+  expect(env.config.toolchains).toEqual(expect.arrayContaining(['node', 'python']));
+  expect(env.config.envVars).toMatchObject({ NODE_ENV: 'development' });
+  expect(env.config.aliases).toMatchObject({ nr: 'npm run' });
+  expect(env.config.extra).toEqual({ recipe: 'fullstack-next' });
+  expect(env.recipeWarnings).toEqual([]);
+});
+
+test('build + recipe: id de toolchain/MCP desconhecido → recipeWarnings, não quebra', async () => {
+  const recipe = mkRecipe({
+    profile: 'dba',
+    toolchainIds: ['cobol'],
+    mcpIds: ['inventado'],
+  });
+  const env = await new EnvironmentBuilder(undefined, fakeGateway('present')).build('dba', recipe);
+  expect(env.recipeWarnings).toEqual(expect.arrayContaining(['toolchain "cobol"', 'MCP "inventado"']));
+  expect(env.config.mcps).not.toContain('inventado');
+});
+
+test('build sem recipe: recipeWarnings vazio, sem extra', async () => {
+  const env = await new EnvironmentBuilder(undefined, fakeGateway('present')).build('dba');
+  expect(env.recipeWarnings).toEqual([]);
+  expect(env.config.extra).toBeUndefined();
 });
