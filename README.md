@@ -62,17 +62,27 @@ Ficam no PATH: `nio` (CLI), `nio-gateway` (serviço de auth), `nio-cli` e
 
 ## Configuração
 
-A CLI lê variáveis de ambiente nesta precedência (a primeira que definir vence, e
-o shell sempre vence os arquivos):
+**Você não precisa exportar nada no shell.** Rode `nio config setup` — o wizard
+pede o `NIO_DATABASE_URL` (que o time te passa) e o `JWT_SECRET`, **testa a
+conexão** e grava em `~/.nio/config.env` (chmod 600, nunca commitado). O `nio init`,
+`nio register` e `nio login` disparam esse wizard sozinhos se a config faltar; se
+estiver presente mas errada, param com uma mensagem dizendo exatamente o quê.
+
+```bash
+nio config setup     # wizard interativo (cola os valores, testa, salva)
+nio config check     # confere: completa? banco responde?  (--json pra CI)
+nio config path      # ~/.nio/config.env
+```
+
+A CLI carrega as variáveis nesta precedência (shell sempre vence os arquivos):
 
 ```
 env do shell  >  $NIO_ENV_FILE  >  ./.env  >  ~/.nio/config.env
 ```
 
-Pra uma instalação global, o lugar canônico é **`~/.nio/config.env`**:
+Conteúdo de `~/.nio/config.env` (o wizard gera; dá pra editar à mão):
 
 ```bash
-# ~/.nio/config.env
 NIO_DATABASE_URL=postgres://usuario:senha@HOST:5432/nio_cli
 # NIO_DATABASE_SSL=true          # só se o banco exigir TLS (gerenciado/nuvem)
 JWT_SECRET=<mesmo-valor-do-time>
@@ -82,6 +92,9 @@ JWT_SECRET=<mesmo-valor-do-time>
 # SMS_AUTH_HEADER=X-API-TOKEN: seu-token
 # SMS_BODY_TEMPLATE={"to":"{to}","message":"{text}"}
 ```
+
+> Alternativa pra time: gere o `~/.nio/config.env` uma vez e distribua o arquivo
+> (é só `KEY=value`) — a CLI valida no primeiro comando.
 
 | Variável | Prefixo | Lida por |
 |---|---|---|
@@ -99,24 +112,15 @@ nunca cai num default silencioso.
 ## Primeiros passos
 
 ```bash
-# 1. config (uma vez)
-mkdir -p ~/.nio && $EDITOR ~/.nio/config.env      # NIO_DATABASE_URL + JWT_SECRET
-
-# 2. suba o gateway de auth (precisa estar no ar pro login/logout/2FA)
-nio-gateway &
-
-# 3. crie seu usuário na base compartilhada
-nio register
-
-# 4. autentique (salva o JWT em ~/.nio/session.json)
-nio login
-
-# 5. (opcional) ative o 2º fator
-nio security enable-2fa
-
-# 6. monte o ambiente da sessão neste diretório
-nio init
+nio config setup     # cola NIO_DATABASE_URL + JWT_SECRET (o time te passa), testa, salva
+nio-gateway &        # gateway de auth no ar (precisa pro login/logout/2FA)
+nio register         # cria seu usuário na base compartilhada
+nio login            # autentica (salva o JWT em ~/.nio/session.json)
+nio security enable-2fa   # (opcional) 2º fator
+nio init             # monta o ambiente da sessão neste diretório
 ```
+
+Se você pular o `nio config setup`, o próprio `nio register`/`init` abre o wizard.
 
 O `nio-gateway` só é necessário pros comandos de auth (`login`/`logout`/
 `verify-2fa`/`security`). Todo o resto — `init`, `sessions`, as tools MCP —
@@ -216,12 +220,16 @@ Operações do CLI, **sem o binário na frente** (declarado no cabeçalho da tab
 Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --help`.
 
 <!-- COMMANDS:START -->
-<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 31 comandos. -->
+<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 35 comandos. -->
 
 | Comando | Descrição |
 | --- | --- |
 | `clean-legacy` | Remove commands/skills legados (substituídos) de ~/.claude e ~/.codex |
 | `completion [shell]` | Imprime o script de autocomplete (bash\|zsh\|fish). |
+| `config` | Config compartilhada da equipe (~/.nio/config.env) |
+| `config check` | Confere se a config está completa e o Postgres responde |
+| `config path` | Imprime o caminho do arquivo de config |
+| `config setup` | Wizard: cola os valores do time, testa a conexão e salva |
 | `docker` | Camada Docker: MCP Gateway + Portainer, compose, debug e cluster (Swarm) |
 | `docker cluster <action> [arg]` | Docker Swarm — stack `nio-cluster` (up\|down\|status\|scale) |
 | `docker compose <action> [service]` | Wrapper sobre `docker compose` do projeto (up\|down\|restart\|ps\|logs) |
@@ -431,7 +439,7 @@ background em qualquer comando (`update-notifier`).
 | Sintoma | Causa provável / o que fazer |
 |---|---|
 | `nio: command not found` | `npm i -g @nio-cli/cli` e confira `npm bin -g` no PATH |
-| `NIO_DATABASE_URL não definida` | ponha em `~/.nio/config.env` (ou exporte no shell). Bin publicado só lê `.env`/`config.env`, não o `.env` de dev via bun |
+| `Configuração necessária` / `NIO_DATABASE_URL não definida` | rode `nio config setup` (ou deixe o `nio init` abrir o wizard) |
 | `Não consegui falar com o nio-gateway` | o `nio-gateway` não está no ar — rode `nio-gateway &` |
 | `Não autenticado` | `nio register` (1ª vez) e depois `nio login` |
 | Erro de conexão com o banco | `ECONNREFUSED` = Postgres fora do ar / host errado; `password authentication failed` = credencial; erro de SSL = `NIO_DATABASE_SSL=true` |

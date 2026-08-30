@@ -12,6 +12,7 @@ import { collectRuleSkills } from "../../../lib/rules.js";
 import { offerDependencyInstall, offerRuleSkills } from "../../flows/dependencies.js";
 import { offerShellCompletion } from "../../flows/completion.js";
 import { ensureCoreClients } from "../../flows/clients.js";
+import { ensureConfig } from "../../../lib/nio-config.js";
 import { section, c, sym } from "../../../lib/colors.js";
 import { startSpinner } from "../../../spinner.js";
 import { isBinaryInstalled } from "../../../lib/client-install.js";
@@ -281,7 +282,10 @@ async function runInitWizard(): Promise<void> {
   console.log(renderMatrixLogo());
   console.log(`${brand.name} init — monta o ambiente desta sessão.`);
 
-  // Logo no início: confere OpenCode e oferece instalar se faltar.
+  // Antes de tudo: config da equipe (NIO_DATABASE_URL/JWT_SECRET). Falta → wizard.
+  await ensureConfig({ interactive: true });
+
+  // Confere OpenCode e oferece instalar se faltar.
   await ensureCoreClients({ interactive: true });
 
   // Sem login inline: exige `nio register`/`nio login` prévios e sai se faltar.

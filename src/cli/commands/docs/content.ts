@@ -92,24 +92,23 @@ export const SECTIONS: DocSection[] = [
   {
     id: 'config',
     title: 'Configuração',
+    blurb: 'Você não precisa exportar nada no shell.',
     blocks: [
       {
         kind: 'p',
-        text: 'A CLI lê variáveis de ambiente nesta precedência (a primeira que define vence; o shell sempre vence os arquivos):',
+        text: '`nio config setup` — wizard que pede o `NIO_DATABASE_URL` (o time te passa) e o `JWT_SECRET`, testa a conexão e grava em ~/.nio/config.env (chmod 600). `nio init`/`register`/`login` disparam esse wizard sozinhos se a config faltar; se estiver errada, param dizendo o quê.',
       },
-      { kind: 'code', text: 'env do shell  >  $NIO_ENV_FILE  >  ./.env  >  ~/.nio/config.env' },
-      { kind: 'p', text: 'Pra instalação global, o lugar canônico é ~/.nio/config.env:' },
       {
         kind: 'code',
         text: [
-          '# ~/.nio/config.env',
-          'NIO_DATABASE_URL=postgres://usuario:senha@HOST:5432/nio_cli',
-          '# NIO_DATABASE_SSL=true      # só se o banco exigir TLS',
-          'JWT_SECRET=<mesmo-valor-do-time>',
-          '# SMS_ENDPOINT_URL=https://api.provedor.com/v2/sms',
-          '# SMS_AUTH_HEADER=X-API-TOKEN: seu-token',
-          '# SMS_BODY_TEMPLATE={"to":"{to}","message":"{text}"}',
+          'nio config setup     wizard (cola os valores, testa, salva)',
+          'nio config check     completa? banco responde?  (--json pra CI)',
+          'nio config path      ~/.nio/config.env',
         ].join('\n'),
+      },
+      {
+        kind: 'p',
+        text: 'Precedência ao carregar: env do shell > $NIO_ENV_FILE > ./.env > ~/.nio/config.env.',
       },
       {
         kind: 'table',
@@ -131,12 +130,12 @@ export const SECTIONS: DocSection[] = [
       {
         kind: 'code',
         text: [
-          'mkdir -p ~/.nio && $EDITOR ~/.nio/config.env   # NIO_DATABASE_URL + JWT_SECRET',
-          'nio-gateway &                                  # gateway de auth no ar',
-          'nio register                                   # cria seu usuário na base compartilhada',
-          'nio login                                      # salva o JWT em ~/.nio/session.json',
-          'nio security enable-2fa                         # (opcional) 2º fator',
-          'nio init                                       # monta o ambiente da sessão',
+          'nio config setup       # cola NIO_DATABASE_URL + JWT_SECRET, testa, salva',
+          'nio-gateway &          # gateway de auth no ar',
+          'nio register           # cria seu usuário na base compartilhada',
+          'nio login              # salva o JWT em ~/.nio/session.json',
+          'nio security enable-2fa # (opcional) 2º fator',
+          'nio init               # monta o ambiente da sessão',
         ].join('\n'),
       },
       { kind: 'p', text: 'A qualquer momento, `nio debug` mostra o que está ok e o que falta.' },

@@ -12,6 +12,7 @@ import {
   type GatewaySession,
 } from "../../lib/gateway-client.js";
 import { loadSession, saveSession, clearSession } from "../../lib/session-store.js";
+import { ensureConfig } from "../../lib/nio-config.js";
 import { authCopy } from "../copy.js";
 
 /**
@@ -52,6 +53,7 @@ function registerRegisterCommand(program: Command): void {
     .command("register")
     .description("Cria um novo usuário no banco (user_cli)")
     .action(async () => {
+      await ensureConfig({ interactive: true });
       const name = await input({
         message: authCopy.register.namePrompt,
         validate: (v) => v.trim().length > 0 || authCopy.register.nameInvalid,
@@ -87,6 +89,7 @@ function registerLoginCommand(program: Command): void {
     .command("login")
     .description("Autentica via nio-gateway (túnel HTTP) e salva a sessão localmente (JWT)")
     .action(async () => {
+      await ensureConfig({ interactive: true });
       const name = await input({ message: authCopy.login.namePrompt });
       const pass = await password({ message: authCopy.login.passwordPrompt, mask: "*" });
 
