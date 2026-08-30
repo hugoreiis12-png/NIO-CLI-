@@ -29,7 +29,13 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Publish
-        run: npm publish --access public
+      - name: Publish (pula se a versão já está no npm)
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "@nio-cli/cli@${VERSION}" version >/dev/null 2>&1; then
+            echo "@nio-cli/cli@${VERSION} já publicado — nada a fazer."
+            exit 0
+          fi
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
