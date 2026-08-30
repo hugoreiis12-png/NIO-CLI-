@@ -5,3 +5,4 @@ dist/
 .env
 .env.local
 *.mcpb
+nio-docs.html
