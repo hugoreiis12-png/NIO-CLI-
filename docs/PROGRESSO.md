@@ -1451,3 +1451,37 @@ broker/fila), com **10 códigos de backup** de uso único como caminho alternati
 - `docs/v2/ARQUITETURA-GATEWAY.md` → banner + item 7 na linha do tempo (Twilio →
   HTTP genérico, estado do OTP nosso).
 - `README.md` → seção "2º fator (SMS)".
+
+---
+
+## 2026-08-30 — Limpeza de arquitetura pré-publicação (0.2.0)
+
+Antes de subir o pacote, faxina do resíduo v1 e reorganização do `src/` pra
+ficar legível. 6 commits (`21ef0a0`..`527bbaf`).
+
+### Removido (código morto)
+- `InvestigationGateway` + `src/adapters/postgres/` + `src/core/{ports,types}.ts`
+  (o antigo) — scaffolding de investigação read-only dual-IP, nunca ligado.
+- `src/lib/{require-config,active-project}.ts` — binding de projeto NOS v1.
+- `workers/edge-filter/` — Cloudflare Worker do gateway v1 (fora do build).
+- `src/constants.ts` — `SESSION_FILE` foi pra `session-store.ts`.
+
+### Removido (docs obsoletos)
+- specs `auth/0001-0003`, `investigation/`, `rebrand/`; `adr/0001`
+- `docs/{PLANO-EXECUCAO,ROADMAP,diagnostico-2026-07-27}.md`, `roadmap-*.html`,
+  `NIO-CLI-Transicao-v1-v2.md`, `docs/v2/TASK-*.md`
+- `diagrama/` inteiro (mermaids do gateway OAuth/PKCE v1)
+
+### Reorganizado
+- `docs/v2/` → `docs/arch/` (ARQUITETURA-*) + `docs/PROGRESSO.md`
+- `src/core/session.ts` → `src/core/types.ts` (é o arquivo de entidades do
+  domínio inteiro; os outros de `core/` já eram ports fatiados por domínio)
+- `src/lib/` (44 soltos) → 12 na raiz + `lib/{clients,deps,provision,skills,exec,auth}/`
+- `src/spinner.ts` → `src/lib/spinner.ts`
+- `CLAUDE.md` "Arquitetura (hexagonal)" reescrita pra estrutura real
+
+### Verificação
+`bunx tsc --noEmit` verde. `bun test` **368 pass / 1 skip / 0 fail** (era 379 —
+saíram 11 testes da investigação). `bun run build` → 4 bins. `nio docs`/`config
+check`/`debug` OK. `grep` por refs mortas (`docs/v2/`, `InvestigationGateway`,
+`workers/edge-filter`, `core/session.js`) → limpo (fora deste log).
