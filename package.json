@@ -1,8 +1,9 @@
 {
   "name": "@nio-cli/cli",
-  "version": "0.1.0",
-  "description": "MCP server e CLI pra controlar o NOS a partir de assistentes de IA como Claude Code, Codex CLI e GitHub Copilot.",
+  "version": "0.2.0",
+  "description": "Orquestrador de ambientes de desenvolvimento: escolhe um perfil, responde um wizard e a CLI (com auxílio de IA via MCP) materializa toolchains, linguagens, frameworks, dotfiles e IDE.",
   "type": "module",
+  "license": "UNLICENSED",
   "bin": {
     "nio": "dist/cli.js",
     "nio-cli": "dist/mcp-server.js",
@@ -31,11 +32,13 @@
   "keywords": [
     "mcp",
     "model-context-protocol",
-    "claude-code",
-    "codex",
-    "copilot",
-    "nio",
-    "nos"
+    "cli",
+    "developer-environment",
+    "dev-environment",
+    "environment-orchestration",
+    "opencode",
+    "postgres",
+    "nio"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc && node --input-type=commonjs -e \"require('fs').cpSync('src/cli/copy','dist/cli/copy',{recursive:true})\" && chmod +x dist/cli.js dist/mcp-server.js dist/gateway/index.js dist/mcp-server-lang.js",
