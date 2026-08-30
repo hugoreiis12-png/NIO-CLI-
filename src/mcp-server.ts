@@ -15,21 +15,21 @@ import { loadProjectConfig, type ProjectConfig } from './config.js';
 import { tools, toolDefinitions, type ToolContext } from './tools/index.js';
 import { errorResult } from './lib/tool-result.js';
 import { notifyMcpServerIfUpdate } from './lib/version-check.js';
-import { filterSkillsForSurface } from './lib/skills.js';
+import { filterSkillsForSurface } from './lib/skills/skills.js';
 import {
   loadSkills,
   skillResourceDescriptors,
   readSkillResource,
   skillPromptDescriptors,
   buildSkillPrompt,
-} from './lib/skill-serve.js';
-import { provision } from './lib/provision.js';
-import { provisionHooks } from './lib/hooks.js';
-import { claudeTarget, type ProvisionTarget } from './lib/targets.js';
-import { ensureSkillsCache } from './lib/skills-cache.js';
-import { shouldRunAutoPull, pickProvisionTarget } from './lib/autopull.js';
+} from './lib/skills/skill-serve.js';
+import { provision } from './lib/provision/provision.js';
+import { provisionHooks } from './lib/clients/hooks.js';
+import { claudeTarget, type ProvisionTarget } from './lib/clients/targets.js';
+import { ensureSkillsCache } from './lib/skills/skills-cache.js';
+import { shouldRunAutoPull, pickProvisionTarget } from './lib/clients/autopull.js';
 import { brand, env } from './brand.js';
-import { loadSession } from './lib/session-store.js';
+import { loadSession } from './lib/auth/session-store.js';
 import { createUserRepository } from './adapters/pg/user-repository.js';
 import { authenticate } from './gateway/middleware/auth.js';
 import type { UserCli } from './core/types.js';

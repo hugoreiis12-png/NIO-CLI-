@@ -10,7 +10,7 @@ import {
   type ResolvedDependency,
   type DependencyPlan,
 } from './dependencies.js';
-import type { SkillDoc } from './skills.js';
+import type { SkillDoc } from '../skills/skills.js';
 
 // Caracterização de dependencies.ts ANTES do split em módulos — pina a resolução
 // de `dependency` docs em planos executáveis (resolveDependency, pura) e a decisão

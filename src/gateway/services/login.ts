@@ -11,8 +11,8 @@ import { createUserRepository } from '../../adapters/pg/user-repository.js';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
 import { createLoginChallengeRepository } from '../../adapters/pg/login-challenge-repository.js';
 import { createHttpSmsSender } from '../../adapters/sms/http-generic.js';
-import { generateOtp, hashOtp, verifyOtp } from '../../lib/otp.js';
-import { verifyBackupCode, markUsed, countRemaining } from '../../lib/backup-codes.js';
+import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
+import { verifyBackupCode, markUsed, countRemaining } from '../../lib/auth/backup-codes.js';
 import { getJwtSecret, JWT_EXPIRES_IN } from '../config.js';
 
 export interface SessionPayload {

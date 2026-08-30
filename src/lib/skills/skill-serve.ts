@@ -1,5 +1,5 @@
 import { readSkillFiles, toSkillDocs, type SkillDoc, type SkillDocType } from './skills.js';
-import { brand } from '../brand.js';
+import { brand } from '../../brand.js';
 
 /**
  * Camada de **serviço** do pacote de skills pro servidor MCP: expõe os docs como

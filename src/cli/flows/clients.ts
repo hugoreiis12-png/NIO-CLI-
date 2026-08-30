@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { confirm } from "../../lib/prompts.js";
-import { CLIENTS, isBinaryInstalled, type ClientInfo } from "../../lib/client-install.js";
+import { CLIENTS, isBinaryInstalled, type ClientInfo } from "../../lib/clients/client-install.js";
 import { c, sym, cmd, link, box } from "../../lib/colors.js";
 import { flowsCopy, fmt } from "../copy.js";
 

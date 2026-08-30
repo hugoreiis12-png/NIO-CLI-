@@ -7,8 +7,8 @@ import type { Command } from "commander";
 import { brand } from "../../brand.js";
 import { c, sym, section, box } from "../../lib/colors.js";
 import { input, password, confirm } from "../../lib/prompts.js";
-import { loadSession } from "../../lib/session-store.js";
-import { gatewaySecurity } from "../../lib/gateway-client.js";
+import { loadSession } from "../../lib/auth/session-store.js";
+import { gatewaySecurity } from "../../lib/auth/gateway-client.js";
 
 /** Token da sessão local, ou encerra pedindo login. */
 async function requireToken(): Promise<string> {

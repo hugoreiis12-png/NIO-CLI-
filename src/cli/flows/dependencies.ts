@@ -6,8 +6,8 @@ import {
   recordDependencyInstalled,
   skillsInstallPlan,
   type ResolvedDependency,
-} from "../../lib/dependencies.js";
-import { type SkillDoc } from "../../lib/skills.js";
+} from "../../lib/deps/dependencies.js";
+import { type SkillDoc } from "../../lib/skills/skills.js";
 import { c, sym, cmd, rule, sectionTitle } from "../../lib/colors.js";
 import { printDepHeader, printManualSteps } from "../ui/render.js";
 import { flowsCopy, fmt } from "../copy.js";

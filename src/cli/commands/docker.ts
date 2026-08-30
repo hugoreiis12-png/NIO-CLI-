@@ -20,10 +20,10 @@ import {
   portainerHealthy,
   unreachableDocker,
 } from "../../lib/docker.js";
-import { upsertOpencodeMcp } from "../../lib/client-configs.js";
-import { isBinaryInstalled } from "../../lib/client-install.js";
+import { upsertOpencodeMcp } from "../../lib/clients/client-configs.js";
+import { isBinaryInstalled } from "../../lib/clients/client-install.js";
 import { openUrl } from "../../lib/open-url.js";
-import { loadSession } from "../../lib/session-store.js";
+import { loadSession } from "../../lib/auth/session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { createDockerGateway } from "../../adapters/docker/docker-gateway.js";
 import {

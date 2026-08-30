@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import AdmZip from 'adm-zip';
-import { brand, env, homePath } from '../brand.js';
+import { brand, env, homePath } from '../../brand.js';
 
 /**
  * Skills como repo aberto (não pacote npm): o CLI baixa o zipball do GitHub pro

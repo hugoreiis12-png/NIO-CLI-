@@ -7,15 +7,15 @@ import type { Session, Ide as SessionIde, Profile } from "../../../core/types.js
 import { SessionManager, type MaterializedSession } from "../../../app/session-manager.js";
 import type { McpSpec } from "../../../core/environment.js";
 import { createIdeGateway } from "../../../adapters/ide/ide-gateway.js";
-import { readDependencies, skillIdMap } from "../../../lib/skills.js";
-import { collectRuleSkills } from "../../../lib/rules.js";
+import { readDependencies, skillIdMap } from "../../../lib/skills/skills.js";
+import { collectRuleSkills } from "../../../lib/skills/rules.js";
 import { offerDependencyInstall, offerRuleSkills } from "../../flows/dependencies.js";
 import { offerShellCompletion } from "../../flows/completion.js";
 import { ensureCoreClients } from "../../flows/clients.js";
-import { ensureConfig } from "../../../lib/nio-config.js";
+import { ensureConfig } from "../../../lib/auth/nio-config.js";
 import { section, c, sym } from "../../../lib/colors.js";
-import { startSpinner } from "../../../spinner.js";
-import { isBinaryInstalled } from "../../../lib/client-install.js";
+import { startSpinner } from "../../../lib/spinner.js";
+import { isBinaryInstalled } from "../../../lib/clients/client-install.js";
 import { SyncReport, renderReport, browseReport, resolveReportMode } from "../../ui/report.js";
 import { flushTelemetry } from "../../../lib/telemetry.js";
 import { writeManagedDotfiles } from "../../../lib/dotfiles.js";
@@ -43,7 +43,7 @@ import {
   provisionHooksStep,
 } from "./provision-step.js";
 import { promptSelection } from "../../flows/sections.js";
-import type { StoredSession } from "../../../lib/session-store.js";
+import type { StoredSession } from "../../../lib/auth/session-store.js";
 
 /**
  * Mapeia o `Ide` do wizard (`config.Ide`, superset) pro `Session.ide` (domínio).

@@ -6,7 +6,7 @@
  */
 import { mkdir, readFile, writeFile, rm, chmod } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { homePath } from '../brand.js';
+import { homePath } from '../../brand.js';
 
 /** Sessão local v2 (`nio login` contra `user_cli`/Postgres) — `~/.nio/session.json`. */
 export const SESSION_FILE = homePath('session.json');

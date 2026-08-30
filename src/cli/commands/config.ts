@@ -4,7 +4,7 @@
  */
 import type { Command } from "commander";
 import { c, sym } from "../../lib/colors.js";
-import { CONFIG_FILE, checkConfig, runConfigWizard } from "../../lib/nio-config.js";
+import { CONFIG_FILE, checkConfig, runConfigWizard } from "../../lib/auth/nio-config.js";
 
 const LABEL = { missing: "faltando", invalid: "inválido", unreachable: "sem conexão" } as const;
 

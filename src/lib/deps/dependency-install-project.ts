@@ -9,7 +9,7 @@
  * frontmatter). Aqui é o manifest do projeto do usuário.
  */
 import { spawnSync } from 'node:child_process';
-import type { DependencyType } from '../core/types.js';
+import type { DependencyType } from '../../core/types.js';
 import type { InstallOutcome } from './dependencies.js';
 
 /** Comando fixo do instalador por ecossistema. `null` = sem auto-install suportado. */

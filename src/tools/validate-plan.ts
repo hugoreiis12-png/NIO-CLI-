@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs';
 import type { Tool, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolContext } from './index.js';
 import { jsonResult, errorResult } from '../lib/tool-result.js';
-import { runValidatePlan } from '../lib/validate-plan-delegate.js';
-import { ENGINES, PLAN_ENGINE } from '../lib/exec-engines.js';
+import { runValidatePlan } from '../lib/exec/validate-plan-delegate.js';
+import { ENGINES, PLAN_ENGINE } from '../lib/exec/exec-engines.js';
 import { brand } from '../brand.js';
 
 const ArgsSchema = z

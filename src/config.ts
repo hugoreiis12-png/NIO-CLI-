@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, isAbsolute, dirname } from 'node:path';
 import { brand, env } from './brand.js';
-import { DEV_ROLE, GENERAL, type Selection } from './lib/sections.js';
+import { DEV_ROLE, GENERAL, type Selection } from './lib/skills/sections.js';
 
 /** Arquivo de binding do projeto na raiz do repo (`nio.json`). */
 const PROJECT_CONFIG_FILE = brand.projectConfigFile;

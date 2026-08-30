@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Tool, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolContext } from './index.js';
 import { jsonResult, errorResult } from '../lib/tool-result.js';
-import { getJob } from '../lib/exec-delegate.js';
+import { getJob } from '../lib/exec/exec-delegate.js';
 import { brand } from '../brand.js';
 
 const ArgsSchema = z.object({ job_id: z.string().min(1) }).strict();

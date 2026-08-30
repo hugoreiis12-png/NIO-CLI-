@@ -9,7 +9,7 @@ import {
   upsertOpencodeMcp,
   NIO_OPERATOR_MODEL,
 } from './client-configs.js';
-import type { McpSpec } from '../core/environment.js';
+import type { McpSpec } from '../../core/environment.js';
 
 const NIO_ENTRY = { command: ['nio-cli'], environment: {} as Record<string, string> };
 const PG_MCP: McpSpec = {

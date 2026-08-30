@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { toSkillDocs, type SkillDoc } from './skills.js';
-import { readJson } from './file-merge.js';
-import type { ProvisionInputDoc } from './provision.js';
-import { brand } from '../brand.js';
+import { toSkillDocs, type SkillDoc } from '../skills/skills.js';
+import { readJson } from '../file-merge.js';
+import type { ProvisionInputDoc } from '../provision/provision.js';
+import { brand } from '../../brand.js';
 
 /**
  * Um "alvo" de provisionamento: um cliente de IA com seu diretório nativo e como os

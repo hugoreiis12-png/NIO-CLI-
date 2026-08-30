@@ -1,14 +1,14 @@
 /**
  * Camada Docker da NIO-CLI — config, URLs e health dos serviços de infra
  * (`docker/docker-compose.yml`: Docker MCP Gateway + Portainer) e detecção do
- * `docker` no host. Espelha `src/gateway/config.ts` + `src/lib/gateway-client.ts`.
+ * `docker` no host. Espelha `src/gateway/config.ts` + `lib/auth/gateway-client.ts`.
  */
 import { spawnSync } from 'node:child_process';
 import { connect } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { env } from '../brand.js';
-import { isBinaryInstalled } from './client-install.js';
+import { isBinaryInstalled } from './clients/client-install.js';
 
 /** Porta do Docker MCP Gateway (loopback only). `NIO_DOCKER_MCP_PORT`, default 8811. */
 export const DOCKER_MCP_PORT = Number(env('DOCKER_MCP_PORT')?.trim()) || 8811;

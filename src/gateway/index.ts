@@ -21,7 +21,7 @@ import {
   type RequestContext,
 } from './edge-filter.js';
 import { GATEWAY_PORT, GATEWAY_HOST } from './config.js';
-import { getOrCreateGatewayToken } from '../lib/gateway-token.js';
+import { getOrCreateGatewayToken } from '../lib/auth/gateway-token.js';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'Content-Type': 'application/json' });

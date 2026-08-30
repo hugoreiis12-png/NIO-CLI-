@@ -1,14 +1,14 @@
 /**
  * Adapter `pkg` — implementação do `ToolchainGateway` (`core/environment.ts`).
  * Garante um toolchain no host: detecta por glob (reusa `globExists` de
- * `lib/dependency-install`) e, se faltar e houver plano, instala via `spawnSync`
+ * `lib/deps/dependency-install`) e, se faltar e houver plano, instala via `spawnSync`
  * SEM shell (mesmo padrão seguro de `runDependencyInstall` — args em array, zero
  * interpolação de string).
  *
  * **Nunca lança** (contrato do port): qualquer falha vira `status: 'failed'`.
  */
 import { spawnSync } from 'node:child_process';
-import { globExists } from '../../lib/dependency-install.js';
+import { globExists } from '../../lib/deps/dependency-install.js';
 import type { EnsureResult, ToolchainGateway, ToolchainSpec } from '../../core/environment.js';
 
 /** Detectado no disco por qualquer um dos globs de `detect`. */

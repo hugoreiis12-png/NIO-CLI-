@@ -3,9 +3,9 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { backupFile, readJson, writeJson, readToml, writeToml } from './file-merge.js';
-import { brand, envName } from '../brand.js';
-import type { McpSpec } from '../core/environment.js';
+import { backupFile, readJson, writeJson, readToml, writeToml } from '../file-merge.js';
+import { brand, envName } from '../../brand.js';
+import type { McpSpec } from '../../core/environment.js';
 
 const MCP_COMMAND = brand.mcpBinName;
 

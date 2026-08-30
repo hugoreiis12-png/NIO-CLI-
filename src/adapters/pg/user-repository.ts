@@ -1,6 +1,6 @@
 /**
  * Implementação Postgres do `UserRepository` (port em `core/repositories.ts`).
- * Usa o Pool único de `./client` e o hashing argon2id de `lib/password`.
+ * Usa o Pool único de `./client` e o hashing argon2id de `lib/auth/password`.
  *
  * Segurança: `password` e `backup_codes` (hashes) nunca saem daqui nas entidades
  * — `UserCli` não os carrega; `getBackupCodes` é a única porta pros de backup.
@@ -8,7 +8,7 @@
  */
 import type { UserCli } from '../../core/types.js';
 import type { NewUserInput, UserRepository } from '../../core/repositories.js';
-import { hashPassword, verifyPassword } from '../../lib/password.js';
+import { hashPassword, verifyPassword } from '../../lib/auth/password.js';
 import { query } from './client.js';
 
 /** Colunas cruas de `user_cli` (snake_case) — inclui hashes, uso interno só. */

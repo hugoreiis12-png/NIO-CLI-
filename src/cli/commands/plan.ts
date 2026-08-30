@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { existsSync } from "node:fs";
-import { runPlan } from "../../lib/plan-delegate.js";
-import { ENGINES, PLAN_ENGINE, parseEngine } from "../../lib/exec-engines.js";
+import { runPlan } from "../../lib/exec/plan-delegate.js";
+import { ENGINES, PLAN_ENGINE, parseEngine } from "../../lib/exec/exec-engines.js";
 
 /**
  * Superfície de CLI do planejamento headless — mesmo contrato do `exec`:

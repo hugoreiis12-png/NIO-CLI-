@@ -5,10 +5,10 @@
  */
 import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { brand, homePath } from '../brand.js';
-import { closePool, ping } from '../adapters/pg/client.js';
-import { input, password, confirm } from './prompts.js';
-import { c, sym, box, cmd } from './colors.js';
+import { brand, homePath } from '../../brand.js';
+import { closePool, ping } from '../../adapters/pg/client.js';
+import { input, password, confirm } from '../prompts.js';
+import { c, sym, box, cmd } from '../colors.js';
 
 export const CONFIG_FILE = homePath('config.env');
 const PG_URL = /^postgres(ql)?:\/\/.+/i;

@@ -1,7 +1,7 @@
 // `nio open` — abre a IDE da sessão ativa na pasta do projeto (Sprint 2.2).
 // Contrapartida manual da abertura automática no fim do `nio init`.
 import type { Command } from "commander";
-import { loadSession } from "../../lib/session-store.js";
+import { loadSession } from "../../lib/auth/session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { createIdeGateway } from "../../adapters/ide/ide-gateway.js";
 import { c, sym } from "../../lib/colors.js";

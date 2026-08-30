@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Profile } from '../../core/types.js';
 import type { EnvironmentRecipe, RecipeCatalog } from '../../core/environment.js';
-import { skillsDir, parseFrontmatter } from '../../lib/skills.js';
+import { skillsDir, parseFrontmatter } from '../../lib/skills/skills.js';
 
 const PROFILES = new Set<Profile>(['fullstack', 'analyst', 'scientist', 'dba', 'qa', 'bi']);
 

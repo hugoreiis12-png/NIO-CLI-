@@ -3,7 +3,7 @@
  * security …` falam com o Gateway pelo túnel HTTP (via Kong). Loopback only
  * (127.0.0.1), mesma máquina do usuário.
  */
-import { GATEWAY_URL } from '../gateway/config.js';
+import { GATEWAY_URL } from '../../gateway/config.js';
 import { getOrCreateGatewayToken } from './gateway-token.js';
 
 /** Sessão emitida — a CLI grava isto em `~/.nio/session.json`. */

@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import { DependencyWatcher } from './dependency-watcher.js';
 import type { DependencyEventRepository } from '../core/repositories.js';
 import type { Session, DependencyEvent } from '../core/types.js';
-import type { ScannedDependency } from '../lib/dependency-scan.js';
+import type { ScannedDependency } from '../lib/deps/dependency-scan.js';
 
 const session: Session = {
   id: 's1',

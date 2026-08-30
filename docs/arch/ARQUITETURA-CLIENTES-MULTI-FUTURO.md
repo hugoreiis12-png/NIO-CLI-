@@ -68,7 +68,7 @@ prompt de escolha e override.
 
 ### A1 — Reativar o Codex no registro de clientes
 
-`src/lib/client-install.ts`: adicionar `codex` a `CLIENTS`:
+`src/lib/clients/client-install.ts`: adicionar `codex` a `CLIENTS`:
 ```ts
 codex: { id: 'codex', label: 'Codex CLI', binary: 'codex', npm: '@openai/codex', url: 'https://developers.openai.com/codex/cli' }
 ```
@@ -84,7 +84,7 @@ export interface PrimaryDetection { chosen: PrimaryClient | null; installed: Pri
 /** Detecta pelo PATH (`isBinaryInstalled`, injetável); override NIO_PRIMARY_CLIENT (só vale se o binário existir). */
 export function detectPrimaryClient(hint?, isInstalled = isBinaryInstalled): PrimaryDetection
 ```
-Reusa `isBinaryInstalled` (`src/lib/client-install.ts`) e `env('PRIMARY_CLIENT')`.
+Reusa `isBinaryInstalled` (`src/lib/clients/client-install.ts`) e `env('PRIMARY_CLIENT')`.
 
 ### A3 — `nio init` usa o primário detectado
 
@@ -95,13 +95,13 @@ Reusa `isBinaryInstalled` (`src/lib/client-install.ts`) e `env('PRIMARY_CLIENT')
 - **`src/cli/commands/init/clients-step.ts`**: sai o checkbox de 1 opção; entra
   `installPrimaryClient(primary, profileMcps)` → `installOpencodeGlobal` **ou**
   `installCodexGlobal`.
-- **`src/lib/client-configs.ts`**: `planCodexUpdate` ganha `profileMcps: McpSpec[]`
+- **`src/lib/clients/client-configs.ts`**: `planCodexUpdate` ganha `profileMcps: McpSpec[]`
   (paridade com `planOpencodeUpdate`); cada spec vira `mcp_servers.<id>` no
   `config.toml`. + `codexMcpEntry`, `codexGlobalPath`.
 - **`src/cli/commands/init/index.ts`**: `resolveProvisionTargets(primary)` →
   `targetForPrimary(primary)` (`opencodeTarget` **ou** `codexTarget` — `toCodexDocs`
   já traduz); `handoffToOperator(primary)` spawna o binário do primário.
-- **`src/lib/targets.ts`**: `ALL_TARGETS` dinâmico; `targetForPrimary()`;
+- **`src/lib/clients/targets.ts`**: `ALL_TARGETS` dinâmico; `targetForPrimary()`;
   `detectConfiguredTargets` checa `~/.codex/config.toml` também.
 
 ### A4 — Persistência do primário (per-máquina)
@@ -120,8 +120,8 @@ detectado, instalados, hint, override. Placeholder pros subcomandos `next` /
 ### A — Arquivos
 
 **Novos:** `src/lib/primary-client.ts` (+ teste), `src/cli/commands/agent.ts`.
-**Editar:** `src/lib/client-install.ts`, `src/lib/client-configs.ts`,
-`src/lib/targets.ts`, `src/lib/autopull.ts`, `src/cli/flows/clients.ts`,
+**Editar:** `src/lib/clients/client-install.ts`, `src/lib/clients/client-configs.ts`,
+`src/lib/clients/targets.ts`, `src/lib/clients/autopull.ts`, `src/cli/flows/clients.ts`,
 `src/cli/commands/init/clients-step.ts`, `src/cli/commands/init/provision-step.ts`,
 `src/cli/commands/init/index.ts`, `src/config.ts`, `src/cli.ts`,
 `scripts/gen-reference.ts`, `README.md`, `docs/PROGRESSO.md`.

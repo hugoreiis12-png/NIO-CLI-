@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { resolveProvisionTargets } from "./provision-step.js";
-import { opencodeTarget } from "../../../lib/targets.js";
+import { opencodeTarget } from "../../../lib/clients/targets.js";
 import type { ClientChoice } from "./clients-step.js";
 
 // ponytail: só a decisão pura de "quais targets provisionar" — o provision()

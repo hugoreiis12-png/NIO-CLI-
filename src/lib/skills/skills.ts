@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { join, relative, sep, dirname } from 'node:path';
 import { skillsCacheDir, skillsCached } from './skills-cache.js';
 import { includePath, type Selection } from './sections.js';
-import { brand, env } from '../brand.js';
+import { brand, env } from '../../brand.js';
 
 /**
  * Lê o pacote `@nio-cli/skills` (skills / commands / agents / dependencies) e produz

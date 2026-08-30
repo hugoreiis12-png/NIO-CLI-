@@ -2,7 +2,7 @@
 // Superfície fina sobre o `SessionManager` (app layer) — a lógica de resolução por
 // prefixo de UUID e a invariante 1-ativa-por-usuário vivem lá.
 import type { Command } from "commander";
-import { loadSession } from "../../lib/session-store.js";
+import { loadSession } from "../../lib/auth/session-store.js";
 import {
   SessionManager,
   SessionNotFoundError,

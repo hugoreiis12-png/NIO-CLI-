@@ -2,9 +2,9 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { skillsDir } from './skills.js';
-import { homePath } from '../brand.js';
-import { HARNESS_RULES_REL, HARNESS_PATTERNS_REL } from './harness.js';
+import { skillsDir } from '../skills/skills.js';
+import { homePath } from '../../brand.js';
+import { HARNESS_RULES_REL, HARNESS_PATTERNS_REL } from '../clients/harness.js';
 import {
   DEFAULT_ENGINE,
   engineArgs,

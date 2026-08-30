@@ -8,7 +8,7 @@ import {
   resolveEngineBin,
   type Engine,
 } from './exec-engines.js';
-import { HARNESS_RULES_REL } from './harness.js';
+import { HARNESS_RULES_REL } from '../clients/harness.js';
 
 /**
  * Planejamento headless: roda o engine pensante sobre a raiz do projeto e escreve um

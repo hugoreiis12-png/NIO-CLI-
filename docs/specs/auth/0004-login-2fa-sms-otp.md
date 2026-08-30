@@ -102,5 +102,5 @@ fator segue funcionando).
 
 `UserRepository.verifyCredentials` (0001), `AuthSessionRepository` (0002),
 `authenticate()` middleware (0002), `logRequest`/edge-filter (0002/0003),
-`lib/password` (argon2id), `lib/gateway-token` (`X-Nio-Gateway-Token`), Kong
+`lib/auth/password` (argon2id), `lib/auth/gateway-token` (`X-Nio-Gateway-Token`), Kong
 rate-limiting (`kong/kong.yml`).

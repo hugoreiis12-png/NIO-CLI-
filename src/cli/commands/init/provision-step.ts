@@ -1,9 +1,9 @@
-import { claudeTarget, opencodeTarget, type ProvisionTarget } from "../../../lib/targets.js";
-import { provision } from "../../../lib/provision.js";
-import { provisionHooks } from "../../../lib/hooks.js";
-import { fetchSkills } from "../../../lib/skills-cache.js";
+import { claudeTarget, opencodeTarget, type ProvisionTarget } from "../../../lib/clients/targets.js";
+import { provision } from "../../../lib/provision/provision.js";
+import { provisionHooks } from "../../../lib/clients/hooks.js";
+import { fetchSkills } from "../../../lib/skills/skills-cache.js";
 import { c } from "../../../lib/colors.js";
-import { startSpinner } from "../../../spinner.js";
+import { startSpinner } from "../../../lib/spinner.js";
 import { printProvisionResult, printHookResult } from "../../ui/render.js";
 import { SyncReport, summarizeProvision } from "../../ui/report.js";
 import { track, provisionedItems } from "../../../lib/telemetry.js";

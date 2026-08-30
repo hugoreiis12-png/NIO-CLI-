@@ -1,5 +1,5 @@
 import { checkbox, select } from "../../lib/prompts.js";
-import { skillsDir } from "../../lib/skills.js";
+import { skillsDir } from "../../lib/skills/skills.js";
 import {
   discoverRoles,
   discoverAreas,
@@ -7,7 +7,7 @@ import {
   DEV_ROLE,
   GENERAL,
   type Selection,
-} from "../../lib/sections.js";
+} from "../../lib/skills/sections.js";
 import { c, sym, section } from "../../lib/colors.js";
 
 const ROLE_LABELS: Record<string, string> = { dev: "Desenvolvedor", management: "Gestão" };

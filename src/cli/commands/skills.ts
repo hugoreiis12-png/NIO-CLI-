@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { brand } from "../../brand.js";
-import { readSkillDocs } from "../../lib/skills.js";
+import { readSkillDocs } from "../../lib/skills/skills.js";
 
 export function registerSkillsCommands(program: Command): void {
   const skills = program

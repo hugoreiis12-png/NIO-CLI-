@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { existsSync } from "node:fs";
-import { runValidatePlan } from "../../lib/validate-plan-delegate.js";
-import { ENGINES, PLAN_ENGINE, parseEngine } from "../../lib/exec-engines.js";
+import { runValidatePlan } from "../../lib/exec/validate-plan-delegate.js";
+import { ENGINES, PLAN_ENGINE, parseEngine } from "../../lib/exec/exec-engines.js";
 
 /**
  * Superfície de CLI da triagem — mesmo contrato do `plan`/`exec`:

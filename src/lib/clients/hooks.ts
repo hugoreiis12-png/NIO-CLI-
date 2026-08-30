@@ -7,11 +7,11 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { readJson, writeJson } from './file-merge.js';
-import { skillsDir } from './skills.js';
-import { ensureDir } from './provision.js';
-import { DEV_ROLE, type Selection } from './sections.js';
-import { brand } from '../brand.js';
+import { readJson, writeJson } from '../file-merge.js';
+import { skillsDir } from '../skills/skills.js';
+import { ensureDir } from '../provision/provision.js';
+import { DEV_ROLE, type Selection } from '../skills/sections.js';
+import { brand } from '../../brand.js';
 
 /**
  * Provisionamento de hooks (só Claude Code). Um hook é um script + um gatilho que

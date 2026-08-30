@@ -90,7 +90,7 @@ flowchart TD
 | **Validator** | Código próprio, já existe | Confere se o usuário tem cadastro ativo em `user_cli` | ✅ `UserRepository.findByName` |
 | **Confronto de senha** | Código próprio, já existe | Verifica a senha contra o hash argon2id | ✅ `UserRepository.verifyCredentials` — anti-enumeração embutida |
 | **2º fator (SMS)** | Ferramenta adotada — **Twilio Verify** | Gera, envia e valida o código OTP; guarda o estado do código do lado deles, não do nosso | ❌ Conta/credenciais Twilio ainda não existem |
-| **Sessão local** | Código próprio, já existe | `~/.nio/session.json` + `user_cli.token_session` | ✅ `src/lib/session-store.ts` |
+| **Sessão local** | Código próprio, já existe | `~/.nio/session.json` + `user_cli.token_session` | ✅ `src/lib/auth/session-store.ts` |
 
 Legenda: ✅ implementado e testado · 🟡 scaffold/esqueleto existe, lógica principal falta · ❌ não existe nada ainda
 

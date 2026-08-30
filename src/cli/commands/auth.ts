@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { input, password } from "../../lib/prompts.js";
 import { brand } from "../../brand.js";
 import { renderMatrixLogo } from "../../matrix-logo.js";
-import { startSpinner } from "../../spinner.js";
+import { startSpinner } from "../../lib/spinner.js";
 import { c, sym } from "../../lib/colors.js";
 import { createUserRepository } from "../../adapters/pg/user-repository.js";
 import {
@@ -10,9 +10,9 @@ import {
   gatewayLogout,
   gatewayVerify2fa,
   type GatewaySession,
-} from "../../lib/gateway-client.js";
-import { loadSession, saveSession, clearSession } from "../../lib/session-store.js";
-import { ensureConfig } from "../../lib/nio-config.js";
+} from "../../lib/auth/gateway-client.js";
+import { loadSession, saveSession, clearSession } from "../../lib/auth/session-store.js";
+import { ensureConfig } from "../../lib/auth/nio-config.js";
 import { authCopy } from "../copy.js";
 
 /**

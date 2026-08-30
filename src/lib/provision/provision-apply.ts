@@ -2,8 +2,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, lstatSync, 
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { VERSION } from "../version.js";
-import { brand } from "../brand.js";
+import { VERSION } from "../../version.js";
+import { brand } from "../../brand.js";
 
 /**
  * Motor do provisionamento: hash/manifesto (`.<marca>-provision.json`), escrita

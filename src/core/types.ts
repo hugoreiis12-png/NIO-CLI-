@@ -42,7 +42,7 @@ export interface EnvironmentConfig {
 
 /**
  * `user_cli` — usuário autenticado na CLI. **Nunca** carrega o hash de senha:
- * o `password` fica confinado ao adapter (verificação via `lib/password`).
+ * o `password` fica confinado ao adapter (verificação via `lib/auth/password`).
  */
 export interface UserCli {
   id: number;

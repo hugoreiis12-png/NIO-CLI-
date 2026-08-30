@@ -9,8 +9,8 @@ import {
   type ProjectConfig,
 } from "../../../config.js";
 import { brand } from "../../../brand.js";
-import { concatenateRules } from "../../../lib/rules.js";
-import { writeRepoHarness } from "../../../lib/harness.js";
+import { concatenateRules } from "../../../lib/skills/rules.js";
+import { writeRepoHarness } from "../../../lib/clients/harness.js";
 import { printHarnessResult } from "../../ui/render.js";
 import { initCopy } from "../../copy.js";
 

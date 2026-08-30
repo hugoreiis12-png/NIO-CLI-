@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
-import { brand } from "../brand.js";
-import { claudeTarget, type ProvisionTarget } from "./targets.js";
-import { filterDocsForSurface, skillsDir } from "./skills.js";
-import { filterForSelection, flattenSelection, type Selection } from "./sections.js";
+import { brand } from "../../brand.js";
+import { claudeTarget, type ProvisionTarget } from "../clients/targets.js";
+import { filterDocsForSurface, skillsDir } from "../skills/skills.js";
+import { filterForSelection, flattenSelection, type Selection } from "../skills/sections.js";
 import { collectSkillFiles } from "./provision-collect.js";
 import { applyProvision, type ProvisionOptions, type ProvisionResult } from "./provision-apply.js";
 

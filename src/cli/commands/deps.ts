@@ -2,7 +2,7 @@
 // da sessão ativa, registra eventos e (opt-in) instala. `scan` = um ciclo; `watch`
 // = loop de 10s até Ctrl+C. Auto-install só com `--install` (decisão de escopo).
 import type { Command } from "commander";
-import { loadSession } from "../../lib/session-store.js";
+import { loadSession } from "../../lib/auth/session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { createDependencyEventRepository } from "../../adapters/pg/dependency-event-repository.js";
 import { DependencyWatcher, type TickResult } from "../../app/dependency-watcher.js";

@@ -1,7 +1,7 @@
 import { checkbox } from "../../../lib/prompts.js";
 import { section } from "../../../lib/colors.js";
-import { CLIENTS } from "../../../lib/client-install.js";
-import { installOpencodeGlobal, type InstallResult } from "../../../lib/client-configs.js";
+import { CLIENTS } from "../../../lib/clients/client-install.js";
+import { installOpencodeGlobal, type InstallResult } from "../../../lib/clients/client-configs.js";
 import { printInstallResult } from "../../ui/render.js";
 import { ensureClientInstalled } from "../../flows/clients.js";
 import { initCopy } from "../../copy.js";

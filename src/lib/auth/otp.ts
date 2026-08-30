@@ -4,7 +4,7 @@
  * basta pra código de vida curta e rate-limitado). Ver spec 0004.
  */
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
-import { getJwtSecret } from '../gateway/config.js';
+import { getJwtSecret } from '../../gateway/config.js';
 
 /** Código numérico de 6 dígitos (com zeros à esquerda). */
 export function generateOtp(): string {

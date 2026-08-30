@@ -1,12 +1,12 @@
 import type { Command } from "commander";
 import { brand } from "../../brand.js";
 import { existsSync } from "node:fs";
-import { runExec, getJob } from "../../lib/exec-delegate.js";
+import { runExec, getJob } from "../../lib/exec/exec-delegate.js";
 import {
   ENGINES,
   DEFAULT_ENGINE,
   parseEngine,
-} from "../../lib/exec-engines.js";
+} from "../../lib/exec/exec-engines.js";
 
 /**
  * Superfície de CLI da delegação headless — o que o nio Studio (Tauri) chama.

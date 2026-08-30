@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { readSkillDocs } from "../../lib/skills.js";
+import { readSkillDocs } from "../../lib/skills/skills.js";
 import { section, c, sym } from "../../lib/colors.js";
 import { brand } from "../../brand.js";
 

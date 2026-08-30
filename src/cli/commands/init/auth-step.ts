@@ -1,4 +1,4 @@
-import { loadSession, type StoredSession } from "../../../lib/session-store.js";
+import { loadSession, type StoredSession } from "../../../lib/auth/session-store.js";
 import { brand } from "../../../brand.js";
 import { box, c, sym, cmd } from "../../../lib/colors.js";
 

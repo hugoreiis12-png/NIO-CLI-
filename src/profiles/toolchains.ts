@@ -2,7 +2,7 @@
  * Toolchains reutilizados por vários perfis.
  *
  * NOTA: `detect` usa paths absolutos Unix. No Windows o `globExists`
- * (`lib/dependency-install`) tem limitação conhecida com paths absolutos
+ * (`lib/deps/dependency-install`) tem limitação conhecida com paths absolutos
  * (drive letter) — o toolchain sai como `failed` (aviso, NÃO-fatal: o ambiente
  * é incremental). Sem `install` universal (varia demais por SO), estes são
  * detectáveis mas não auto-instaláveis — orienta em vez de instalar.

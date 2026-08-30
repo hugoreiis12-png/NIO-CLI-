@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import type { SkillDoc } from './skills.js';
-import { homePath } from '../brand.js';
+import type { SkillDoc } from '../skills/skills.js';
+import { homePath } from '../../brand.js';
 
 /**
  * Resolve dependências (docs `dependency`) num plano; o IO vive em `dependency-install.ts`
@@ -197,7 +197,7 @@ function parseDetect(value?: string): string[] | undefined {
 
 // Checagem de "já instalado", execução do plano e o marcador de instalações são
 // IO puro — vivem em `dependency-install.ts`. Reexportado daqui pra manter o
-// import único (`from '../lib/dependencies.js'`) pro resto da CLI.
+// import único (`from './dependencies.js'`) pro resto da CLI.
 export {
   recordDependencyInstalled,
   isDependencyInstalled,

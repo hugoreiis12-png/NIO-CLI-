@@ -4,7 +4,7 @@
  * `cluster` (compose/create são wrapper determinístico). Ver ARQUITETURA-DOCKER.md.
  */
 import { spawn } from 'node:child_process';
-import { NIO_OPERATOR_MODEL } from '../lib/client-configs.js';
+import { NIO_OPERATOR_MODEL } from '../lib/clients/client-configs.js';
 import { CLUSTER_STACK } from '../lib/docker.js';
 import type { ClusterState, DockerGateway } from '../core/docker.js';
 import type { Session } from '../core/types.js';

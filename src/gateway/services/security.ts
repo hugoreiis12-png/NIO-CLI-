@@ -8,13 +8,13 @@ import type { SmsSender } from '../../core/messaging.js';
 import { createUserRepository } from '../../adapters/pg/user-repository.js';
 import { createLoginChallengeRepository } from '../../adapters/pg/login-challenge-repository.js';
 import { createHttpSmsSender } from '../../adapters/sms/http-generic.js';
-import { generateOtp, hashOtp, verifyOtp } from '../../lib/otp.js';
+import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
 import {
   generateBackupCodes,
   verifyBackupCode,
   markUsed,
   countRemaining,
-} from '../../lib/backup-codes.js';
+} from '../../lib/auth/backup-codes.js';
 import { challengeUsable, maskPhone, OTP_TTL_MS, OTP_MAX_ATTEMPTS } from './login.js';
 
 export interface SecurityDeps {

@@ -21,7 +21,7 @@ import { createUserRepository } from '../../../adapters/pg/user-repository.js';
 import { createSessionRepository } from '../../../adapters/pg/session-repository.js';
 import { query, closePool } from '../../../adapters/pg/client.js';
 import { EnvironmentBuilder } from '../../../app/environment-builder.js';
-import { installOpencodeGlobal, NIO_OPERATOR_MODEL } from '../../../lib/client-configs.js';
+import { installOpencodeGlobal, NIO_OPERATOR_MODEL } from '../../../lib/clients/client-configs.js';
 
 const hasDb = Boolean(process.env.NIO_DATABASE_URL);
 const dbTest = hasDb ? test : test.skip;

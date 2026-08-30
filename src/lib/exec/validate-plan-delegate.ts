@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { brand } from '../brand.js';
+import { brand } from '../../brand.js';
 import { readFileSync } from 'node:fs';
 import { planPath, stripFence } from './plan-delegate.js';
 import {
@@ -9,7 +9,7 @@ import {
   resolveEngineBin,
   type Engine,
 } from './exec-engines.js';
-import { HARNESS_RULES_REL } from './harness.js';
+import { HARNESS_RULES_REL } from '../clients/harness.js';
 
 /**
  * Triagem headless: roda o engine pensante sobre o `plan.md` + o repo e devolve um

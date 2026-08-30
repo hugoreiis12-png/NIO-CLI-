@@ -8,11 +8,11 @@ import {
   highlightInlineCode,
 } from "../../lib/colors.js";
 import { brand } from "../../brand.js";
-import { type InstallResult } from "../../lib/client-configs.js";
-import { type ProvisionResult } from "../../lib/provision.js";
-import { type HookProvisionResult } from "../../lib/hooks.js";
-import { type ResolvedDependency } from "../../lib/dependencies.js";
-import { HARNESS_RULES_REL } from "../../lib/harness.js";
+import { type InstallResult } from "../../lib/clients/client-configs.js";
+import { type ProvisionResult } from "../../lib/provision/provision.js";
+import { type HookProvisionResult } from "../../lib/clients/hooks.js";
+import { type ResolvedDependency } from "../../lib/deps/dependencies.js";
+import { HARNESS_RULES_REL } from "../../lib/clients/harness.js";
 
 export function printInstallResult(label: string, result: InstallResult): void {
   const at = (p: string) => c.dim(p);

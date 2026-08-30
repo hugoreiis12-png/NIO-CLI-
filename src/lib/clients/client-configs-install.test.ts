@@ -9,7 +9,7 @@ import {
   planOpencodeUpdate,
   NIO_OPERATOR_MODEL,
 } from './client-configs.js';
-import { envName } from '../brand.js';
+import { envName } from '../../brand.js';
 
 // Cobertura que faltava: `client-configs.test.ts` só cobre readCoAuthoredBy/disableCoAuthoredBy.
 // installClaudeCodeRepo/installVSCodeRepo recebem `cwd` explícito — testáveis sem tocar $HOME.

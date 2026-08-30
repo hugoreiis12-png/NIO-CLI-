@@ -13,7 +13,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile, chmod } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { homePath } from '../brand.js';
+import { homePath } from '../../brand.js';
 
 export const GATEWAY_TOKEN_FILE = homePath('gateway.token');
 

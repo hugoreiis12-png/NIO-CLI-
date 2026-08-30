@@ -11,11 +11,11 @@
  */
 import type { Session, DependencyEvent, DependencyType } from '../core/types.js';
 import type { DependencyEventRepository } from '../core/repositories.js';
-import type { ScannedDependency } from '../lib/dependency-scan.js';
-import type { InstallOutcome } from '../lib/dependencies.js';
-import { scanProject } from '../lib/dependency-scan.js';
-import { isInstalled, missingDependencies } from '../lib/dependency-installed.js';
-import { installProjectDeps } from '../lib/dependency-install-project.js';
+import type { ScannedDependency } from '../lib/deps/dependency-scan.js';
+import type { InstallOutcome } from '../lib/deps/dependencies.js';
+import { scanProject } from '../lib/deps/dependency-scan.js';
+import { isInstalled, missingDependencies } from '../lib/deps/dependency-installed.js';
+import { installProjectDeps } from '../lib/deps/dependency-install-project.js';
 
 /** Seams de IO (default = implementações reais); injetadas nos testes. */
 export interface WatcherDeps {

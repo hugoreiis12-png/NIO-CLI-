@@ -8,7 +8,7 @@
 >
 > **Achado ao levantar este documento**: a base já existe. Uma decisão
 > anterior, de **27 jul 2026**, já tinha restringido a superfície ativa a só
-> OpenCode (`src/lib/targets.ts`: `ALL_TARGETS = [opencodeTarget]`;
+> OpenCode (`src/lib/clients/targets.ts`: `ALL_TARGETS = [opencodeTarget]`;
 > `ensureCoreClients` só checa OpenCode). O que é novo aqui é: travar o
 > **modelo** (não só o cliente), fazer o `init` terminar **dentro** de uma
 > sessão viva (não só configurar e devolver o prompt), e o repo de skills
@@ -34,10 +34,10 @@ segundo o que foi dito) — não é uma reabertura da escolha de cliente externo
 
 | Peça | Estado |
 |---|---|
-| `ALL_TARGETS = [opencodeTarget]` (`src/lib/targets.ts`) | ✅ Só OpenCode é alvo de provisionamento — decisão de 27 jul 2026 |
+| `ALL_TARGETS = [opencodeTarget]` (`src/lib/clients/targets.ts`) | ✅ Só OpenCode é alvo de provisionamento — decisão de 27 jul 2026 |
 | `ensureCoreClients` (`src/cli/flows/clients.ts`) | ✅ Só checa/instala OpenCode |
 | `promptClientChoices` (`clients-step.ts`) | ✅ Checkbox já só oferece "OpenCode (global)" |
-| `installOpencodeGlobal()` (`src/lib/client-configs.ts`) | ✅ Escreve `~/.config/opencode/opencode.json` com `mcp.nio` apontando pro binário `nio-cli`, `NIO_CLIENT=opencode` |
+| `installOpencodeGlobal()` (`src/lib/clients/client-configs.ts`) | ✅ Escreve `~/.config/opencode/opencode.json` com `mcp.nio` apontando pro binário `nio-cli`, `NIO_CLIENT=opencode` |
 | `opencodeTarget.mapDocs` | ✅ Reaproveita o layout cru do pacote de skills (mesmo formato do Claude Code, sem tradução) |
 | Filtro de skill por `clients:` (`surface: 'opencode'`) | 🟡 O mecanismo existe, mas tem um bug (ver abaixo) |
 | **Modelo travado em `opencode.json`** | ❌ Não existe — `installOpencodeGlobal()` não escreve a chave `model` |
@@ -46,7 +46,7 @@ segundo o que foi dito) — não é uma reabertura da escolha de cliente externo
 
 ## Bug real encontrado no caminho
 
-`src/lib/skills.ts`:
+`src/lib/skills/skills.ts`:
 ```ts
 export const KNOWN_CLIENTS = ['claude-code', 'codex', 'cowork'] as const;
 ```
@@ -110,10 +110,10 @@ perfil→MCPs é uma tarefa própria, maior, pra depois.
 Como `ALL_TARGETS` já só tem `opencodeTarget` desde 27 jul, isto já era
 verdade antes desta conversa — só reafirmando que segue valendo:
 
-- `claudeTarget`, `codexTarget` (`src/lib/targets.ts`) — definidos, fora da
+- `claudeTarget`, `codexTarget` (`src/lib/clients/targets.ts`) — definidos, fora da
   lista ativa.
 - `toCodexDocs`, `toCodexSkillContent`, `toCodexPromptContent`
-  (`src/lib/client-configs.ts`) — só usados por `codexTarget`, que está fora
+  (`src/lib/clients/client-configs.ts`) — só usados por `codexTarget`, que está fora
   de `ALL_TARGETS`.
 - `installCodexGlobal` e equivalente do Claude, se existirem — mesma
   situação.
@@ -142,6 +142,6 @@ Nenhum desses é urgente — não atrapalham nada rodando.
 
 ## Referências
 
-- `src/lib/targets.ts`, `src/lib/client-configs.ts`, `src/cli/commands/init/*` — código relevante hoje.
+- `src/lib/clients/targets.ts`, `src/lib/clients/client-configs.ts`, `src/cli/commands/init/*` — código relevante hoje.
 - [ADR 0004](../adr/0004-operador-ia-unico.md) — a decisão do operador único.
 - `docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md` — o desenho multi-cliente parkeado.

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { brand } from '../brand.js';
+import { brand } from '../../brand.js';
 import { dirname, join } from 'node:path';
 
 /**

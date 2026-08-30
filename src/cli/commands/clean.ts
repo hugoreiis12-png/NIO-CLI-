@@ -4,7 +4,7 @@ import { rmSync, lstatSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { confirm } from "../../lib/prompts.js";
-import { readSkillDocs } from "../../lib/skills.js";
+import { readSkillDocs } from "../../lib/skills/skills.js";
 import { c, sym } from "../../lib/colors.js";
 
 /**

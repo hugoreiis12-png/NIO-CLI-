@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, isAbsolute, parse } from 'node:path';
-import { homePath } from '../brand.js';
+import { homePath } from '../../brand.js';
 import type { DependencyPlan, ResolvedDependency } from './dependencies.js';
 
 /**

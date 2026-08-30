@@ -1,12 +1,12 @@
 import type { Command } from "commander";
 import { existsSync } from "node:fs";
 import { getProjectConfigPath, loadProjectConfig } from "../../config.js";
-import { loadSession } from "../../lib/session-store.js";
+import { loadSession } from "../../lib/auth/session-store.js";
 import { ping, closePool } from "../../adapters/pg/client.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
-import { isBinaryInstalled } from "../../lib/client-install.js";
-import { skillsCached } from "../../lib/skills-cache.js";
-import { opencodeGlobalPath } from "../../lib/client-configs.js";
+import { isBinaryInstalled } from "../../lib/clients/client-install.js";
+import { skillsCached } from "../../lib/skills/skills-cache.js";
+import { opencodeGlobalPath } from "../../lib/clients/client-configs.js";
 import { section, c, sym } from "../../lib/colors.js";
 import { brand } from "../../brand.js";
 

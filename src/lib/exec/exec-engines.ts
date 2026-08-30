@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { envName } from '../brand.js';
+import { envName } from '../../brand.js';
 
 /**
  * Registro central dos engines da delegação headless. É o **único** lugar que conhece

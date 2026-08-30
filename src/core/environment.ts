@@ -28,7 +28,7 @@ export interface ToolchainSpec {
   id: string;
   /**
    * Globs — se qualquer um existir, o toolchain é considerado presente (não
-   * reinstala). Mesmo mecanismo do `detect:` de dependências (`lib/dependencies`).
+   * reinstala). Mesmo mecanismo do `detect:` de dependências (`lib/deps/dependencies`).
    */
   detect?: string[];
   /**
