@@ -7,11 +7,9 @@ import { join } from 'node:path';
  * e os docs .md que citam tools literalmente (CLAUDE.md, SKILL.md, docs/specs/**\/*.md, e o `brand.skillsRepo` externo).
  * A tabela de tools do README é GERADA — depois de editar aqui, rode `bun run gen:docs`.
  *
- * Rebrand NIO (docs/specs/rebrand/0005-noclaf-to-nio.md): sem compat com o nome antigo — nenhum
- * fallback de `NOCLAF_*`/`~/.noclaf` no código. Duas pendências cross-sistema documentadas na
- * spec, não resolvidas só por este arquivo: `patPrefix` (backend precisa aceitar o prefixo novo
- * antes do deploy) e `webUrl` (auth desacoplada do domínio antigo — mecanismo definitivo em
- * docs/specs/auth/0002-cli-native-login.md, ainda em aberto).
+ * Rebrand NIO: sem compat com o nome antigo — nenhum fallback de `NOCLAF_*`/
+ * `~/.noclaf` no código. `webUrl` fica vazio: a auth v2 é por senha + `nio-gateway`,
+ * sem domínio externo.
  */
 export const brand = {
   // --- Identidade / display ---
@@ -35,10 +33,8 @@ export const brand = {
 
   // --- URLs / endpoints ---
   /**
-   * Base do app web — DESACOPLADA por decisão do rebrand: a CLI não depende mais de um
-   * domínio externo pra autenticação. Vazio até `docs/specs/auth/0002-cli-native-login.md`
-   * definir o mecanismo; os pontos de uso (`cli/commands/auth.ts`, `init/auth-step.ts`) já
-   * tratam string vazia sem imprimir link quebrado.
+   * Base do app web — vazia de propósito: a auth v2 é por senha + `nio-gateway`,
+   * a CLI não depende de domínio externo. Os pontos de uso tratam string vazia.
    */
   webUrl: '',
 

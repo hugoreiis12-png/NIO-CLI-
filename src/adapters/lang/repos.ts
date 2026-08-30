@@ -1,7 +1,7 @@
 /**
  * Os 5 repos que o `nio-lang` centraliza (fetch-cache em `~/.nio/lang/<dir>`).
  * Fonte única do mapeamento linguagem → repo/dir/ref — usado pelo `vendor`
- * (baixa) e pelo `knowledge-store` (lê). Ver `docs/v2/ARQUITETURA-NIO-LANG.md`.
+ * (baixa) e pelo `knowledge-store` (lê). Ver `docs/arch/ARQUITETURA-NIO-LANG.md`.
  */
 import type { LanguageId } from '../../core/lang.js';
 

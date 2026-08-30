@@ -6,7 +6,7 @@
  * GATE DE SEGURANÇA: nunca aplica sem passar pelo dry-run + confirm. A função de
  * confirmação é injetável (o wizard passa o prompt real; os testes passam um fake).
  *
- * Ver `docs/v2/ARQUITETURA-NIO-LANG.md` (fatia 4b).
+ * Ver `docs/arch/ARQUITETURA-NIO-LANG.md` (fatia 4b).
  */
 import type {
   LanguageId,

@@ -151,7 +151,7 @@ Cada passo termina com `bunx tsc --noEmit` limpo e `bun test` verde.
    toolchain**. É o passo de maior risco (instala software de verdade) — isolá-lo.
 5. **envVars/aliases → dotfiles/shell** — fase 3, menor prioridade.
 6. Completar os 6 perfis no catálogo.
-7. Atualizar `docs/v2/PROGRESSO.md` a cada fatia entregue.
+7. Atualizar `docs/PROGRESSO.md` a cada fatia entregue.
 
 ## Questões em aberto
 
@@ -176,10 +176,8 @@ Cada passo termina com `bunx tsc --noEmit` limpo e `bun test` verde.
 
 ## Referências
 
-- `docs/v2/ARQUITETURA-CLIENTE-IA.md` — operador fixo (OpenCode/big-pickle),
+- `docs/arch/ARQUITETURA-CLIENTE-IA.md` — operador fixo (OpenCode/big-pickle),
   handoff do `init`; o `EnvironmentBuilder` roda antes do handoff.
-- `docs/v2/TASK-remocao-v1.md` — limpeza do v1; `project-step.ts` ficou órfão com
-  o redesenho do `init` (candidato a remoção, destrava o cluster Supabase).
 - `src/core/session.ts` (`EnvironmentConfig`), `src/core/repositories.ts`
   (`SessionRepository.updateConfig`), `src/lib/client-configs.ts`
   (`planOpencodeUpdate`), `src/lib/dependency-install.ts` (padrão de instalação).

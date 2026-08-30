@@ -1,7 +1,7 @@
 /**
  * Domínio de linguagens (v2) — vocabulário do `nio-lang` (MCP server nativo que
  * centraliza config/conhecimento de Python, TypeScript, Node.js, C# e n8n).
- * Sem IO aqui (regra do hexágono). Ver `docs/v2/ARQUITETURA-NIO-LANG.md`.
+ * Sem IO aqui (regra do hexágono). Ver `docs/arch/ARQUITETURA-NIO-LANG.md`.
  */
 
 /** Linguagens centralizadas pelo `nio-lang`. */

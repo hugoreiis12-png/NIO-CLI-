@@ -1,7 +1,7 @@
 /**
  * `nio docker *` — camada Docker. `toolkit`/`portainer` sobem a infra NIO;
  * `compose`/`create` são wrapper determinístico sobre `docker`; `debug`/`orquest`/
- * `cluster` fazem handoff pro operador de IA. Ver `docs/v2/ARQUITETURA-DOCKER.md`.
+ * `cluster` fazem handoff pro operador de IA. Ver `docs/arch/ARQUITETURA-DOCKER.md`.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";

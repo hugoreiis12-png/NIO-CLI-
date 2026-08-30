@@ -10,7 +10,7 @@ import { DOCKER_MCP_URL } from '../lib/docker.js';
  * `nio-lang` — MCP server nativo da CLI que centraliza conhecimento/config das
  * linguagens (Python/TS/Node/C#/n8n). É **base de TODO perfil** (entra no
  * `BASE_MCPS` do `EnvironmentBuilder`), no lugar que o context7 ocupava. Roda
- * como binário local da própria CLI. Ver `docs/v2/ARQUITETURA-NIO-LANG.md`.
+ * como binário local da própria CLI. Ver `docs/arch/ARQUITETURA-NIO-LANG.md`.
  */
 export const nioLangMcp: McpSpec = {
   id: 'nio-lang',
@@ -57,7 +57,7 @@ export const n8nMcp: McpSpec = {
 /**
  * Docker MCP Gateway — MCP **remoto** (container `nio-mcp-gateway` do
  * `docker/docker-compose.yml`, server `docker` do catálogo). Fora do `BASE_MCPS`:
- * opt-in via `nio docker toolkit up`. Ver `docs/v2/ARQUITETURA-DOCKER.md`.
+ * opt-in via `nio docker toolkit up`. Ver `docs/arch/ARQUITETURA-DOCKER.md`.
  */
 export const dockerGatewayMcp: McpSpec = {
   id: 'docker',

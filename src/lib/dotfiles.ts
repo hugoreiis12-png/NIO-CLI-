@@ -7,7 +7,7 @@
  * `# >>> nio managed >>>` / `# <<< nio managed <<<`, preservando o resto do
  * arquivo. Sem `envVars`/`aliases`, não escreve nada (`skipped`).
  *
- * Ver `docs/v2/ARQUITETURA-ENVIRONMENT-BUILDER.md` (Tarefa 5).
+ * Ver `docs/arch/ARQUITETURA-ENVIRONMENT-BUILDER.md` (Tarefa 5).
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';

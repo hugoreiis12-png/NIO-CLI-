@@ -124,7 +124,7 @@ detectado, instalados, hint, override. Placeholder pros subcomandos `next` /
 `src/lib/targets.ts`, `src/lib/autopull.ts`, `src/cli/flows/clients.ts`,
 `src/cli/commands/init/clients-step.ts`, `src/cli/commands/init/provision-step.ts`,
 `src/cli/commands/init/index.ts`, `src/config.ts`, `src/cli.ts`,
-`scripts/gen-reference.ts`, `README.md`, `docs/v2/PROGRESSO.md`.
+`scripts/gen-reference.ts`, `README.md`, `docs/PROGRESSO.md`.
 **Reusar:** `isBinaryInstalled`, `ensureClientInstalled`, `installCodexGlobal`,
 `codexTarget`/`toCodexDocs`, `planCodexUpdate`, `env()`/`envName()`.
 

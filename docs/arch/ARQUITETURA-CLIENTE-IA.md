@@ -122,9 +122,7 @@ verdade antes desta conversa — só reafirmando que segue valendo:
   a virar automático ("Configurando OpenCode automaticamente" em vez de um
   checkbox).
 
-Nenhum desses é urgente — não atrapalham nada rodando. Ficam registrados
-pra quando o segundo agente for limpar de vez (mesma lógica da
-`TASK-remocao-v1.md`).
+Nenhum desses é urgente — não atrapalham nada rodando.
 
 ## Questões em aberto
 
@@ -144,6 +142,6 @@ pra quando o segundo agente for limpar de vez (mesma lógica da
 
 ## Referências
 
-- `docs/v2/TASK-cliente-ia-fixo.md` — tarefas concretas pro segundo agente.
 - `src/lib/targets.ts`, `src/lib/client-configs.ts`, `src/cli/commands/init/*` — código relevante hoje.
-- `docs/v2/TASK-remocao-v1.md` — mesma convenção de tarefa incremental pro segundo agente, tema diferente (v1/Supabase).
+- [ADR 0004](../adr/0004-operador-ia-unico.md) — a decisão do operador único.
+- `docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md` — o desenho multi-cliente parkeado.

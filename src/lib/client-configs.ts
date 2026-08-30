@@ -243,7 +243,7 @@ interface OpencodeServerEntry {
 }
 
 /**
- * Modelo fixo do operador de IA embutido (ver `docs/v2/ARQUITETURA-CLIENTE-IA.md`).
+ * Modelo fixo do operador de IA embutido (ver `docs/arch/ARQUITETURA-CLIENTE-IA.md`).
  * É só um DEFAULT no `opencode.json` — o OpenCode não trava modelo de
  * verdade a nível de config de projeto/global (limitação documentada, não
  * finja que é um lock forte).

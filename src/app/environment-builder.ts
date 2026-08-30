@@ -11,7 +11,7 @@
  * `EnvironmentConfig` e volta como `EnsureResult { status: 'failed' }` pro
  * chamador avisar (o ambiente é incremental — a sessão já existe).
  *
- * Ver `docs/v2/ARQUITETURA-ENVIRONMENT-BUILDER.md` e `TASK-environment-builder.md`.
+ * Ver `docs/arch/ARQUITETURA-ENVIRONMENT-BUILDER.md`.
  */
 import type { Profile, EnvironmentConfig } from '../core/session.js';
 import type {

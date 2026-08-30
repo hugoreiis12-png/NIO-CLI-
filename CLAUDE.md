@@ -1,14 +1,13 @@
-# NIO-CLI — Guia para agentes (v2)
+# NIO-CLI — Guia para agentes
 
-> **O que o projeto é (v2):** um **orquestrador de ambientes de desenvolvimento**.
+> **O que o projeto é:** um **orquestrador de ambientes de desenvolvimento**.
 > O usuário escolhe um perfil, responde um wizard, e a CLI (com auxílio da IA via
 > MCP) materializa o ambiente: toolchains, linguagens, frameworks, dotfiles,
 > aliases e IDE. A entidade central é a **`Session`** (ambiente isolado, UUID,
-> persistido no Postgres). Documento de transição: `NIO-CLI-Transicao-v1-v2.md`.
+> persistido no Postgres). Histórico das decisões: `docs/PROGRESSO.md`.
 >
-> **Não é mais** o cliente do sistema NOS (tasks/sprints/ponto). Todo esse domínio
-> (Supabase, tools de tarefa/alocação, fluxo de ponto) está sendo removido na
-> migração v1 → v2. Não escreva código novo contra ele.
+> Nasceu de um cliente do sistema NOS (tasks/sprints/ponto, backend Supabase) —
+> todo esse domínio v1 já foi **removido**. Não escreva código novo contra ele.
 
 ## Runtime e stack
 

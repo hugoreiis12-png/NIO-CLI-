@@ -73,8 +73,8 @@ O contrato dos gateways de IO ("nunca lança", falha → `status`) é seguido pe
 
 ## Referências
 
-- `docs/v2/ARQUITETURA-DOCKER.md` — desenho detalhado.
+- `docs/arch/ARQUITETURA-DOCKER.md` — desenho detalhado.
 - `docker/docker-compose.yml`, `src/lib/docker.ts`, `src/core/docker.ts`,
   `src/adapters/docker/`, `src/app/docker-manager.ts`, `src/cli/commands/docker.ts`.
-- `docs/v2/ARQUITETURA-GATEWAY.md` — nota "MCP Gateway ≠ AI Gateway".
+- `docs/arch/ARQUITETURA-GATEWAY.md` — nota "MCP Gateway ≠ AI Gateway".
 - https://github.com/docker/mcp-gateway · https://docs.docker.com/ai/mcp-catalog-and-toolkit/

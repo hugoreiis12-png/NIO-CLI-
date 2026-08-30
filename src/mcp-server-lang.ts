@@ -6,7 +6,7 @@
  * repos). Scaffolding e mais tools vêm nas próximas fatias.
  *
  * Sem autenticação: serve conhecimento de linguagem (público, sem segredo) —
- * diferente do `nio` (mcp-server.ts), que exige JWT. Ver `docs/v2/ARQUITETURA-NIO-LANG.md`.
+ * diferente do `nio` (mcp-server.ts), que exige JWT. Ver `docs/arch/ARQUITETURA-NIO-LANG.md`.
  */
 import './lib/load-env.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';

@@ -5,7 +5,7 @@
  * `child_process`. O resultado RESOLVIDO da materialização é o `EnvironmentConfig`
  * (`core/session.ts`), que vai pro `sessions.config`.
  *
- * Ver `docs/v2/ARQUITETURA-ENVIRONMENT-BUILDER.md`.
+ * Ver `docs/arch/ARQUITETURA-ENVIRONMENT-BUILDER.md`.
  */
 import type { Profile, Ide } from './session.js';
 

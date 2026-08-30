@@ -11,11 +11,11 @@ created: 2026-08-29
 
 Em 27 jul 2026 a superfície ativa de clientes de IA já tinha sido restrita a só
 OpenCode (`ALL_TARGETS = [opencodeTarget]`, `ensureCoreClients` só checa OpenCode);
-em 24 ago 2026 (`docs/v2/ARQUITETURA-CLIENTE-IA.md`) fechou-se a decisão de a
+em 24 ago 2026 (`docs/arch/ARQUITETURA-CLIENTE-IA.md`) fechou-se a decisão de a
 NIO-CLI ser **autocontida** — `nio init` embute um operador fixo (OpenCode rodando
 `opencode/big-pickle`) e entrega o terminal pra ele no fim do wizard.
 
-Em 27 ago 2026 (commit `ffd13c3`, `docs/v2/PROGRESSO.md` — "Arquitetura de clientes
+Em 27 ago 2026 (commit `ffd13c3`, `docs/PROGRESSO.md` — "Arquitetura de clientes
 de IA, Parte A") começou uma evolução faseada: **Parte A** — `nio init` detecta
 **OpenCode ou Codex** no host e sobe o que existir, com `nio agent status`,
 tradução de config pro Codex e `handoffToOperator` dinâmico; **Partes B/C** (só
@@ -41,7 +41,7 @@ que a Parte A tinha "superado em parte").
   desde 27 jul) — não é apagado. A feature futura o reaproveita.
 - O trabalho da Parte A fica **preservado no histórico do git** (`ffd13c3`) e o
   desenho das 3 partes fica versionado em
-  `docs/v2/ARQUITETURA-CLIENTES-MULTI-FUTURO.md`.
+  `docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md`.
 
 ## Consequências
 
@@ -72,7 +72,7 @@ que a Parte A tinha "superado em parte").
 
 ## Referências
 
-- `docs/v2/ARQUITETURA-CLIENTE-IA.md` — o desenho do operador fixo (volta a valer por inteiro).
-- `docs/v2/ARQUITETURA-CLIENTES-MULTI-FUTURO.md` — desenho parkeado das Partes A/B/C.
-- `docs/v2/PROGRESSO.md` — entrada de 27 ago (Parte A) + entrada de 29 ago (reversão).
+- `docs/arch/ARQUITETURA-CLIENTE-IA.md` — o desenho do operador fixo (volta a valer por inteiro).
+- `docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md` — desenho parkeado das Partes A/B/C.
+- `docs/PROGRESSO.md` — entrada de 27 ago (Parte A) + entrada de 29 ago (reversão).
 - commit `ffd13c3` — a Parte A implementada, no histórico.

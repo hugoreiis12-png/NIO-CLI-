@@ -1,6 +1,6 @@
 /**
  * OTP de 6 dígitos do 2º fator (SMS). Geração + hash HMAC-SHA256 com o
- * `JWT_SECRET` (nunca persiste o código puro — constraint spec 0003/ANPD; HMAC
+ * `JWT_SECRET` (nunca persiste o código puro — constraint ANPD; HMAC
  * basta pra código de vida curta e rate-limitado). Ver spec 0004.
  */
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';

@@ -29,15 +29,15 @@ export function buildContext(req: FilterableRequest): RequestContext {
   };
 }
 
-/** Log estruturado em stderr  mesmo padrão do `traceability.ts` da spec 0002, mas sem o vocabulário de evento fechado em OAuth. */
+/** Log estruturado em stderr — uma linha JSON por request (`event: 'gateway_request'`). */
 export function logRequest(ctx: RequestContext, extra: Record<string, unknown> = {}): void {
   console.error(JSON.stringify({ ts: new Date().toISOString(), event: 'gateway_request', ...ctx, ...extra }));
 }
 
 /**
- * Trilha auditável de auth (exigência ANPD/NIST da spec 0003): quem/quando/
- * resultado de cada tentativa de login/2FA. Só metadados — **nunca** a senha ou
- * o código OTP. `result` ∈ password_ok|password_fail|2fa_sent|2fa_ok|2fa_fail|2fa_expired.
+ * Trilha auditável de auth (exigência ANPD/NIST): quem/quando/resultado de cada
+ * tentativa de login/2FA. Só metadados — **nunca** a senha ou o código OTP.
+ * `result` ∈ password_ok|password_fail|2fa_sent|2fa_ok|2fa_fail|2fa_expired.
  */
 export function logAuthEvent(
   ctx: RequestContext,

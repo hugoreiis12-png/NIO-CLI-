@@ -154,8 +154,8 @@ profiles/:    catálogo dos 6 perfis (fixos no fonte)
 - **Contrato "nunca lança"** nos ports de IO (`ToolchainGateway`, `IdeGateway`,
   `DockerGateway`, `SmsSender`): falha vira um resultado `{ status, error? }`.
 
-Detalhes: [`docs/v2/`](docs/v2/) (uma `ARQUITETURA-*.md` por camada) e os
-[ADRs](docs/adr/). Histórico cronológico: [`docs/v2/PROGRESSO.md`](docs/v2/PROGRESSO.md).
+Detalhes: [`docs/arch/`](docs/arch/) (uma `ARQUITETURA-*.md` por camada) e os
+[ADRs](docs/adr/). Histórico cronológico: [`docs/PROGRESSO.md`](docs/PROGRESSO.md).
 
 ### Perfis
 
@@ -193,7 +193,7 @@ O gateway gera/valida o OTP em processo (sem Twilio, sem broker), guarda só o
 `auth_2` responde `503 "2FA não configurado"` — o login de 1 fator segue normal.
 Detalhes: [spec 0004](docs/specs/auth/0004-login-2fa-sms-otp.md) ·
 [ADR 0006](docs/adr/0006-2fa-sms-otp.md) ·
-[`docs/v2/ARQUITETURA-GATEWAY.md`](docs/v2/ARQUITETURA-GATEWAY.md).
+[`docs/arch/ARQUITETURA-GATEWAY.md`](docs/arch/ARQUITETURA-GATEWAY.md).
 
 Pra testar sem SMS real, o repo traz um mock: `bun run dev:sms-echo` sobe um
 endpoint local que imprime o código no terminal (aponte `SMS_ENDPOINT_URL` pra ele).
@@ -205,11 +205,11 @@ endpoint local que imprime o código no terminal (aponte `SMS_ENDPOINT_URL` pra 
 No fim do `nio init`, a CLI entrega o terminal pro operador de IA fixo:
 **OpenCode** rodando `opencode/big-pickle` (default gravado no
 `~/.config/opencode/opencode.json`, junto do MCP `nio` e dos MCPs do perfil). Ver
-[`docs/v2/ARQUITETURA-CLIENTE-IA.md`](docs/v2/ARQUITETURA-CLIENTE-IA.md).
+[`docs/arch/ARQUITETURA-CLIENTE-IA.md`](docs/arch/ARQUITETURA-CLIENTE-IA.md).
 
 > Multi-cliente (OpenCode | Codex), proxy de compressão de contexto e ladder de
 > failover entre modelos são **feature futura** — desenho parkeado em
-> [`docs/v2/ARQUITETURA-CLIENTES-MULTI-FUTURO.md`](docs/v2/ARQUITETURA-CLIENTES-MULTI-FUTURO.md)
+> [`docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md`](docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md)
 > ([ADR 0004](docs/adr/0004-operador-ia-unico.md)).
 
 ---
@@ -287,7 +287,7 @@ nio completion fish | source     # ~/.config/fish/config.fish
 Camada de gerência de container — metade wrapper determinístico sobre `docker`,
 metade dirigida pelo operador de IA em linguagem natural (via o **Docker MCP
 Gateway**). Roda em qualquer Docker Engine (não exige Docker Desktop). Ver
-[`docs/v2/ARQUITETURA-DOCKER.md`](docs/v2/ARQUITETURA-DOCKER.md) ·
+[`docs/arch/ARQUITETURA-DOCKER.md`](docs/arch/ARQUITETURA-DOCKER.md) ·
 [ADR 0005](docs/adr/0005-camada-docker.md).
 
 ```bash
@@ -469,6 +469,5 @@ Sempre: `nio debug` mostra o estado de tudo com uma dica por item.
 
 **0.2.0** — v1 da CLI fechada: auth (senha + 2º fator SMS), backend de sessões,
 wizard de ambiente, tools MCP de ambiente, camada Docker e o gateway com Kong.
-Sobre uma base v1 (cliente NOS) em remoção — ver
-[`docs/v2/TASK-remocao-v1.md`](docs/v2/TASK-remocao-v1.md). Progresso:
-[`docs/v2/PROGRESSO.md`](docs/v2/PROGRESSO.md).
+Nasceu de um cliente NOS/Supabase (v1), já removido. Histórico cronológico:
+[`docs/PROGRESSO.md`](docs/PROGRESSO.md).

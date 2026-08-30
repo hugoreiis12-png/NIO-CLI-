@@ -84,7 +84,7 @@ flowchart TD
 |---|---|---|---|
 | **CLI** | Código próprio | Pede usuário/senha, depois o código SMS | ✅ Parte 1 (senha) já existe e funciona (`src/cli/commands/auth.ts`) |
 | **Tunelamento** | Código próprio | Transporte da request da CLI até a borda | ❌ Não existe — a CLI hoje fala direto com o Postgres, sem rede intermediária nenhuma |
-| **Edge Filter** | Escrito à mão (`workers/edge-filter/`, Cloudflare Worker já existe da spec 0002) | Primeira triagem de quem está entrando — hoje só loga (ip, user-agent, trace id) e repassa, não filtra nada de fato | 🟡 Scaffold existe, sem lógica de filtro real |
+| **Edge Filter** | Escrito à mão (`src/gateway/edge-filter.ts`) | Primeira triagem de toda request no `nio-gateway`: rejeita `Origin` de browser, checa o `X-Nio-Gateway-Token`, loga (trace id, evento) | ✅ Existe e roda no `nio-gateway` |
 | **Kong Gateway OSS** | Ferramenta adotada (self-hosted, modo DB-less) | `jwt` (valida token emitido pelo Gateway core), `acl` (permissionamento por `Profile`), `rate-limiting`, `request-validator`, balanceamento entre instâncias do Gateway core se houver mais de uma | ❌ Não existe deploy nenhum ainda — decisão tomada, nada instalado |
 | **Gateway core** | Escrito à mão (`src/gateway/server.ts` já existe da spec 0002, hoje só serve rotas OAuth/PKCE que não são mais o caminho) | Processa a request já validada pelo Kong; decide por tipo de request; orquestra Validator → confronto de senha → 2º fator | 🟡 Scaffold existe (Bun.serve na porta 8787), lógica de processamento não |
 | **Validator** | Código próprio, já existe | Confere se o usuário tem cadastro ativo em `user_cli` | ✅ `UserRepository.findByName` |
@@ -201,8 +201,7 @@ tratar desde a primeira migration, não depois:
 
 ## Referências
 
-- `docs/specs/auth/0002-cli-native-login.md` — Gateway OAuth2/PKCE original, `status: superseded`.
-- `docs/specs/auth/0003-login-2fa-sms.md` — spec do fluxo de login com 2º fator, com o registro de decisões completo (inclusive a reconsideração do Kong, verbatim).
-- `docs/v2/PROGRESSO.md` (23 ago 2026) — estado do login v2 sem 2º fator, já funcionando.
-- `docs/v2/TASK-remocao-v1.md` — tarefa de remoção do v1; a seção "Resolvido" lá referencia o destino de `src/gateway/*`/`workers/edge-filter/` em função desta arquitetura.
-- `docs/adr/0003-gateway-auth-dedicado.md` — ADR original do Gateway (pré-2FA).
+- [spec 0004](../specs/auth/0004-login-2fa-sms-otp.md) — o fluxo de login + 2º fator atual (SMS OTP).
+- [ADR 0006](../adr/0006-2fa-sms-otp.md) — a decisão do 2FA (SMS via adapter HTTP genérico).
+- [ADR 0003](../adr/0003-gateway-auth-dedicado.md) — ADR original do Gateway (pré-2FA).
+- `docs/PROGRESSO.md` — histórico cronológico das decisões.

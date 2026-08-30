@@ -84,4 +84,4 @@ sem Twilio e com arquitetura própria.
 - `db/migrations/0004_login_2fa.sql`, `src/gateway/services/{login,security}.ts`,
   `src/core/messaging.ts`, `src/adapters/sms/http-generic.ts`, `src/lib/{otp,backup-codes}.ts`,
   `src/cli/commands/security.ts`.
-- `docs/v2/ARQUITETURA-GATEWAY.md` (seção 2FA).
+- `docs/arch/ARQUITETURA-GATEWAY.md` (seção 2FA).
