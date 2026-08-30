@@ -1,25 +1,44 @@
 /**
- * Carrega variáveis de `.env` nos binários publicados (rodam sob `node`, que não
- * lê `.env` sozinho — só o `bun run` do dev fazia isso). Importe PRIMEIRO, antes
- * de qualquer módulo que leia env no topo (ex.: `gateway/config.ts`).
+ * Carrega variáveis de `.env` nos binários (rodam sob `node`, que não lê `.env`
+ * sozinho). Importe PRIMEIRO, antes de qualquer módulo que leia env no topo.
  *
  * Precedência: env do shell > `$NIO_ENV_FILE` > `.env` do diretório atual >
- * `~/.nio/config.env`. `process.loadEnvFile` nunca sobrescreve valor já definido.
+ * `~/.nio/config.env`. Nunca sobrescreve valor já presente no ambiente.
  */
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const debug = /^(1|true|yes|on)$/i.test((process.env.NIO_DEBUG ?? '').trim());
 
+/** `process.loadEnvFile` (Node 20.12+) existe? Sob Bun / Node antigo, não. */
+const nodeLoad = (process as { loadEnvFile?: (p: string) => void }).loadEnvFile;
+
+/** Parser mínimo `KEY=value` (fallback quando `process.loadEnvFile` não existe). */
+function parseAndApply(text: string): void {
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq < 1) continue;
+    const key = line.slice(0, eq).trim();
+    if (process.env[key] === undefined) {
+      process.env[key] = line.slice(eq + 1).trim();
+    }
+  }
+}
+
 function tryLoad(path: string): void {
-  const had = existsSync(path);
+  if (!existsSync(path)) {
+    if (debug) console.error(`[nio:debug] env ausente: ${path}`);
+    return;
+  }
   try {
-    // Node 20.12+; ausência do arquivo lança e é ignorada de propósito.
-    (process as { loadEnvFile?: (p: string) => void }).loadEnvFile?.(path);
-    if (debug) console.error(`[nio:debug] env ${had ? 'carregado' : 'ausente'}: ${path}`);
-  } catch {
-    if (debug) console.error(`[nio:debug] env falhou (malformado?): ${path}`);
+    if (nodeLoad) nodeLoad(path);
+    else parseAndApply(readFileSync(path, 'utf8'));
+    if (debug) console.error(`[nio:debug] env carregado: ${path}`);
+  } catch (err) {
+    if (debug) console.error(`[nio:debug] env falhou (${(err as Error).message}): ${path}`);
   }
 }
 

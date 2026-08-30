@@ -51,30 +51,30 @@ async function authedHeaders(token: string): Promise<Record<string, string>> {
   return { ...(await baseHeaders()), Authorization: `Bearer ${token}` };
 }
 
-async function post<T>(path: string, body: unknown, headers: Record<string, string>): Promise<T> {
+/** fetch pro gateway com log de debug + erro "não está no ar" uniforme. */
+async function gwFetch(method: string, path: string, init: RequestInit = {}): Promise<Response> {
+  dlog(`${method} ${GATEWAY_URL}${path}`);
   let res: Response;
-  dlog(`POST ${GATEWAY_URL}${path}`);
   try {
-    res = await fetch(`${GATEWAY_URL}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+    res = await fetch(`${GATEWAY_URL}${path}`, { method, ...init });
   } catch (err) {
     throw unreachableError(err);
   }
   dlog(`  → ${res.status} ${res.statusText}`);
+  return res;
+}
+
+async function post<T>(path: string, body: unknown, headers: Record<string, string>): Promise<T> {
+  const res = await gwFetch('POST', path, { headers, body: JSON.stringify(body) });
   if (!res.ok) throw await errorFromResponse(res);
   return (await res.json()) as T;
 }
 
 export async function gatewayLogin(name: string, password: string): Promise<GatewayLoginResult | null> {
-  let res: Response;
-  try {
-    res = await fetch(`${GATEWAY_URL}/login`, {
-      method: 'POST',
-      headers: await baseHeaders(),
-      body: JSON.stringify({ name, password }),
-    });
-  } catch (err) {
-    throw unreachableError(err);
-  }
+  const res = await gwFetch('POST', '/login', {
+    headers: await baseHeaders(),
+    body: JSON.stringify({ name, password }),
+  });
   if (res.status === 401) return null; // usuário/senha inválidos
   if (!res.ok) throw await errorFromResponse(res);
   return (await res.json()) as GatewayLoginResult;
@@ -86,16 +86,10 @@ export async function gatewayVerify2fa(
   code: string,
   type: 'otp' | 'backup',
 ): Promise<Verify2faResult> {
-  let res: Response;
-  try {
-    res = await fetch(`${GATEWAY_URL}/verify-2fa`, {
-      method: 'POST',
-      headers: await baseHeaders(),
-      body: JSON.stringify({ challengeId, code, type }),
-    });
-  } catch (err) {
-    throw unreachableError(err);
-  }
+  const res = await gwFetch('POST', '/verify-2fa', {
+    headers: await baseHeaders(),
+    body: JSON.stringify({ challengeId, code, type }),
+  });
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (res.status === 401 || res.status === 429) {
     return {
@@ -110,28 +104,17 @@ export async function gatewayVerify2fa(
 }
 
 export async function gatewayLogout(sessionId: string): Promise<void> {
-  let res: Response;
-  try {
-    res = await fetch(`${GATEWAY_URL}/logout`, {
-      method: 'POST',
-      headers: await baseHeaders(),
-      body: JSON.stringify({ sessionId }),
-    });
-  } catch (err) {
-    throw unreachableError(err);
-  }
+  const res = await gwFetch('POST', '/logout', {
+    headers: await baseHeaders(),
+    body: JSON.stringify({ sessionId }),
+  });
   if (!res.ok) throw await errorFromResponse(res);
 }
 
 /** Rotas `nio security …` (exigem Bearer + o token do gateway). */
 export const gatewaySecurity = {
   status: async (token: string) => {
-    let res: Response;
-    try {
-      res = await fetch(`${GATEWAY_URL}/security/status`, { headers: await authedHeaders(token) });
-    } catch (err) {
-      throw unreachableError(err);
-    }
+    const res = await gwFetch('GET', '/security/status', { headers: await authedHeaders(token) });
     if (!res.ok) throw await errorFromResponse(res);
     return (await res.json()) as { enabled: boolean; phoneHint: string | null; backupCodesRemaining: number };
   },
