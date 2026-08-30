@@ -14,9 +14,8 @@ import type {
  *    (guarda no código) E abre a sessão do banco como read-only; a role
  *    DQL-only do Postgres é a terceira camada, autoritativa (F12-T3 + F15).
  *
- * Este port é **separado** da `Gateway` de domínio de propósito: é outro
- * backend (Postgres direto via `Bun.sql`, não PostgREST) e não compartilha o
- * caminho de autenticação por-usuário das tools de escrita.
+ * Fala com os Postgres pelo driver `pg` (sessão read-only), não pelo `Pool` do
+ * `nio_cli` (`adapters/pg/`) — é outro banco, sem auth por-usuário.
  */
 export interface InvestigationGateway {
   /** Consulta read-only no destino explícito. `params` são placeholders posicionais. */
