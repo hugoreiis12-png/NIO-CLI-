@@ -8,13 +8,18 @@
  */
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+
+const debug = /^(1|true|yes|on)$/i.test((process.env.NIO_DEBUG ?? '').trim());
 
 function tryLoad(path: string): void {
+  const had = existsSync(path);
   try {
     // Node 20.12+; ausência do arquivo lança e é ignorada de propósito.
     (process as { loadEnvFile?: (p: string) => void }).loadEnvFile?.(path);
+    if (debug) console.error(`[nio:debug] env ${had ? 'carregado' : 'ausente'}: ${path}`);
   } catch {
-    /* arquivo não existe ou linha malformada — segue sem ele */
+    if (debug) console.error(`[nio:debug] env falhou (malformado?): ${path}`);
   }
 }
 

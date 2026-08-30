@@ -449,7 +449,9 @@ background em qualquer comando (`update-notifier`).
 | `Conteúdo de skills não encontrado` | cache `~/.nio/skills` vazio — rode `nio sync` com rede, ou `NIO_SKILLS_DIR` pra um checkout local |
 | Sobraram comandos antigos | `nio clean-legacy` (`--dry-run` pra revisar antes) |
 
-Sempre: `nio debug` mostra o estado de tudo com uma dica por item.
+Sempre: `nio debug` mostra o estado de tudo com uma dica por item. E
+`NIO_DEBUG=1 nio <cmd>` liga log verboso (`[nio:debug]` em stderr): `.env`
+carregados, config resolvida, requests pro gateway, e stack trace completo nos erros.
 
 ---
 

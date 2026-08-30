@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import "./lib/load-env.js";
 import { Command } from "commander";
+import { DEBUG } from "./lib/debug.js";
 import { VERSION } from "./version.js";
 import { brand } from "./brand.js";
 import { renderMatrixLogo } from "./matrix-logo.js";
@@ -57,6 +58,7 @@ registerDocsCommand(program);
 registerConfigCommand(program);
 
 program.parseAsync(process.argv).catch((err) => {
-  console.error(`Erro: ${(err as Error).message}`);
+  if (DEBUG) console.error(err);
+  else console.error(`Erro: ${(err as Error).message}\n(rode com NIO_DEBUG=1 pro stack trace completo)`);
   process.exit(1);
 });

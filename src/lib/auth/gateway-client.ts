@@ -5,6 +5,7 @@
  */
 import { GATEWAY_URL } from '../../gateway/config.js';
 import { getOrCreateGatewayToken } from './gateway-token.js';
+import { dlog } from '../debug.js';
 
 /** Sessão emitida — a CLI grava isto em `~/.nio/session.json`. */
 export interface GatewaySession {
@@ -52,11 +53,13 @@ async function authedHeaders(token: string): Promise<Record<string, string>> {
 
 async function post<T>(path: string, body: unknown, headers: Record<string, string>): Promise<T> {
   let res: Response;
+  dlog(`POST ${GATEWAY_URL}${path}`);
   try {
     res = await fetch(`${GATEWAY_URL}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
   } catch (err) {
     throw unreachableError(err);
   }
+  dlog(`  → ${res.status} ${res.statusText}`);
   if (!res.ok) throw await errorFromResponse(res);
   return (await res.json()) as T;
 }

@@ -201,6 +201,11 @@ export const SECTIONS: DocSection[] = [
         text: '`nio debug` roda uma bateria de checagens read-only e mostra ✓ / ⚠ / ✗ com uma dica acionável em cada: nio.json no diretório, login local, conexão Postgres, sessão ativa, OpenCode no PATH, cache de skills.',
       },
       {
+        kind: 'p',
+        text: '`NIO_DEBUG=1` liga log verboso em stderr (`[nio:debug]`): quais `.env` carregaram, config resolvida (URL mascarada, `SELECT 1`), cada request pro gateway (URL + status), e **stack trace completo** nos erros em vez de só a mensagem.',
+      },
+      { kind: 'code', text: 'NIO_DEBUG=1 nio login' },
+      {
         kind: 'list',
         items: [
           '"NIO_DATABASE_URL não definida" → ponha em ~/.nio/config.env (o bin publicado não lê o .env de dev via bun).',

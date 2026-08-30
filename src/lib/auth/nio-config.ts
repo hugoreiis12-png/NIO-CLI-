@@ -9,6 +9,7 @@ import { brand, homePath } from '../../brand.js';
 import { closePool, ping } from '../../adapters/pg/client.js';
 import { input, password, confirm } from '../prompts.js';
 import { c, sym, box, cmd } from '../colors.js';
+import { dlog } from '../debug.js';
 
 export const CONFIG_FILE = homePath('config.env');
 const PG_URL = /^postgres(ql)?:\/\/.+/i;
@@ -77,12 +78,22 @@ export function validateConfigShape(env: NodeJS.ProcessEnv): ConfigProblem[] {
   return problems;
 }
 
+/** Mascara a senha da connection string pro log. */
+function maskUrl(url: string): string {
+  return url.replace(/:\/\/([^:/@]+):[^@]*@/, '://$1:***@');
+}
+
 /** Checa a config já carregada em `process.env`, incluindo um `SELECT 1`. `[]` = ok. */
 export async function checkConfig(): Promise<ConfigProblem[]> {
+  dlog('config: NIO_DATABASE_URL =', process.env.NIO_DATABASE_URL ? maskUrl(process.env.NIO_DATABASE_URL) : '(vazio)');
+  dlog('config: JWT_SECRET =', process.env.JWT_SECRET ? `(${process.env.JWT_SECRET.length} chars)` : '(vazio)');
+  dlog('config: NIO_GATEWAY_URL =', process.env.NIO_GATEWAY_URL ?? '(default :8000/Kong)');
   const problems = validateConfigShape(process.env);
   if (!problems.some((p) => p.key === 'NIO_DATABASE_URL')) {
     await closePool();
-    if (!(await ping())) {
+    const ok = await ping();
+    dlog('config: SELECT 1 =>', ok ? 'ok' : 'FALHOU');
+    if (!ok) {
       problems.push({
         key: 'NIO_DATABASE_URL',
         issue: 'unreachable',
