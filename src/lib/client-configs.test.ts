@@ -2,7 +2,13 @@ import { test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readCoAuthoredBy, disableCoAuthoredBy, planOpencodeUpdate, NIO_OPERATOR_MODEL } from './client-configs.js';
+import {
+  readCoAuthoredBy,
+  disableCoAuthoredBy,
+  planOpencodeUpdate,
+  upsertOpencodeMcp,
+  NIO_OPERATOR_MODEL,
+} from './client-configs.js';
 import type { McpSpec } from '../core/environment.js';
 
 const NIO_ENTRY = { command: ['nio-cli'], environment: {} as Record<string, string> };
@@ -44,6 +50,39 @@ test('planOpencodeUpdate: preserva mcp.nio e chaves não-nio do usuário', () =>
   expect(mcp.custom.command).toEqual(['meu-mcp']); // chave do usuário intacta
   expect(mcp.nio.command).toEqual(['nio-cli']);
   expect(mcp.postgres.command).toEqual(PG_MCP.command);
+});
+
+test('upsertOpencodeMcp: registra um MCP remoto (type: remote + url), preserva o resto', () => {
+  const d = mkdtempSync(join(tmpdir(), 'nio-mcp-'));
+  const p = join(d, 'opencode.json');
+  writeFileSync(p, JSON.stringify({ model: 'x', mcp: { nio: { type: 'local', command: ['nio-cli'] } } }));
+
+  const dockerSpec: McpSpec = { id: 'docker', url: 'http://127.0.0.1:8811/mcp' };
+  const r1 = upsertOpencodeMcp(dockerSpec, { path: p });
+  expect(r1.status).toBe('updated');
+  const cfg = JSON.parse(readFileSync(p, 'utf8'));
+  expect(cfg.model).toBe('x');
+  expect(cfg.mcp.nio.command).toEqual(['nio-cli']);
+  expect(cfg.mcp.docker).toEqual({ type: 'remote', url: 'http://127.0.0.1:8811/mcp', enabled: true });
+
+  // idempotente
+  expect(upsertOpencodeMcp(dockerSpec, { path: p }).status).toBe('already_configured');
+
+  // remove → enabled: false
+  const r3 = upsertOpencodeMcp(dockerSpec, { remove: true, path: p });
+  expect(r3.status).toBe('updated');
+  expect(JSON.parse(readFileSync(p, 'utf8')).mcp.docker.enabled).toBe(false);
+
+  rmSync(d, { recursive: true, force: true });
+});
+
+test('upsertOpencodeMcp: cria o arquivo se não existe', () => {
+  const d = mkdtempSync(join(tmpdir(), 'nio-mcp-'));
+  const p = join(d, 'sub', 'opencode.json');
+  // path com dir inexistente → writeJson deve criar (mkdir -p no file-merge)
+  const r = upsertOpencodeMcp({ id: 'docker', url: 'http://x/mcp' }, { path: p });
+  expect(['created', 'updated']).toContain(r.status);
+  rmSync(d, { recursive: true, force: true });
 });
 
 // os.homedir() ignora $HOME no macOS, então passamos o path do settings.json

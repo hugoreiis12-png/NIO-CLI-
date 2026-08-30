@@ -11,6 +11,7 @@
   },
   "files": [
     "dist",
+    "docker/docker-compose.yml",
     "README.md"
   ],
   "engines": {
@@ -45,6 +46,7 @@
     "dev:gateway": "bun run src/gateway/index.ts",
     "dev:lang": "bun run src/mcp-server-lang.ts",
     "dev:kong": "docker compose -f kong/docker-compose.yml up",
+    "dev:docker": "docker compose -f docker/docker-compose.yml up",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {

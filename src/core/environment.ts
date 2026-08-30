@@ -10,13 +10,15 @@
 import type { Profile, Ide } from './session.js';
 
 /**
- * Um MCP a registrar no cliente de IA. Formato OpenCode: `command` é o binário +
- * args juntos (array), `environment` são env vars do processo do MCP.
+ * Um MCP a registrar no cliente de IA. **Exatamente um** de: `command` (local —
+ * binário + args juntos, `type: 'local'`) ou `url` (remoto — endpoint HTTP,
+ * `type: 'remote'`; ex.: Docker MCP Gateway). `environment` = env do processo.
  */
 export interface McpSpec {
-  /** Chave do MCP no `opencode.json` (ex.: "postgres", "powerbi-modeling"). */
+  /** Chave do MCP no `opencode.json` (ex.: "postgres", "powerbi-modeling", "docker"). */
   id: string;
-  command: string[];
+  command?: string[];
+  url?: string;
   environment?: Record<string, string>;
 }
 

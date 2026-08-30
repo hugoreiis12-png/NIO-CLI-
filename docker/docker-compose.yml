@@ -1,0 +1,44 @@
+# Camada Docker da NIO-CLI — infra local (`nio docker toolkit up`).
+#
+#  - mcp-gateway : Docker MCP Gateway (docker/mcp-gateway), transport `streaming`
+#                  em 127.0.0.1:8811/mcp. Agrega o server `docker` do catálogo
+#                  (docker/compose/swarm como tools MCP). Registrado no
+#                  `opencode.json` pelo `nio docker toolkit up` → o operador
+#                  (OpenCode/big-pickle) ganha as tools e dirige por linguagem natural.
+#  - portainer   : Portainer CE — visibilidade do gerenciamento de containers e
+#                  da stack `nio-cluster` (Swarm). 1º acesso pede setup token.
+#
+# Mesmo padrão do `kong/docker-compose.yml`: portas pinadas em 127.0.0.1,
+
+# `restart: unless-stopped`, `extra_hosts` p/ Linux. Roda em qualquer Docker
+# Engine — não exige Docker Desktop.
+services:
+  mcp-gateway:
+    image: docker/mcp-gateway:latest
+    container_name: nio-mcp-gateway
+    restart: unless-stopped
+    command:
+      - "--transport=streaming"
+      - "--port=8811"
+      - "--servers=docker"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "127.0.0.1:8811:8811"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  portainer:
+    image: portainer/portainer-ce:lts
+    container_name: nio-portainer
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - nio_portainer_data:/data
+    ports:
+      - "127.0.0.1:9443:9443"
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  nio_portainer_data:
+    name: nio_portainer_data

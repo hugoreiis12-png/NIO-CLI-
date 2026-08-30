@@ -20,6 +20,7 @@ import { registerAgentsCommand } from "./cli/commands/agents.js";
 import { registerCommandCommand } from "./cli/commands/command.js";
 import { registerOpenCommand } from "./cli/commands/open.js";
 import { registerDepsCommand } from "./cli/commands/deps.js";
+import { registerDockerCommand } from "./cli/commands/docker.js";
 
 notifyCliIfUpdate();
 
@@ -46,6 +47,7 @@ registerAgentsCommand(program);
 registerCommandCommand(program);
 registerOpenCommand(program);
 registerDepsCommand(program);
+registerDockerCommand(program);
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(`Erro: ${(err as Error).message}`);

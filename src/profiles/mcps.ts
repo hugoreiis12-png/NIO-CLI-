@@ -4,6 +4,7 @@
  * entrada fictícia (que geraria um `opencode.json` quebrado).
  */
 import type { McpSpec } from '../core/environment.js';
+import { DOCKER_MCP_URL } from '../lib/docker.js';
 
 /**
  * `nio-lang` — MCP server nativo da CLI que centraliza conhecimento/config das
@@ -51,4 +52,14 @@ export const powerbiMcp: McpSpec = {
 export const n8nMcp: McpSpec = {
   id: 'n8n',
   command: ['npx', '-y', 'n8n-mcp'],
+};
+
+/**
+ * Docker MCP Gateway — MCP **remoto** (container `nio-mcp-gateway` do
+ * `docker/docker-compose.yml`, server `docker` do catálogo). Fora do `BASE_MCPS`:
+ * opt-in via `nio docker toolkit up`. Ver `docs/v2/ARQUITETURA-DOCKER.md`.
+ */
+export const dockerGatewayMcp: McpSpec = {
+  id: 'docker',
+  url: DOCKER_MCP_URL,
 };

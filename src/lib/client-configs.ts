@@ -1,3 +1,4 @@
+// Configuração do client (opencode, vscode , claude code)
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -236,6 +237,7 @@ export function planCodexUpdate(
 interface OpencodeServerEntry {
   type?: string;
   command?: string[];
+  url?: string;
   environment?: Record<string, string>;
   enabled?: boolean;
 }
@@ -248,8 +250,11 @@ interface OpencodeServerEntry {
  */
 export const NIO_OPERATOR_MODEL = 'opencode/big-pickle';
 
-/** Monta a entrada OpenCode de um MCP de perfil, preservando campos do usuário. */
+/** Monta a entrada OpenCode de um MCP, preservando campos do usuário. Remoto (`spec.url`) → `type: 'remote'`. */
 function opencodeMcpEntry(spec: McpSpec, current?: OpencodeServerEntry): OpencodeServerEntry {
+  if (spec.url) {
+    return { type: 'remote', ...current, url: spec.url, enabled: true };
+  }
   const entry: OpencodeServerEntry = {
     type: 'local',
     ...current,
@@ -262,15 +267,19 @@ function opencodeMcpEntry(spec: McpSpec, current?: OpencodeServerEntry): Opencod
   return entry;
 }
 
+/** Uma entrada de MCP já está OK no `opencode.json`? (command/url batem, não desabilitada) */
+function opencodeMcpOk(spec: McpSpec, cur?: OpencodeServerEntry): boolean {
+  if (!cur || cur.enabled === false) return false;
+  return spec.url ? cur.url === spec.url : cur.command?.[0] === spec.command?.[0];
+}
+
 /**
  * Decide se o `nio` (+ os MCPs do perfil) já estão OK no `opencode.json` e monta
  * o próximo objeto se precisar atualizar (pura, sem IO). Mesmo padrão de
  * `planCodexUpdate`, mas o OpenCode usa `mcp` (não `mcpServers`/`mcp_servers`),
  * `command` como array (binário + args juntos) e `environment` (não `env`).
  * Também garante o `model` default (`NIO_OPERATOR_MODEL`) no nível raiz.
- *
- * `profileMcps` são os MCPs do perfil (do `EnvironmentBuilder`), fundidos junto
- * do `mcp.nio` com o mesmo spread defensivo — nunca apaga chaves do usuário.
+ * 
  */
 export function planOpencodeUpdate(
   existing: Record<string, unknown>,
@@ -286,10 +295,7 @@ export function planOpencodeUpdate(
       current.environment?.[envName('CLIENT')] === 'opencode' &&
       current.enabled !== false,
   );
-  const mcpsOk = profileMcps.every((spec) => {
-    const cur = servers[spec.id];
-    return Boolean(cur && cur.command?.[0] === spec.command[0] && cur.enabled !== false);
-  });
+  const mcpsOk = profileMcps.every((spec) => opencodeMcpOk(spec, servers[spec.id]));
   const alreadyConfigured = nioOk && existing.model === NIO_OPERATOR_MODEL && mcpsOk;
 
   const nextMcp: Record<string, OpencodeServerEntry> = {
@@ -345,6 +351,41 @@ export function installOpencodeGlobal(
 
   const backup = backupFile(path);
   writeJson(path, next);
+  return { status: 'updated', path, backup };
+}
+
+/**
+ * Funde **uma** entrada de MCP no `opencode.json` global (fora do fluxo de
+ * perfil) — usado pelo `nio docker toolkit up`. Preserva o resto do arquivo, faz
+ * `.bak`. `remove: true` desabilita (`enabled: false`) em vez de fundir.
+ */
+export function upsertOpencodeMcp(
+  spec: McpSpec,
+  opts: { remove?: boolean; path?: string } = {},
+): InstallResult {
+  const path = opts.path ?? opencodeGlobalPath();
+
+  if (!existsSync(path)) {
+    if (opts.remove) return { status: 'already_configured', path };
+    const servers = { [spec.id]: opencodeMcpEntry(spec) };
+    writeJson(path, { mcp: servers });
+    return { status: 'created', path };
+  }
+
+  const existing = readJsonSafe(path) ?? {};
+  const servers = { ...((existing.mcp ?? {}) as Record<string, OpencodeServerEntry>) };
+  const cur = servers[spec.id];
+
+  if (opts.remove) {
+    if (!cur || cur.enabled === false) return { status: 'already_configured', path };
+    servers[spec.id] = { ...cur, enabled: false };
+  } else {
+    if (opencodeMcpOk(spec, cur)) return { status: 'already_configured', path };
+    servers[spec.id] = opencodeMcpEntry(spec, cur);
+  }
+
+  const backup = backupFile(path);
+  writeJson(path, { ...existing, mcp: servers });
   return { status: 'updated', path, backup };
 }
 
