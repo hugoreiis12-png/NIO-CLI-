@@ -1,7 +1,7 @@
 # Configuração do Kong Gateway para o NIO-CLI
 services:
   kong:
-    image: kong:latest
+    image: kong:3.9
     container_name: nio-kong
     restart: unless-stopped
     environment:
@@ -12,7 +12,9 @@ services:
     volumes:
       - ./kong.yml:/kong/kong.yml:ro
     ports:
-      - "127.0.0.1:8000:8000" # proxy,  é isto que a CLI chama agora (GATEWAY_URL)
-      - "127.0.0.1:8001:8001" # admin API só debug local (curl 127.0.0.1:8001)
+      # portas do host parametrizáveis (default 8000/8001) — evita colisão com
+      # outros serviços locais. Se mudar a de proxy, ajuste NIO_GATEWAY_URL/NIO_KONG_PROXY_PORT na CLI.
+      - "127.0.0.1:${NIO_KONG_PROXY_PORT:-8000}:8000" # proxy — é o que a CLI chama (GATEWAY_URL)
+      - "127.0.0.1:${NIO_KONG_ADMIN_PORT:-8001}:8001" # admin API, só debug local
     extra_hosts:
       - "host.docker.internal:host-gateway" # necessário no Linux; noop no Docker Desktop

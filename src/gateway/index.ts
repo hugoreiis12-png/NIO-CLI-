@@ -19,7 +19,7 @@ import {
   tokensMatch,
   type RequestContext,
 } from './edge-filter.js';
-import { GATEWAY_PORT } from './config.js';
+import { GATEWAY_PORT, GATEWAY_HOST } from './config.js';
 import { getOrCreateGatewayToken } from '../lib/gateway-token.js';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -203,8 +203,8 @@ async function main(): Promise<void> {
     })();
   });
 
-  server.listen(GATEWAY_PORT, '127.0.0.1', () => {
-    console.error(`[nio-gateway] ouvindo em http://127.0.0.1:${GATEWAY_PORT}`);
+  server.listen(GATEWAY_PORT, GATEWAY_HOST, () => {
+    console.error(`[nio-gateway] ouvindo em http://${GATEWAY_HOST}:${GATEWAY_PORT}`);
   });
 }
 

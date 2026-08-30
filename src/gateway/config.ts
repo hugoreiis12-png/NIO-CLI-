@@ -6,8 +6,15 @@
  */
 import { env } from '../brand.js';
 
-/** Porta do `nio-gateway` em si (loopback only). Default 3000 — Kong faz proxy pra cá por trás. */
+/** Porta do `nio-gateway` em si. Default 3000 — Kong faz proxy pra cá por trás. */
 export const GATEWAY_PORT = Number(env('GATEWAY_PORT')?.trim()) || 3000;
+
+/**
+ * Interface de bind do `nio-gateway`. Default `127.0.0.1` (loopback only). Ponha
+ * `0.0.0.0` quando o Kong roda em container e precisa alcançar via `host.docker.internal`
+ * — a segurança segue no `X-Nio-Gateway-Token` + rejeição de `Origin`, não no bind.
+ */
+export const GATEWAY_HOST = env('GATEWAY_HOST')?.trim() || '127.0.0.1';
 
 /** Porta de proxy do Kong (padrão dele). Default 8000 — é o que a CLI chama agora, não mais o `nio-gateway` direto. */
 export const KONG_PROXY_PORT = Number(env('KONG_PROXY_PORT')?.trim()) || 8000;

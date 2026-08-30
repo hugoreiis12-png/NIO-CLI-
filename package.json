@@ -49,7 +49,7 @@
     "dev:mcp": "bun run src/mcp-server.ts",
     "dev:gateway": "bun run src/gateway/index.ts",
     "dev:lang": "bun run src/mcp-server-lang.ts",
-    "dev:kong": "docker compose -f kong/docker-compose.yml up",
+    "dev:kong": "docker compose -f kong/docker-compose.yml --env-file .env up",
     "dev:docker": "docker compose -f docker/docker-compose.yml up",
     "prepublishOnly": "bun run build"
   },
