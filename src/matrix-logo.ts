@@ -1,8 +1,17 @@
 /**
- * Logo NIO com efeito Matrix (chuva de katakana) — decorativo, mostrado no
- * `--help` e na tela de login. Determinístico (seed fixa): a mesma "chuva"
- * sempre, sem piscar diferente a cada execução.
+ * Logo NIO com efeito Matrix. `renderMatrixLogo()` = frame estático; `animateMatrixLogo()`
+ * toca a chuva caindo (~1.3s) e assenta nele — só em TTY (fallback estático fora,
+ * ou com `NIO_NO_ANIM=1`).
  */
+import { envName } from './brand.js';
+
+// ─── Ajuste fino da animação (só afeta TTY). O dono mexe aqui. ─────────
+const ANIM = {
+  frames: 30, //     nº de quadros da chuva caindo
+  frameMs: 45, //    ms entre quadros  (30 * 45 ≈ 1.35s)
+  rainColumns: 42, // colunas de chuva por quadro (densidade)
+  settleSeed: 42, //  seed do frame final (o estático)
+};
 
 const MATRIX_CHARS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾜﾝ0123456789';
 const TRAIL_CHARS = '･｡';
@@ -47,7 +56,7 @@ interface Canvas {
 }
 
 /** Desenha o logo centralizado e devolve o retângulo ocupado (a chuva não pisa nele). */
-function placeLogo(width: number, height: number): { cells: string[][]; logoArea: Set<string>; logoR: number; logoC: number } {
+function placeLogo(width: number, height: number): Canvas & { logoC: number } {
   const cells = Array.from({ length: height }, () => Array<string>(width).fill(' '));
   const logoH = NIO_LOGO.length;
   const logoW = NIO_LOGO[0].length;
@@ -61,19 +70,31 @@ function placeLogo(width: number, height: number): { cells: string[][]; logoArea
       logoArea.add(`${logoR + i},${logoC + j}`);
     }
   }
-  return { cells, logoArea, logoR, logoC };
+  return { cells, logoArea, logoC };
 }
 
-/** Colunas de chuva caindo (cabeça brilhante + rastro de pontos), evitando a área do logo. */
-function scatterRain(rand: () => number, canvas: Canvas, width: number, height: number, logoC: number, logoW: number): void {
+/**
+ * Colunas de chuva (cabeça brilhante + rastro de pontos), evitando a área do logo.
+ * `fall` desloca todas as colunas pra baixo — `< 0` = chuva ainda "acima" da tela
+ * (usado nos primeiros quadros da animação).
+ */
+function scatterRain(
+  rand: () => number,
+  canvas: Canvas,
+  width: number,
+  height: number,
+  logoC: number,
+  logoW: number,
+  fall: number,
+): void {
   const cols: number[] = [];
-  for (let n = 0; n < 35; n++) {
+  for (let n = 0; n < ANIM.rainColumns; n++) {
     const col = randInt(rand, 0, width - 1);
     if (!(col >= logoC - 1 && col <= logoC + logoW)) cols.push(col);
   }
 
   for (const col of cols) {
-    const start = randInt(rand, -10, 3);
+    const start = randInt(rand, -10, 3) + fall;
     const trail = randInt(rand, 6, 18);
     for (let i = 0; i < trail; i++) {
       const row = start + i;
@@ -89,14 +110,13 @@ function scatterLoosePixels(rand: () => number, canvas: Canvas, width: number, h
   for (let n = 0; n < 50; n++) {
     const row = randInt(rand, 0, height - 1);
     const col = randInt(rand, 0, width - 1);
-    const key = `${row},${col}`;
-    if (!canvas.logoArea.has(key) && canvas.cells[row][col] === ' ') {
+    if (!canvas.logoArea.has(`${row},${col}`) && canvas.cells[row][col] === ' ') {
       canvas.cells[row][col] = pickChar(rand, MATRIX_CHARS);
     }
   }
 }
 
-/** Colore: logo em verde sólido, chuva/pixels em tons variados de verde (ou sem cor). */
+/** Colore: logo em verde sólido, chuva/pixels em tons variados de verde. */
 function colorize(rand: () => number, canvas: Canvas, width: number, height: number, colored: boolean): string {
   const lines: string[] = [];
   for (let r = 0; r < height; r++) {
@@ -128,18 +148,54 @@ export interface MatrixLogoOptions {
   colored?: boolean;
 }
 
-export function renderMatrixLogo(opts: MatrixLogoOptions = {}): string {
+/** Um quadro. `fall` desloca a chuva (0 = assentado). */
+function renderFrame(opts: MatrixLogoOptions, seed: number, fall: number): string {
   const width = opts.width ?? 70;
   const height = opts.height ?? 24;
-  const seed = opts.seed ?? 42;
   const colored = opts.colored ?? Boolean(process.stdout.isTTY);
 
   const rand = mulberry32(seed);
-  const { cells, logoArea, logoC } = placeLogo(width, height);
-  const canvas: Canvas = { cells, logoArea };
-
-  scatterRain(rand, canvas, width, height, logoC, NIO_LOGO[0].length);
+  const canvas = placeLogo(width, height);
+  scatterRain(rand, canvas, width, height, canvas.logoC, NIO_LOGO[0].length, fall);
   scatterLoosePixels(rand, canvas, width, height);
-
   return colorize(rand, canvas, width, height, colored);
+}
+
+/** O logo estático (frame assentado). Determinístico: mesma seed, mesma saída. */
+export function renderMatrixLogo(opts: MatrixLogoOptions = {}): string {
+  return renderFrame(opts, opts.seed ?? ANIM.settleSeed, 0);
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+function animationDisabled(width: number, height: number): boolean {
+  return (
+    !process.stdout.isTTY ||
+    Boolean(process.env.CI) ||
+    Boolean(process.env[envName('NO_ANIM')]) ||
+    (process.stdout.rows ?? 24) < height + 2 ||
+    (process.stdout.columns ?? 80) < width
+  );
+}
+
+/**
+ * Toca a chuva caindo e assenta no logo. Fora de TTY / com `NIO_NO_ANIM` / `CI` /
+ * terminal baixo demais → só imprime o estático uma vez. Deixa o frame final na tela.
+ */
+export async function animateMatrixLogo(opts: MatrixLogoOptions = {}): Promise<void> {
+  const width = opts.width ?? 70;
+  const height = opts.height ?? 24;
+  if (animationDisabled(width, height)) {
+    process.stdout.write(renderMatrixLogo(opts) + '\n');
+    return;
+  }
+
+  const up = `\x1b[${height}A`;
+  for (let f = 0; f <= ANIM.frames; f++) {
+    const last = f === ANIM.frames;
+    const seed = last ? (opts.seed ?? ANIM.settleSeed) : (ANIM.settleSeed + f * 0x9e37) >>> 0;
+    const frame = last ? renderMatrixLogo(opts) : renderFrame(opts, seed, f - ANIM.frames);
+    process.stdout.write((f === 0 ? '' : up) + frame + '\n');
+    if (!last) await sleep(ANIM.frameMs);
+  }
 }

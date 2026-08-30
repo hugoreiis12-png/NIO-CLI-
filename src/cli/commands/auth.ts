@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { input, password } from "../../lib/prompts.js";
 import { brand } from "../../brand.js";
-import { renderMatrixLogo } from "../../matrix-logo.js";
+import { animateMatrixLogo } from "../../matrix-logo.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { c, sym } from "../../lib/colors.js";
 import { createUserRepository } from "../../adapters/pg/user-repository.js";
@@ -48,10 +48,55 @@ async function resolveSecondFactor(
 
 const MIN_PASSWORD_LENGTH = 8;
 
+/** Fluxo completo de login: config → prompt nome/senha → gateway (+2FA) → salva a sessão. */
+async function runLogin(): Promise<void> {
+  await ensureConfig({ interactive: true });
+  const name = await input({ message: authCopy.login.namePrompt });
+  const pass = await password({ message: authCopy.login.passwordPrompt, mask: "*" });
+
+  const spinner = startSpinner("Autenticando...");
+  let session: GatewaySession;
+  try {
+    const result = await gatewayLogin(name.trim(), pass);
+    if (!result) {
+      spinner.fail(authCopy.login.invalidCredentials);
+      process.exit(1);
+    }
+    spinner.stop();
+
+    if (result.step === "done") {
+      session = result;
+    } else {
+      const s = await resolveSecondFactor(result.challengeId, result.phoneHint);
+      if (!s) {
+        console.error(`${c.red(sym.err)} 2º fator não concluído.`);
+        process.exit(1);
+      }
+      session = s;
+    }
+  } catch (err) {
+    spinner.fail(`Falha ao autenticar: ${(err as Error).message}`);
+    process.exit(1);
+  }
+
+  await saveSession({
+    userId: session.userId,
+    name: session.name,
+    token: session.token,
+    sessionId: session.sessionId,
+    loggedInAt: new Date().toISOString(),
+    expiresAt: session.expiresAt,
+  });
+  await animateMatrixLogo();
+  console.log("[ok] Autenticado!");
+  console.log(`Usuário: ${session.name}`);
+  console.log(`ID:      ${session.userId}`);
+}
+
 function registerRegisterCommand(program: Command): void {
   program
     .command("register")
-    .description("Cria um novo usuário no banco (user_cli)")
+    .description("Cria um novo usuário no banco (user_cli) e já entra (login)")
     .action(async () => {
       await ensureConfig({ interactive: true });
       const name = await input({
@@ -74,13 +119,14 @@ function registerRegisterCommand(program: Command): void {
         }
         const user = await repo.create({ name: name.trim(), password: pass });
         spinner.stop();
-        console.log(renderMatrixLogo());
-        console.log(`[ok] Usuário criado: ${user.name} (id ${user.id})`);
-        console.log(`Rode \`${brand.name} login\` pra autenticar.`);
+        console.log(`${c.green(sym.ok)} Usuário criado: ${user.name} (id ${user.id})`);
       } catch (err) {
         spinner.fail(`Falha ao criar usuário: ${(err as Error).message}`);
         process.exit(1);
       }
+
+      console.log(c.dim("\nVamos entrar:"));
+      await runLogin();
     });
 }
 
@@ -88,49 +134,7 @@ function registerLoginCommand(program: Command): void {
   program
     .command("login")
     .description("Autentica via nio-gateway (túnel HTTP) e salva a sessão localmente (JWT)")
-    .action(async () => {
-      await ensureConfig({ interactive: true });
-      const name = await input({ message: authCopy.login.namePrompt });
-      const pass = await password({ message: authCopy.login.passwordPrompt, mask: "*" });
-
-      const spinner = startSpinner("Autenticando...");
-      let session: GatewaySession;
-      try {
-        const result = await gatewayLogin(name.trim(), pass);
-        if (!result) {
-          spinner.fail(authCopy.login.invalidCredentials);
-          process.exit(1);
-        }
-        spinner.stop();
-
-        if (result.step === "done") {
-          session = result;
-        } else {
-          const s = await resolveSecondFactor(result.challengeId, result.phoneHint);
-          if (!s) {
-            console.error(`${c.red(sym.err)} 2º fator não concluído.`);
-            process.exit(1);
-          }
-          session = s;
-        }
-      } catch (err) {
-        spinner.fail(`Falha ao autenticar: ${(err as Error).message}`);
-        process.exit(1);
-      }
-
-      await saveSession({
-        userId: session.userId,
-        name: session.name,
-        token: session.token,
-        sessionId: session.sessionId,
-        loggedInAt: new Date().toISOString(),
-        expiresAt: session.expiresAt,
-      });
-      console.log(renderMatrixLogo());
-      console.log("[ok] Autenticado!");
-      console.log(`Usuário: ${session.name}`);
-      console.log(`ID:      ${session.userId}`);
-    });
+    .action(runLogin);
 }
 
 function registerLogoutCommand(program: Command): void {
@@ -166,7 +170,7 @@ function registerWhoamiCommand(program: Command): void {
         console.log(JSON.stringify(session, null, 2));
         return;
       }
-      console.log(renderMatrixLogo());
+      await animateMatrixLogo();
       console.log(`Usuário:   ${session.name}`);
       console.log(`ID:        ${session.userId}`);
       console.log(`Login em:  ${session.loggedInAt}`);

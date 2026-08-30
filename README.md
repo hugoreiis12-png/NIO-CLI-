@@ -137,9 +137,9 @@ Hexagonal. O núcleo não conhece IO; os adapters implementam os contratos.
 entrypoints:  src/cli.ts (nio)          src/gateway/index.ts (nio-gateway)
               src/mcp-server.ts (nio-cli)   src/mcp-server-lang.ts (nio-lang)
 app:          SessionManager · EnvironmentBuilder · DependencyWatcher · DockerManager
-core/:        types.ts / session.ts (entidades)  +  ports.ts / repositories.ts
-              / environment.ts / docker.ts / messaging.ts (interfaces, sem IO)
-adapters/:    pg/ (Postgres)  ide/ (vscode)  pkg/ (npm,pip,…)  docker/  sms/  skills/
+core/:        types.ts (entidades + enums)  +  ports por domínio, sem IO:
+              repositories.ts · environment.ts · docker.ts · messaging.ts · lang.ts
+adapters/:    pg/ (Postgres)  ide/ (vscode)  pkg/ (npm,pip,…)  docker/  sms/  skills/  lang/
 profiles/:    catálogo dos 6 perfis (fixos no fonte)
 ```
 
@@ -159,7 +159,7 @@ Detalhes: [`docs/arch/`](docs/arch/) (uma `ARQUITETURA-*.md` por camada) e os
 
 ### Perfis
 
-Fixos no fonte (`src/core/session.ts`) — novos perfis só entram alterando o código:
+Fixos no fonte (`src/core/types.ts`) — novos perfis só entram alterando o código:
 
 `fullstack` · `analyst` · `scientist` · `dba` · `qa` · `bi`
 
@@ -248,7 +248,7 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | `login` | Autentica via nio-gateway (túnel HTTP) e salva a sessão localmente (JWT) |
 | `logout` | Encerra a sessão local e revoga a auth_session no banco |
 | `plan` | Roda o engine pensante sobre o projeto e escreve/refina o plan.md da raiz. |
-| `register` | Cria um novo usuário no banco (user_cli) |
+| `register` | Cria um novo usuário no banco (user_cli) e já entra (login) |
 | `security` | 2º fator do login (SMS OTP + códigos de backup) |
 | `security disable-2fa` | Desativa o 2º fator |
 | `security enable-2fa` | Ativa o 2º fator via SMS |
@@ -452,6 +452,9 @@ background em qualquer comando (`update-notifier`).
 Sempre: `nio debug` mostra o estado de tudo com uma dica por item. E
 `NIO_DEBUG=1 nio <cmd>` liga log verboso (`[nio:debug]` em stderr): `.env`
 carregados, config resolvida, requests pro gateway, e stack trace completo nos erros.
+
+O logo Matrix anima (chuva caindo) toda vez que aparece em terminal interativo.
+`NIO_NO_ANIM=1` deixa ele sempre estático; fora de TTY (pipe/CI) já é estático.
 
 ---
 

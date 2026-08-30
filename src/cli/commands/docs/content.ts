@@ -206,9 +206,13 @@ export const SECTIONS: DocSection[] = [
       },
       { kind: 'code', text: 'NIO_DEBUG=1 nio login' },
       {
+        kind: 'p',
+        text: 'O logo Matrix anima (chuva) em TTY; `NIO_NO_ANIM=1` deixa estático (fora de TTY já é).',
+      },
+      {
         kind: 'list',
         items: [
-          '"NIO_DATABASE_URL não definida" → ponha em ~/.nio/config.env (o bin publicado não lê o .env de dev via bun).',
+          '"NIO_DATABASE_URL não definida" → ponha em ~/.nio/config.env, ou rode `nio config setup`.',
           '"Não consegui falar com o nio-gateway" → suba `nio-gateway &`.',
           '"Não autenticado" → `nio register` (1ª vez) e `nio login`.',
           '"2FA não configurado no servidor" (503) → faltam as SMS_* no ambiente do nio-gateway.',

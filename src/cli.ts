@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { DEBUG } from "./lib/debug.js";
 import { VERSION } from "./version.js";
 import { brand } from "./brand.js";
-import { renderMatrixLogo } from "./matrix-logo.js";
+import { renderMatrixLogo, animateMatrixLogo } from "./matrix-logo.js";
 import { notifyCliIfUpdate } from "./lib/version-check.js";
 import { registerAuthCommands } from "./cli/commands/auth.js";
 import { registerInitCommand } from "./cli/commands/init/index.js";
@@ -29,12 +29,15 @@ import { registerConfigCommand } from "./cli/commands/config.js";
 
 notifyCliIfUpdate();
 
+/** `--help` toca a animação antes; se já rolou, o `beforeAll` não redesenha. */
+let logoShown = false;
+
 const program = new Command();
 program
   .name(brand.name)
   .description(`CLI do ${brand.productName} (${brand.productFullName})`)
   .version(VERSION)
-  .addHelpText("beforeAll", () => renderMatrixLogo());
+  .addHelpText("beforeAll", () => (logoShown ? "" : renderMatrixLogo()));
 
 registerAuthCommands(program);
 registerInitCommand(program);
@@ -57,7 +60,21 @@ registerSecurityCommands(program);
 registerDocsCommand(program);
 registerConfigCommand(program);
 
-program.parseAsync(process.argv).catch((err) => {
+// Animação só pro help de topo (`nio`, `nio -h`, `nio --help`, `nio help`) —
+// subcomandos e comandos reais não passam por aqui.
+const args = process.argv.slice(2);
+const topHelp =
+  args.length === 0 ||
+  (args.length === 1 && (args[0] === "-h" || args[0] === "--help" || args[0] === "help"));
+const helpPromise = topHelp
+  ? animateMatrixLogo().then(() => {
+      logoShown = true;
+    })
+  : Promise.resolve();
+
+helpPromise
+  .then(() => program.parseAsync(process.argv))
+  .catch((err) => {
   if (DEBUG) console.error(err);
   else console.error(`Erro: ${(err as Error).message}\n(rode com NIO_DEBUG=1 pro stack trace completo)`);
   process.exit(1);

@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { Command } from "commander";
 import { brand } from "../../../brand.js";
-import { renderMatrixLogo } from "../../../matrix-logo.js";
+import { animateMatrixLogo } from "../../../matrix-logo.js";
 import { getProjectConfigPath, type ProjectConfig, type Ide } from "../../../config.js";
 import type { Session, Ide as SessionIde, Profile } from "../../../core/types.js";
 import { SessionManager, type MaterializedSession } from "../../../app/session-manager.js";
@@ -279,7 +279,7 @@ async function runInitWizard(): Promise<void> {
   const configPath = getProjectConfigPath();
   if (!(await confirmOverwriteIfExists(configPath))) return;
 
-  console.log(renderMatrixLogo());
+  await animateMatrixLogo();
   console.log(`${brand.name} init — monta o ambiente desta sessão.`);
 
   // Antes de tudo: config da equipe (NIO_DATABASE_URL/JWT_SECRET). Falta → wizard.
