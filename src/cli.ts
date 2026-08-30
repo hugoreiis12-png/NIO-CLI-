@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./lib/load-env.js";
 import { Command } from "commander";
 import { VERSION } from "./version.js";
 import { brand } from "./brand.js";

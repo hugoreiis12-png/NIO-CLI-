@@ -4,6 +4,7 @@
  * sem framework nem deps externas), loopback only. Rotas: `/login` (1º fator),
  * `/verify-2fa` (2º fator → JWT), `/logout`, `/health`, `/security/*` (Bearer).
  */
+import '../lib/load-env.js';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { login, logout, verifyLogin } from './services/login.js';
 import * as security from './services/security.js';

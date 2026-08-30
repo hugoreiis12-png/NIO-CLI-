@@ -8,6 +8,7 @@
  * Sem autenticação: serve conhecimento de linguagem (público, sem segredo) —
  * diferente do `nio` (mcp-server.ts), que exige JWT. Ver `docs/v2/ARQUITETURA-NIO-LANG.md`.
  */
+import './lib/load-env.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
