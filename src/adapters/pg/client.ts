@@ -75,6 +75,16 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
   return getPool().query<T>(text, params ? [...params] : undefined);
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * `true` se `s` tem forma de UUID. Repositórios com PK `uuid` usam isto pra tratar
+ * um id malformado como "não encontrado" em vez de deixar o pg lançar `22P02`.
+ */
+export function isUuid(s: string): boolean {
+  return UUID_RE.test(s);
+}
+
 /**
  * Roda `fn` com um client dedicado do pool dentro de uma transação
  * (`BEGIN`/`COMMIT`, com `ROLLBACK` em erro). Use quando várias escritas precisam

@@ -1,5 +1,5 @@
 import { test, expect, afterEach } from 'bun:test';
-import { getPool, ping, closePool } from './client.js';
+import { getPool, ping, closePool, isUuid } from './client.js';
 
 const KEY = 'NIO_DATABASE_URL';
 const original = process.env[KEY];
@@ -30,4 +30,12 @@ test('getPool é singleton com uma URL válida', () => {
   // isto não toca a rede — só valida a construção e o caching do pool.
   process.env[KEY] = 'postgres://user:pass@localhost:5432/nio_cli';
   expect(getPool()).toBe(getPool());
+});
+
+test('isUuid: aceita UUID (qualquer caixa), rejeita o resto', () => {
+  expect(isUuid('36aa759f-3b92-4ae7-a490-cf8659d362d1')).toBe(true);
+  expect(isUuid('36AA759F-3B92-4AE7-A490-CF8659D362D1')).toBe(true);
+  expect(isUuid('x')).toBe(false);
+  expect(isUuid('')).toBe(false);
+  expect(isUuid('36aa759f-3b92-4ae7-a490-cf8659d362d1 ')).toBe(false);
 });

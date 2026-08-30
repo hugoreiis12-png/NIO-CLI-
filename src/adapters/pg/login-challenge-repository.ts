@@ -8,7 +8,7 @@ import type {
   LoginChallengeRepository,
   NewLoginChallengeInput,
 } from '../../core/repositories.js';
-import { query, withTransaction } from './client.js';
+import { query, withTransaction, isUuid } from './client.js';
 
 /** Linha crua de `login_challenges` (snake_case). */
 export interface LoginChallengeRow {
@@ -25,6 +25,11 @@ export interface LoginChallengeRow {
 
 const COLS =
   'id, user_id, purpose, code_hash, channel, attempts, expires_at, consumed_at, created_at';
+
+/** `id` da coluna é UUID — string fora do formato nunca casa (evita o erro 22P02 do pg). */
+export function isChallengeId(id: string): boolean {
+  return isUuid(id);
+}
 
 export function mapLoginChallengeRow(row: LoginChallengeRow): LoginChallenge {
   return {
@@ -60,6 +65,7 @@ export function createLoginChallengeRepository(): LoginChallengeRepository {
     },
 
     async findById(id) {
+      if (!isChallengeId(id)) return null;
       const res = await query<LoginChallengeRow>(
         `SELECT ${COLS} FROM login_challenges WHERE id = $1`,
         [id],
@@ -69,6 +75,7 @@ export function createLoginChallengeRepository(): LoginChallengeRepository {
     },
 
     async incrementAttempts(id) {
+      if (!isChallengeId(id)) return 0;
       const res = await query<{ attempts: number }>(
         'UPDATE login_challenges SET attempts = attempts + 1 WHERE id = $1 RETURNING attempts',
         [id],
@@ -77,6 +84,7 @@ export function createLoginChallengeRepository(): LoginChallengeRepository {
     },
 
     async consume(id) {
+      if (!isChallengeId(id)) return;
       await query(
         'UPDATE login_challenges SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL',
         [id],

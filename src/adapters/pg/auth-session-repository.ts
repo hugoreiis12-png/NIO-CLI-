@@ -9,7 +9,7 @@
  */
 import type { AuthSession } from '../../core/session.js';
 import type { AuthSessionRepository, NewAuthSessionInput } from '../../core/repositories.js';
-import { query } from './client.js';
+import { query, isUuid } from './client.js';
 
 /** Linha crua de `auth_sessions` (snake_case), como o pg devolve. */
 export interface AuthSessionRow {
@@ -44,12 +44,14 @@ export function createAuthSessionRepository(): AuthSessionRepository {
     },
 
     async findById(id) {
+      if (!isUuid(id)) return null;
       const res = await query<AuthSessionRow>(`SELECT ${COLS} FROM auth_sessions WHERE id = $1`, [id]);
       const row = res.rows[0];
       return row ? mapAuthSessionRow(row) : null;
     },
 
     async revoke(id) {
+      if (!isUuid(id)) return;
       await query(
         `UPDATE auth_sessions SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL`,
         [id],

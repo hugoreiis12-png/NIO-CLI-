@@ -1,5 +1,9 @@
 import { test, expect } from 'bun:test';
-import { mapLoginChallengeRow, type LoginChallengeRow } from './login-challenge-repository.js';
+import {
+  mapLoginChallengeRow,
+  isChallengeId,
+  type LoginChallengeRow,
+} from './login-challenge-repository.js';
 
 const row: LoginChallengeRow = {
   id: 'c1d2e3f4-0000-4000-8000-000000000001',
@@ -31,4 +35,13 @@ test('mapLoginChallengeRow: consumed_at preservado; purpose enable_2fa', () => {
   });
   expect(c.purpose).toBe('enable_2fa');
   expect(c.consumedAt).toEqual(new Date('2026-08-29T12:02:00Z'));
+});
+
+test('isChallengeId: só UUID passa — garbage vira not_found antes do pg', () => {
+  expect(isChallengeId('c1d2e3f4-0000-4000-8000-000000000001')).toBe(true);
+  expect(isChallengeId('C1D2E3F4-0000-4000-8000-000000000001')).toBe(true);
+  expect(isChallengeId('x')).toBe(false);
+  expect(isChallengeId('')).toBe(false);
+  expect(isChallengeId("'; DROP TABLE login_challenges; --")).toBe(false);
+  expect(isChallengeId('c1d2e3f4-0000-4000-8000-00000000000')).toBe(false);
 });
