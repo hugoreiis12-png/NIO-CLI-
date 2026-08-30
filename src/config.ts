@@ -1,8 +1,10 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, isAbsolute, dirname } from 'node:path';
-import { PROJECT_CONFIG_FILE } from './constants.js';
 import { brand, env } from './brand.js';
 import { DEV_ROLE, GENERAL, type Selection } from './lib/sections.js';
+
+/** Arquivo de binding do projeto na raiz do repo (`nio.json`). */
+const PROJECT_CONFIG_FILE = brand.projectConfigFile;
 
 /**
  * IDE do usuário — habilita integrações (ex.: `/implement` registra o worktree no

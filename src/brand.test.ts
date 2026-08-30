@@ -3,7 +3,6 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { brand, patRegex, homePath, env, envName } from './brand.js';
 import { toolDefinitions } from './tools/index.js';
-import { PROJECT_CONFIG_FILE } from './constants.js';
 
 // Trava os defaults: mudar qualquer um destes é um rebrand consciente, não um acidente.
 test('defaults da marca reproduzem os valores atuais (NIO)', () => {
@@ -48,7 +47,7 @@ test('as tools v2 estão registradas — só nio_, sem nos_ (v1 removido)', () =
 });
 
 test('constants derivados batem com os caminhos atuais', () => {
-  expect(PROJECT_CONFIG_FILE).toBe('nio.json');
+  expect(brand.projectConfigFile).toBe('nio.json');
 });
 
 test('patRegex aceita o formato NIO e rejeita o resto', () => {
