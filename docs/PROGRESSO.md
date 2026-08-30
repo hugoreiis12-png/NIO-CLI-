@@ -38,7 +38,7 @@ Relacionamentos (todos `ON DELETE CASCADE`):
 | `scripts/db-ping.ts` + script `db:ping` | Healthcheck manual (`SELECT 1`) |
 | `src/lib/password.ts` | `hashPassword` / `verifyPassword` (argon2id) |
 | `src/lib/password.test.ts` | 5 testes de roundtrip argon2id |
-| `src/core/session.ts` | Domínio v2: entidades das 5 tabelas + enums dos `CHECK` |
+| `src/core/types.ts` | Domínio v2: entidades das 5 tabelas + enums dos `CHECK` |
 | `src/core/repositories.ts` | Port `UserRepository` (+ `NewUserInput`) |
 | `src/adapters/pg/user-repository.ts` | Implementação pg do `UserRepository` (+ `mapUserRow`) |
 | `src/adapters/pg/user-repository.test.ts` | 5 testes de `mapUserRow`, DB-free |
@@ -140,7 +140,7 @@ de `sessions` (ambiente) de propósito — ver decisão abaixo.
 | Arquivo | Papel |
 |---|---|
 | `db/schema.sql` + `db/migrations/0002_auth_sessions.sql` | Tabela `auth_sessions` — `id` (UUID) dobra como `jti`; `user_id`, `expires_at`, `revoked_at`, `created_at`. Sem invariante de unicidade (multi-dispositivo: várias linhas ativas por usuário) |
-| `src/core/session.ts` | Entidade `AuthSession` |
+| `src/core/types.ts` | Entidade `AuthSession` |
 | `src/core/repositories.ts` | Porta `AuthSessionRepository` (`create`, `findById`, `revoke`, `listActiveByUser`, `revokeAllByUser`) |
 | `src/adapters/pg/auth-session-repository.ts` (+ teste do mapper) | Implementação Postgres |
 | `src/gateway/config.ts` | `getJwtSecret()`, `JWT_EXPIRES_IN` (env vars **sem** prefixo `NIO_` — segredo distribuído pela equipe, igual em toda máquina) |
@@ -1409,7 +1409,7 @@ broker/fila), com **10 códigos de backup** de uso único como caminho alternati
 ### Código
 | Arquivo | Papel |
 |---|---|
-| `src/core/session.ts` | `UserCli` += `phone`; entidade `LoginChallenge` + `ChallengePurpose`. |
+| `src/core/types.ts` | `UserCli` += `phone`; entidade `LoginChallenge` + `ChallengePurpose`. |
 | `src/core/repositories.ts` | `UserRepository` += `findById`/`enable2fa`/`disable2fa`/`updateBackupCodes`/`getBackupCodes`; novo port `LoginChallengeRepository`. |
 | `src/adapters/pg/user-repository.ts` (+ test) | `phone`/`backup_codes` no `UserRow`/`COLS`; `mapUserRow` expõe `phone` mas **nunca** `backup_codes` na entidade; 5 métodos novos. |
 | `src/adapters/pg/login-challenge-repository.ts` (+ test do mapper) | molde do `dependency-event-repository`; `create` limpa expirados + desafio ativo do usuário em `withTransaction`. |

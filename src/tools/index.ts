@@ -1,5 +1,5 @@
 import type { Tool, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { UserCli } from '../core/session.js';
+import type { UserCli } from '../core/types.js';
 import type { ProjectConfig } from '../config.js';
 
 import * as delegateExec from './delegate-exec.js';

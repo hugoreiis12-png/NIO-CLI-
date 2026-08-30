@@ -6,7 +6,7 @@
  * — `UserCli` não os carrega; `getBackupCodes` é a única porta pros de backup.
  * `verifyCredentials` não distingue nome/senha errados (anti-enumeração).
  */
-import type { UserCli } from '../../core/session.js';
+import type { UserCli } from '../../core/types.js';
 import type { NewUserInput, UserRepository } from '../../core/repositories.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { query } from './client.js';

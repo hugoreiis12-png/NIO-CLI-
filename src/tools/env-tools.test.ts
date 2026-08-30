@@ -4,7 +4,7 @@ import { definition as detDef, runEnvDetectDeps, type MakeWatcher } from './env-
 import { SessionManager, SessionNotFoundError } from '../app/session-manager.js';
 import type { MaterializedSession } from '../app/session-manager.js';
 import type { DependencyWatcher, TickResult } from '../app/dependency-watcher.js';
-import type { Session } from '../core/session.js';
+import type { Session } from '../core/types.js';
 
 function mkSession(over: Partial<Session> = {}): Session {
   return {

@@ -38,7 +38,7 @@ import {
   runOperator,
 } from "../../app/docker-manager.js";
 import type { ClusterAction, ComposeAction, DockerResult, RunSpec } from "../../core/docker.js";
-import type { Session } from "../../core/session.js";
+import type { Session } from "../../core/types.js";
 import { dockerGatewayMcp } from "../../profiles/mcps.js";
 
 /** `docker` está utilizável? Senão, erro acionável + exit 1. */

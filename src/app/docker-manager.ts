@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { NIO_OPERATOR_MODEL } from '../lib/client-configs.js';
 import { CLUSTER_STACK } from '../lib/docker.js';
 import type { ClusterState, DockerGateway } from '../core/docker.js';
-import type { Session } from '../core/session.js';
+import type { Session } from '../core/types.js';
 import type { SessionRepository } from '../core/repositories.js';
 
 /** Contexto coletado de um container problemático — vira parte do prompt do `debug`. */

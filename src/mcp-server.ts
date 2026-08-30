@@ -32,7 +32,7 @@ import { brand, env } from './brand.js';
 import { loadSession } from './lib/session-store.js';
 import { createUserRepository } from './adapters/pg/user-repository.js';
 import { authenticate } from './gateway/middleware/auth.js';
-import type { UserCli } from './core/session.js';
+import type { UserCli } from './core/types.js';
 
 /** Carrega o config do projeto; erro de parse é degradado (log + null), nunca fatal. */
 function loadConfigStep(): ProjectConfig | null {

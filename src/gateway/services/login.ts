@@ -4,7 +4,7 @@
  * Ver `docs/specs/auth/0004-login-2fa-sms-otp.md` e ADR 0006.
  */
 import jwt from 'jsonwebtoken';
-import type { UserCli, LoginChallenge } from '../../core/session.js';
+import type { UserCli, LoginChallenge } from '../../core/types.js';
 import type { UserRepository, LoginChallengeRepository } from '../../core/repositories.js';
 import type { SmsSender } from '../../core/messaging.js';
 import { createUserRepository } from '../../adapters/pg/user-repository.js';

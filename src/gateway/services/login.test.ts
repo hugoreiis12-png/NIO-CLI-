@@ -8,7 +8,7 @@ import {
   type LoginDeps,
 } from './login.js';
 import { hashOtp } from '../../lib/otp.js';
-import type { UserCli, LoginChallenge } from '../../core/session.js';
+import type { UserCli, LoginChallenge } from '../../core/types.js';
 import type { UserRepository, LoginChallengeRepository } from '../../core/repositories.js';
 import type { SmsSender } from '../../core/messaging.js';
 

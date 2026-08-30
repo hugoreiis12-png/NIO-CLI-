@@ -18,7 +18,7 @@ import type {
   DependencyType,
   LoginChallenge,
   ChallengePurpose,
-} from './session.js';
+} from './types.js';
 
 /** Dados para criar um usuário. `password` é texto puro — o adapter hasheia (argon2id). */
 export interface NewUserInput {

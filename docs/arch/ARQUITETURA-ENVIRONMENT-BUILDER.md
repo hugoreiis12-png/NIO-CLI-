@@ -26,10 +26,10 @@ O **alvo e a persistência já estão modelados** — falta quem produza o dado.
 
 | Peça | Estado |
 |---|---|
-| `EnvironmentConfig` (shape do `sessions.config`): `languages[]`, `toolchains[]`, `frameworks[]`, `mcps[]`, `envVars`, `aliases`, `extra` (`src/core/session.ts:30`) | ✅ tipo definido |
+| `EnvironmentConfig` (shape do `sessions.config`): `languages[]`, `toolchains[]`, `frameworks[]`, `mcps[]`, `envVars`, `aliases`, `extra` (`src/core/types.ts:30`) | ✅ tipo definido |
 | `sessions.config JSONB` + índice GIN (`db/schema.sql:31,39`) | ✅ coluna pronta |
 | `SessionRepository.updateConfig(id, config)` e `NewSessionInput.config?` (`src/core/repositories.ts:42,68`) | ✅ escritor pronto |
-| `Profile` union + `pickProfile` no wizard (`src/core/session.ts:13`, `init/profile-step.ts`) | ✅ |
+| `Profile` union + `pickProfile` no wizard (`src/core/types.ts:13`, `init/profile-step.ts`) | ✅ |
 | Infra de instalação: `spawnSync` sem shell, allowlist por regex, marcador de idempotência (`~/.nio/installed-deps.json`), detecção por glob (`src/lib/dependency-install.ts`, `dependencies.ts`) | ✅ **reaproveitar** no `ToolchainGateway` — não reinventar |
 | `installOpencodeGlobal` / `planOpencodeUpdate` — merge defensivo do `mcp.nio` no `opencode.json` (`src/lib/client-configs.ts:257,290`) | ✅ **estender** pra fundir MCPs do perfil |
 | **`src/profiles/` (catálogo)** — CLAUDE.md promete, não existe | ❌ |
@@ -178,7 +178,7 @@ Cada passo termina com `bunx tsc --noEmit` limpo e `bun test` verde.
 
 - `docs/arch/ARQUITETURA-CLIENTE-IA.md` — operador fixo (OpenCode/big-pickle),
   handoff do `init`; o `EnvironmentBuilder` roda antes do handoff.
-- `src/core/session.ts` (`EnvironmentConfig`), `src/core/repositories.ts`
+- `src/core/types.ts` (`EnvironmentConfig`), `src/core/repositories.ts`
   (`SessionRepository.updateConfig`), `src/lib/client-configs.ts`
   (`planOpencodeUpdate`), `src/lib/dependency-install.ts` (padrão de instalação).
 - `CLAUDE.md` — regra do hexágono, perfis hardcoded, `adapters/pkg/`.

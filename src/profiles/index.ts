@@ -3,7 +3,7 @@
  * (`core/environment.ts`). Novo perfil = novo arquivo aqui + entrada em
  * `DEFINITIONS`. Nenhum IO: só dados + resolução.
  */
-import type { Profile } from '../core/session.js';
+import type { Profile } from '../core/types.js';
 import type { ProfileCatalog, ProfileDefinition, McpSpec, ToolchainSpec } from '../core/environment.js';
 import { dbaProfile } from './dba.js';
 import { fullstackProfile } from './fullstack.js';

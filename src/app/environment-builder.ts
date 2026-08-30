@@ -13,7 +13,7 @@
  *
  * Ver `docs/arch/ARQUITETURA-ENVIRONMENT-BUILDER.md`.
  */
-import type { Profile, EnvironmentConfig } from '../core/session.js';
+import type { Profile, EnvironmentConfig } from '../core/types.js';
 import type {
   ProfileCatalog,
   ToolchainGateway,

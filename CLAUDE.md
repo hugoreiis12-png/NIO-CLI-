@@ -36,22 +36,30 @@
 ## Arquitetura (hexagonal)
 
 ```
-entrypoints:  src/cli.ts (nio)            src/mcp-server.ts (nio-cli, tools de ambiente)
-app:          SessionManager · EnvironmentBuilder · DependencyWatcher
-core/:        types.ts (entidades)  +  ports.ts (interfaces: SessionRepository,
-              UserRepository, EnvironmentGateway, ToolchainGateway, ProfileCatalog,
-              SessionCache, IdeGateway, ...)
-adapters/:    pg/ (Postgres)  fs/ (cache local)  pkg/ (npm,pip,...)  ide/ (vscode)
-profiles/:    catálogo de perfis (hardcoded no código fonte)
+entrypoints:  src/cli.ts (nio)              src/gateway/index.ts (nio-gateway)
+              src/mcp-server.ts (nio-cli)   src/mcp-server-lang.ts (nio-lang)
+app/:         SessionManager · EnvironmentBuilder · DependencyWatcher · DockerManager
+              · LanguageConfigurator
+core/:        types.ts (entidades + enums do schema)
+              + ports por domínio, só interfaces, ZERO IO:
+                repositories.ts (User/Session/AuthSession/LoginChallenge/DependencyEvent)
+                environment.ts  (ProfileCatalog/RecipeCatalog/ToolchainGateway/IdeGateway + shapes)
+                docker.ts       (DockerGateway)   messaging.ts (SmsSender)
+                lang.ts         (KnowledgeStore/LanguageCatalog/ScaffoldGateway/…)
+adapters/:    pg/ (Postgres, driver `pg`)  ide/ (vscode)  pkg/ (npm,pip,…)
+              docker/  sms/ (HTTP genérico)  skills/ (cache do repo NIO-SKILLS)  lang/
+gateway/:     index.ts (HTTP nativo) · edge-filter.ts · middleware/ · services/
+profiles/:    catálogo dos 6 perfis (hardcoded no fonte)
 ```
 
-- **Regra do hexágono:** `core/ports.ts` não importa nenhum client de banco/IO;
-  os adapters implementam os ports. Entidades em `core/types.ts` não têm vínculo
-  com backend.
+- **Regra do hexágono:** nenhum arquivo de `core/` importa client de banco/IO
+  (`pg`, `fs`, `child_process`); os adapters implementam os ports. Contrato dos
+  ports de IO (`ToolchainGateway`/`IdeGateway`/`DockerGateway`/`SmsSender`):
+  **nunca lançam** — falha vira um resultado `{ status, error? }`.
 - **Perfis** (`fullstack`, `analyst`, `scientist`, `dba`, `qa`, `bi`) são fixos no
   código; novos perfis só entram alterando o fonte.
-- **Enums do schema** (`profile`, `status`, `ide`, `dependency_type`) viram **union
-  types** em `core/types.ts` — fonte única, sem string solta.
+- **Enums do schema** (`profile`, `status`, `ide`, `dependency_type`, `purpose`,
+  `channel`) viram **union types** em `core/types.ts` — fonte única, sem string solta.
 
 ## MCP
 

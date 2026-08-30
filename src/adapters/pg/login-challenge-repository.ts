@@ -3,7 +3,7 @@
  * `login_challenges` (código hasheado, TTL, tentativas, consumo). `create` roda
  * em transação: apaga desafios ativos anteriores e expirados, depois insere.
  */
-import type { LoginChallenge, ChallengePurpose } from '../../core/session.js';
+import type { LoginChallenge, ChallengePurpose } from '../../core/types.js';
 import type {
   LoginChallengeRepository,
   NewLoginChallengeInput,

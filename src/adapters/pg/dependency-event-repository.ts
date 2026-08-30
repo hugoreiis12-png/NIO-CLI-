@@ -4,7 +4,7 @@
  * `dependency_events`. `recordIfNew` faz o dedupe (session+file+name) numa
  * transação pra não criar duas linhas iguais em ticks concorrentes.
  */
-import type { DependencyEvent, DependencyType } from '../../core/session.js';
+import type { DependencyEvent, DependencyType } from '../../core/types.js';
 import type {
   DependencyEventRepository,
   NewDependencyEventInput,

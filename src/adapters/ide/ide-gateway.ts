@@ -7,7 +7,7 @@
  * **Nunca lança** (contrato do port): tudo vira um `status` no `OpenResult`.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import type { Ide } from '../../core/session.js';
+import type { Ide } from '../../core/types.js';
 import type { IdeGateway, OpenResult } from '../../core/environment.js';
 
 /**

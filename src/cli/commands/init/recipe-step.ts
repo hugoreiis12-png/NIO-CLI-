@@ -1,6 +1,6 @@
 import { select } from "../../../lib/prompts.js";
 import { section } from "../../../lib/colors.js";
-import type { Profile } from "../../../core/session.js";
+import type { Profile } from "../../../core/types.js";
 import type { EnvironmentRecipe } from "../../../core/environment.js";
 import { createRecipeCatalog } from "../../../adapters/skills/recipe-catalog.js";
 

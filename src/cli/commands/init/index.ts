@@ -3,7 +3,7 @@ import type { Command } from "commander";
 import { brand } from "../../../brand.js";
 import { renderMatrixLogo } from "../../../matrix-logo.js";
 import { getProjectConfigPath, type ProjectConfig, type Ide } from "../../../config.js";
-import type { Session, Ide as SessionIde, Profile } from "../../../core/session.js";
+import type { Session, Ide as SessionIde, Profile } from "../../../core/types.js";
 import { SessionManager, type MaterializedSession } from "../../../app/session-manager.js";
 import type { McpSpec } from "../../../core/environment.js";
 import { createIdeGateway } from "../../../adapters/ide/ide-gateway.js";
@@ -24,7 +24,7 @@ import { LanguageConfigurator, type LanguageSelection } from "../../../app/langu
 import { createLanguageCatalog } from "../../../adapters/lang/language-catalog.js";
 import { n8nMcp } from "../../../profiles/mcps.js";
 import type { LanguageId } from "../../../core/lang.js";
-import type { EnvironmentConfig } from "../../../core/session.js";
+import type { EnvironmentConfig } from "../../../core/types.js";
 import { pickLanguages, pickLanguageChoices } from "./lang-step.js";
 import { requireLocalSessionStep } from "./auth-step.js";
 import { pickProfile, pickSessionName, pickIde } from "./profile-step.js";

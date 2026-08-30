@@ -4,7 +4,7 @@ import { definition as activateDef, runSessionActivate } from './session-activat
 import { definition as createDef, runSessionCreate } from './session-create.js';
 import { SessionManager, SessionNotFoundError, AmbiguousSessionError } from '../app/session-manager.js';
 import type { MaterializedSession } from '../app/session-manager.js';
-import type { Session } from '../core/session.js';
+import type { Session } from '../core/types.js';
 
 function mkSession(over: Partial<Session> = {}): Session {
   return {

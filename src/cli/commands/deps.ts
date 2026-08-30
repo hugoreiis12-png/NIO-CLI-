@@ -6,7 +6,7 @@ import { loadSession } from "../../lib/session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { createDependencyEventRepository } from "../../adapters/pg/dependency-event-repository.js";
 import { DependencyWatcher, type TickResult } from "../../app/dependency-watcher.js";
-import type { Session } from "../../core/session.js";
+import type { Session } from "../../core/types.js";
 import { section, c, sym } from "../../lib/colors.js";
 import { brand } from "../../brand.js";
 

@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { createProfileCatalog } from './index.js';
-import type { Profile } from '../core/session.js';
+import type { Profile } from '../core/types.js';
 
 const ALL_PROFILES: Profile[] = ['fullstack', 'analyst', 'scientist', 'dba', 'qa', 'bi'];
 

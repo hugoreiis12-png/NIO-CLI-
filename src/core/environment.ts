@@ -3,11 +3,11 @@
  * Aqui vivem os SHAPES de entrada (o que um perfil declara) e os PORTS que os
  * adapters implementam. Sem IO nenhum (regra do hexágono): nada de `pg`, `fs` ou
  * `child_process`. O resultado RESOLVIDO da materialização é o `EnvironmentConfig`
- * (`core/session.ts`), que vai pro `sessions.config`.
+ * (`core/types.ts`), que vai pro `sessions.config`.
  *
  * Ver `docs/arch/ARQUITETURA-ENVIRONMENT-BUILDER.md`.
  */
-import type { Profile, Ide } from './session.js';
+import type { Profile, Ide } from './types.js';
 
 /**
  * Um MCP a registrar no cliente de IA. **Exatamente um** de: `command` (local —
@@ -40,7 +40,7 @@ export interface ToolchainSpec {
 
 /**
  * Definição hardcoded de um perfil (`src/profiles/`) — o que ele materializa.
- * É a ENTRADA do `EnvironmentBuilder`; a saída resolvida é o EnviromentConfig (core/session.ts) 
+ * É a ENTRADA do `EnvironmentBuilder`; a saída resolvida é o EnviromentConfig (core/types.ts) 
  */
 export interface ProfileDefinition {
   profile: Profile;

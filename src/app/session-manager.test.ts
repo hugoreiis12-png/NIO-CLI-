@@ -7,7 +7,7 @@ import {
 } from './session-manager.js';
 import type { EnvironmentBuilder } from './environment-builder.js';
 import type { SessionRepository, NewSessionInput } from '../core/repositories.js';
-import type { Session, EnvironmentConfig } from '../core/session.js';
+import type { Session, EnvironmentConfig } from '../core/types.js';
 
 function mkSession(over: Partial<Session> = {}): Session {
   return {

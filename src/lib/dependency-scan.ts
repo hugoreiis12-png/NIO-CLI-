@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
-import type { DependencyType } from '../core/session.js';
+import type { DependencyType } from '../core/types.js';
 
 /** Uma dependência declarada num manifest do projeto. */
 export interface ScannedDependency {

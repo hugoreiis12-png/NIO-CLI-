@@ -9,7 +9,7 @@
  * divergindo do doc §3.4 ("sem pedir permissão") de propósito. As dependências de
  * IO são injetáveis (seams) pra manter o app layer testável sem disco/subprocesso.
  */
-import type { Session, DependencyEvent, DependencyType } from '../core/session.js';
+import type { Session, DependencyEvent, DependencyType } from '../core/types.js';
 import type { DependencyEventRepository } from '../core/repositories.js';
 import type { ScannedDependency } from '../lib/dependency-scan.js';
 import type { InstallOutcome } from '../lib/dependencies.js';

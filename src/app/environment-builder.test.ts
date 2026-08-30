@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
 import { EnvironmentBuilder } from './environment-builder.js';
 import type { ToolchainGateway, EnsureResult, EnvironmentRecipe } from '../core/environment.js';
-import type { Profile } from '../core/session.js';
+import type { Profile } from '../core/types.js';
 
 /** Gateway fake determinístico — devolve sempre o mesmo status por spec. */
 function fakeGateway(status: EnsureResult['status']): ToolchainGateway {

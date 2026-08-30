@@ -5,7 +5,7 @@
  * `activate`: a sessão alvo vira `active` e as demais ativas do usuário caem pra
  * `archived`.
  */
-import type { Session, SessionStatus, EnvironmentConfig } from '../../core/session.js';
+import type { Session, SessionStatus, EnvironmentConfig } from '../../core/types.js';
 import type { NewSessionInput, SessionRepository } from '../../core/repositories.js';
 import { query, withTransaction } from './client.js';
 

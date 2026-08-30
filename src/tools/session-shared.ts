@@ -4,7 +4,7 @@
  * compartilham a serialização da `Session` e o mapeamento de erro.
  */
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { Session } from '../core/session.js';
+import type { Session } from '../core/types.js';
 import type { EnsureResult } from '../core/environment.js';
 import { errorResult } from '../lib/tool-result.js';
 import { SessionNotFoundError, AmbiguousSessionError } from '../app/session-manager.js';

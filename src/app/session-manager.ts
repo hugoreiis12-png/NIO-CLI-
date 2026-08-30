@@ -18,7 +18,7 @@ import type {
   Profile,
   Ide,
   EnvironmentConfig,
-} from '../core/session.js';
+} from '../core/types.js';
 import type { SessionRepository } from '../core/repositories.js';
 import type { McpSpec, EnsureResult, EnvironmentRecipe, RecipeCatalog } from '../core/environment.js';
 import { createSessionRepository } from '../adapters/pg/session-repository.js';

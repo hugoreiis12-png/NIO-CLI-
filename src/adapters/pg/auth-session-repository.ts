@@ -7,7 +7,7 @@
  * do mesmo usuário. É isso que viabiliza multi-dispositivo: cada login é uma
  * linha independente.
  */
-import type { AuthSession } from '../../core/session.js';
+import type { AuthSession } from '../../core/types.js';
 import type { AuthSessionRepository, NewAuthSessionInput } from '../../core/repositories.js';
 import { query, isUuid } from './client.js';
 

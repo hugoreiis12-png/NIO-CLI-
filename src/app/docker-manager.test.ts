@@ -9,7 +9,7 @@ import {
   readClusterState,
   persistClusterState,
 } from './docker-manager.js';
-import type { Session } from '../core/session.js';
+import type { Session } from '../core/types.js';
 import type { SessionRepository } from '../core/repositories.js';
 import type { ClusterState } from '../core/docker.js';
 
