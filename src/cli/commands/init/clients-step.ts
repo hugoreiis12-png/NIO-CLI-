@@ -1,18 +1,72 @@
-import { installOpencodeGlobal, installCodexGlobal, type InstallResult } from "../../../lib/client-configs.js";
+import { checkbox } from "../../../lib/prompts.js";
+import { section } from "../../../lib/colors.js";
+import { CLIENTS } from "../../../lib/client-install.js";
+import { installOpencodeGlobal, type InstallResult } from "../../../lib/client-configs.js";
 import { printInstallResult } from "../../ui/render.js";
+import { ensureClientInstalled } from "../../flows/clients.js";
+import { initCopy } from "../../copy.js";
 import type { McpSpec } from "../../../core/environment.js";
-import type { PrimaryClient } from "../../../lib/primary-client.js";
 
-// A escolha de cliente virou detecção (`resolvePrimaryClient` em flows/clients.ts):
-// o `nio init` sobe o que estiver instalado no host. Aqui só escrevemos a config
-// MCP do primário escolhido, com o `nio` + os MCPs do perfil.
+// Só OpenCode por enquanto (decisão de 2026-07-27) — os outros clientes saem
+// da superfície ativa, mas o motor de config deles continua em
+// client-configs.ts, não apagado.
+export type ClientChoice = "opencode-global";
 
-const LABELS: Record<PrimaryClient, string> = { opencode: "OpenCode (global)", codex: "Codex CLI (global)" };
+export type ChosenClientId = "opencode";
 
-/** Escreve `~/.config/opencode/opencode.json` OU `~/.codex/config.toml` com o
- *  server `nio` + os `profileMcps` do `EnvironmentBuilder`. */
-export function installPrimaryClient(primary: PrimaryClient, profileMcps: McpSpec[] = []): void {
-  const result: InstallResult =
-    primary === "codex" ? installCodexGlobal(profileMcps) : installOpencodeGlobal(profileMcps);
-  printInstallResult(LABELS[primary], result);
+export const CLIENT_INSTALLERS: Record<
+  ClientChoice,
+  { label: string; run: (cwd: string, profileMcps: McpSpec[]) => InstallResult }
+> = {
+  "opencode-global": {
+    label: "OpenCode (global)",
+    run: (_cwd, profileMcps) => installOpencodeGlobal(profileMcps),
+  },
+};
+
+export async function promptClientChoices(): Promise<ClientChoice[]> {
+  return checkbox<ClientChoice>({
+    message: initCopy.clientsPrompt,
+    all: true,
+    choices: [{ name: initCopy.clientChoices.opencodeGlobal, value: "opencode-global" }],
+  });
+}
+
+/** Roda a instalação de cada cliente escolhido, com os MCPs do perfil. */
+export function installClients(
+  clientConfigs: ClientChoice[],
+  cwd: string,
+  profileMcps: McpSpec[] = [],
+): void {
+  for (const choice of clientConfigs) {
+    const installer = CLIENT_INSTALLERS[choice];
+    try {
+      printInstallResult(installer.label, installer.run(cwd, profileMcps));
+    } catch (err) {
+      console.error(`[erro] Falha ao configurar ${choice}: ${(err as Error).message}`);
+    }
+  }
+}
+
+/**
+ * Dado o resultado do checkbox de clientes, quais IDs (`CLIENTS[id]`) devem
+ * ser conferidos como instalados.
+ */
+export function resolveChosenClientIds(clientConfigs: ClientChoice[]): Set<ChosenClientId> {
+  const ids = new Set<ChosenClientId>();
+  for (const choice of clientConfigs) {
+    if (choice === "opencode-global") ids.add("opencode");
+  }
+  return ids;
+}
+
+export async function ensureChosenClientsInstalled(
+  chosenClientIds: Set<ChosenClientId>,
+): Promise<void> {
+  if (chosenClientIds.size === 0) return;
+  console.log("");
+  section("Clientes", "confirmando que estão instalados");
+  for (const id of chosenClientIds) {
+    await ensureClientInstalled(CLIENTS[id], { interactive: true });
+  }
 }

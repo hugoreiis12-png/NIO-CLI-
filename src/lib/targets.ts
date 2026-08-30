@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { toSkillDocs, type SkillDoc } from './skills.js';
@@ -156,14 +156,9 @@ export const opencodeTarget: ProvisionTarget = {
   mapDocs: (docs) => docs,
 };
 
-// OpenCode e Codex são os dois clientes primários (ver `primary-client.ts`).
-// claudeTarget segue definido acima mas fora da superfície ativa.
-export const ALL_TARGETS: ProvisionTarget[] = [opencodeTarget, codexTarget];
-
-/** O `ProvisionTarget` do cliente primário (`opencode`|`codex`). */
-export function targetForPrimary(primary: 'opencode' | 'codex'): ProvisionTarget {
-  return primary === 'codex' ? codexTarget : opencodeTarget;
-}
+// Só OpenCode por enquanto (decisão de 2026-07-27) — claudeTarget/codexTarget
+// seguem definidos acima (não apagados) mas fora da lista ativa.
+export const ALL_TARGETS: ProvisionTarget[] = [opencodeTarget];
 
 function opencodeConfigured(): boolean {
   const path = join(homedir(), '.config', 'opencode', 'opencode.json');
@@ -176,25 +171,13 @@ function opencodeConfigured(): boolean {
   }
 }
 
-function codexConfigured(): boolean {
-  const path = join(homedir(), '.codex', 'config.toml');
-  if (!existsSync(path)) return false;
-  try {
-    // Leitura crua — evita puxar o parser TOML aqui; o marcador é a chave do server.
-    return readFileSync(path, 'utf8').includes(`[mcp_servers.${brand.mcpServerKey}]`);
-  } catch {
-    return false;
-  }
-}
-
 /**
- * Alvos que já têm o servidor `nio` configurado (opencode.json / codex config.toml).
- * Base do auto-detect de `sync`: provisiona pra cada cliente que o worker de fato
- * usa, sem flags.
+ * Alvos que já têm o servidor `nio` configurado (~/.config/opencode/opencode.json).
+ * Base do auto-detect de `sync`: provisiona pra cada cliente que o worker de
+ * fato usa, sem flags.
  */
 export function detectConfiguredTargets(): ProvisionTarget[] {
   const targets: ProvisionTarget[] = [];
   if (opencodeConfigured()) targets.push(opencodeTarget);
-  if (codexConfigured()) targets.push(codexTarget);
   return targets;
 }

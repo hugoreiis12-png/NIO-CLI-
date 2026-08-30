@@ -11,11 +11,10 @@ import { readDependencies, skillIdMap } from "../../../lib/skills.js";
 import { collectRuleSkills } from "../../../lib/rules.js";
 import { offerDependencyInstall, offerRuleSkills } from "../../flows/dependencies.js";
 import { offerShellCompletion } from "../../flows/completion.js";
-import { resolvePrimaryClient } from "../../flows/clients.js";
-import type { PrimaryClient } from "../../../lib/primary-client.js";
+import { ensureCoreClients } from "../../flows/clients.js";
 import { section, c, sym } from "../../../lib/colors.js";
 import { startSpinner } from "../../../spinner.js";
-import { isBinaryInstalled, CLIENTS } from "../../../lib/client-install.js";
+import { isBinaryInstalled } from "../../../lib/client-install.js";
 import { SyncReport, renderReport, browseReport, resolveReportMode } from "../../ui/report.js";
 import { flushTelemetry } from "../../../lib/telemetry.js";
 import { writeManagedDotfiles } from "../../../lib/dotfiles.js";
@@ -30,7 +29,12 @@ import { requireLocalSessionStep } from "./auth-step.js";
 import { pickProfile, pickSessionName, pickIde } from "./profile-step.js";
 import { pickRecipe } from "./recipe-step.js";
 import { confirmOverwriteIfExists, persistConfigStep, writeHarnessStep } from "./context-step.js";
-import { installPrimaryClient } from "./clients-step.js";
+import {
+  promptClientChoices,
+  installClients,
+  resolveChosenClientIds,
+  ensureChosenClientsInstalled,
+} from "./clients-step.js";
 import {
   resolveProvisionTargets,
   fetchSkillsStep,
@@ -188,17 +192,20 @@ async function resolveSessionSetup(
   return { config, session, mcps };
 }
 
-/** Escreve a config MCP do cliente primário + provisiona skills/commands/hooks. */
+/** Escolha e instalação dos clientes de IA + provisionamento de skills/commands/hooks. */
 async function installAndProvisionClients(
   config: ProjectConfig,
   profileMcps: McpSpec[],
-  primary: PrimaryClient,
 ): Promise<void> {
-  installPrimaryClient(primary, profileMcps);
+  const clientConfigs = await promptClientChoices();
+  installClients(clientConfigs, process.cwd(), profileMcps);
 
-  const provisionTargets = resolveProvisionTargets(primary);
+  const chosenClientIds = resolveChosenClientIds(clientConfigs);
+  await ensureChosenClientsInstalled(chosenClientIds);
 
-  section("Skills & commands", "provisionando pro cliente");
+  const provisionTargets = resolveProvisionTargets(clientConfigs);
+
+  section("Skills & commands", "provisionando pros clientes");
   const report = new SyncReport();
   await fetchSkillsStep(report);
   provisionTargetsStep(provisionTargets, config, skillIdMap(), report);
@@ -243,32 +250,25 @@ async function openSessionIde(session: Session): Promise<void> {
 }
 
 /**
- * Handoff final: entrega o ambiente materializado pro cliente de IA primário
- * detectado (OpenCode ou Codex). Sem primário / binário fora do PATH → só
- * orienta, não falha. (Parte C troca esse `spawn` direto pelo `AgentOrchestrator`
- * com failover.)
+ * Handoff final: entrega o ambiente materializado pro operador de IA fixo
+ * (OpenCode — decisão de 2026-07-27). Se o binário não estiver no PATH (usuário
+ * recusou a instalação lá em `ensureCoreClients`), só orienta em vez de falhar.
  */
-async function handoffToOperator(primary: PrimaryClient | null): Promise<void> {
+async function handoffToOperator(): Promise<void> {
   console.log("");
-  if (!primary) {
+  section("Handoff", "entregando a sessão pro OpenCode");
+  if (!isBinaryInstalled("opencode")) {
     console.log(
-      `  ${c.yellow(sym.warn)} Sem cliente de IA. Instale OpenCode ou Codex e rode-o nesta pasta.`,
-    );
-    return;
-  }
-  const bin = CLIENTS[primary]!.binary!; // 'opencode' | 'codex'
-  section("Handoff", `entregando a sessão pro ${CLIENTS[primary]!.label}`);
-  if (!isBinaryInstalled(bin)) {
-    console.log(
-      `  ${c.yellow(sym.warn)} ${bin} não encontrado no PATH. Instale e rode \`${bin}\` nesta pasta.`,
+      `  ${c.yellow(sym.warn)} OpenCode não encontrado no PATH. Instale e rode \`opencode\` ` +
+        "nesta pasta pra continuar.",
     );
     return;
   }
   await new Promise<void>((resolve) => {
-    const child = spawn(bin, [], { stdio: "inherit" });
+    const child = spawn("opencode", [], { stdio: "inherit" });
     child.on("exit", () => resolve());
     child.on("error", (err) => {
-      console.error(`[erro] Falha ao iniciar o ${bin}: ${err.message}`);
+      console.error(`[erro] Falha ao iniciar o OpenCode: ${err.message}`);
       resolve();
     });
   });
@@ -281,23 +281,17 @@ async function runInitWizard(): Promise<void> {
   console.log(renderMatrixLogo());
   console.log(`${brand.name} init — monta o ambiente desta sessão.`);
 
-  // Detecta/instala o cliente de IA primário (OpenCode ou Codex).
-  const primary = await resolvePrimaryClient({ interactive: true });
+  // Logo no início: confere OpenCode e oferece instalar se faltar.
+  await ensureCoreClients({ interactive: true });
 
   // Sem login inline: exige `nio register`/`nio login` prévios e sai se faltar.
   const local = await requireLocalSessionStep();
 
   const { config, session, mcps } = await resolveSessionSetup(local);
-  if (primary) {
-    await installAndProvisionClients(config, mcps, primary);
-  } else {
-    console.warn(
-      `${c.yellow(sym.warn)} Sem cliente de IA — pulando config/provisão. Instale OpenCode ou Codex.`,
-    );
-  }
+  await installAndProvisionClients(config, mcps);
   await offerFollowUps(config);
   await openSessionIde(session);
-  await handoffToOperator(primary);
+  await handoffToOperator();
 }
 
 export function registerInitCommand(program: Command): void {
