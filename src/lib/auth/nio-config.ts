@@ -87,7 +87,7 @@ function maskUrl(url: string): string {
 export async function checkConfig(): Promise<ConfigProblem[]> {
   dlog('config: NIO_DATABASE_URL =', process.env.NIO_DATABASE_URL ? maskUrl(process.env.NIO_DATABASE_URL) : '(vazio)');
   dlog('config: JWT_SECRET =', process.env.JWT_SECRET ? `(${process.env.JWT_SECRET.length} chars)` : '(vazio)');
-  dlog('config: NIO_GATEWAY_URL =', process.env.NIO_GATEWAY_URL ?? '(default :8000/Kong)');
+  dlog('config: NIO_GATEWAY_URL =', process.env.NIO_GATEWAY_URL ?? '(default :3000 = nio-gateway direto)');
   const problems = validateConfigShape(process.env);
   if (!problems.some((p) => p.key === 'NIO_DATABASE_URL')) {
     await closePool();

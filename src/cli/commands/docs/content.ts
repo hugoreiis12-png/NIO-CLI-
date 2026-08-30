@@ -118,7 +118,7 @@ export const SECTIONS: DocSection[] = [
           ['JWT_SECRET / JWT_EXPIRES_IN (sem prefixo)', 'nio-gateway + nio-cli'],
           ['SMS_* (sem prefixo)', 'nio-gateway'],
           ['NIO_GATEWAY_HOST (default 127.0.0.1)', 'nio-gateway — 0.0.0.0 p/ Kong em container'],
-          ['NIO_GATEWAY_URL (default http://127.0.0.1:8000)', 'a CLI, pra achar o gateway/Kong'],
+          ['NIO_GATEWAY_URL (default http://127.0.0.1:3000)', 'a CLI acha o nio-gateway. Kong na frente? aponta pra :8000'],
         ],
       },
     ],

@@ -102,7 +102,7 @@ JWT_SECRET=<mesmo-valor-do-time>
 | `JWT_SECRET` / `JWT_EXPIRES_IN` | **sem** prefixo (segredo do time) | `nio-gateway` + `nio-cli` |
 | `SMS_ENDPOINT_URL` / `SMS_AUTH_HEADER` / `SMS_BODY_TEMPLATE` / `SMS_FROM` | **sem** prefixo | `nio-gateway` |
 | `NIO_GATEWAY_HOST` (default `127.0.0.1`) | `NIO_` | `nio-gateway` — `0.0.0.0` p/ Kong em container |
-| `NIO_GATEWAY_URL` (default `http://127.0.0.1:8000`) | `NIO_` | a CLI, pra achar o gateway/Kong |
+| `NIO_GATEWAY_URL` (default `http://127.0.0.1:3000`) | `NIO_` | a CLI acha o nio-gateway (Kong na frente = aponta :8000) |
 
 O schema de conexão é sempre `postgres://…`; um destino inválido falha explícito,
 nunca cai num default silencioso.

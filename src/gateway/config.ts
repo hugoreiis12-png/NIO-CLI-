@@ -1,8 +1,7 @@
 /**
  * Configuração do Gateway. `JWT_SECRET`/`JWT_EXPIRES_IN` sem prefixo `NIO_`
  * de propósito: são o segredo distribuído pela equipe (mesmo valor em toda
- * máquina), não uma env var por-processo como as demais. `GATEWAY_PORT`/
- * `KONG_PROXY_PORT` já seguem a convenção do projeto (via `env()`).
+ * máquina), não uma env var por-processo como as demais.
  */
 import { env } from '../brand.js';
 
@@ -17,10 +16,13 @@ export const GATEWAY_PORT = Number(env('GATEWAY_PORT')?.trim()) || 3000;
 export const GATEWAY_HOST = env('GATEWAY_HOST')?.trim() || '127.0.0.1';
 
 /** Porta de proxy do Kong (padrão dele). Default 8000 — é o que a CLI chama agora, não mais o `nio-gateway` direto. */
-export const KONG_PROXY_PORT = Number(env('KONG_PROXY_PORT')?.trim()) || 8000;
-
-/** URL base pro cliente HTTP (CLI) falar com o Kong. Override total via `NIO_GATEWAY_URL`. */
-export const GATEWAY_URL = env('GATEWAY_URL')?.trim() || `http://127.0.0.1:${KONG_PROXY_PORT}`;
+/**
+ * URL base pro cliente HTTP (CLI). **Default: o `nio-gateway` direto** (`:3000`) —
+ * setup single-user não tem Kong. Quem roda o Kong na frente aponta
+ * `NIO_GATEWAY_URL=http://127.0.0.1:8000`.
+ */
+export const GATEWAY_URL =
+  env('GATEWAY_URL')?.trim() || `http://127.0.0.1:${GATEWAY_PORT}`;
 
 /** L6e e valida 'JWT_SECRET . Throw com mensagem acionavel se ausente . */
 export function getJwtSecret(): string {
