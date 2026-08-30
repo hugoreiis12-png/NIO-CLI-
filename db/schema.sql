@@ -8,7 +8,9 @@ CREATE TABLE IF NOT EXISTS user_cli (
     password TEXT NOT NULL, -- hash argon2id ($argon2id$v=19$m=...,t=...,p=...$salt$hash) — NUNCA senha em texto puro
     timestamp_creation TIMESTAMPTZ DEFAULT NOW(),
     timestamp_password_change TIMESTAMPTZ,
-    auth_2 BOOLEAN DEFAULT FALSE,
+    auth_2 BOOLEAN DEFAULT FALSE,        -- 2º fator (SMS OTP) ativo? ver migration 0004
+    phone TEXT,                          -- E.164 pro SMS do 2º fator; NULL = auth_2 desativado
+    backup_codes TEXT,                   -- 10 hashes argon2id (uso único) juntos por '|'; usado = '[USED]'
     timestamp_last_session TIMESTAMPTZ,
     ips_using TEXT DEFAULT '[]' -- JSON array de strings
 );
@@ -16,6 +18,25 @@ CREATE TABLE IF NOT EXISTS user_cli (
 CREATE INDEX idx_user_cli_name ON user_cli(name);
 -- token_session removida (migration 0003_drop_token_session.sql) — login é
 -- só JWT + auth_sessions agora, ver src/gateway/services/login.ts.
+
+-- ───────────────────────────────────────────────
+-- Tabela: Desafios de OTP (2º fator) — migration 0004
+-- ───────────────────────────────────────────────
+-- Sem Twilio: o estado do OTP é nosso. Uso único, TTL curto, 3 tentativas.
+CREATE TABLE IF NOT EXISTS login_challenges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id BIGINT NOT NULL REFERENCES user_cli(id) ON DELETE CASCADE,
+    purpose TEXT NOT NULL CHECK (purpose IN ('login', 'enable_2fa')),
+    code_hash TEXT NOT NULL,       -- HMAC-SHA256(código, JWT_SECRET). NUNCA o código puro.
+    channel TEXT NOT NULL CHECK (channel IN ('sms')),
+    attempts INT NOT NULL DEFAULT 0,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ,       -- NULL = ativo; preenchido = já usado
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_login_challenges_user ON login_challenges(user_id);
+CREATE INDEX idx_login_challenges_expires ON login_challenges(expires_at);
 
 -- ───────────────────────────────────────────────
 -- Tabela: Sessões (estado do ambiente)
@@ -135,3 +156,6 @@ COMMENT ON COLUMN log_session.session_id IS 'FK para sessions(id) — a sessão 
 COMMENT ON TABLE session_activity IS 'Atividades individuais dentro de uma sessão';
 COMMENT ON COLUMN session_activity.session_id IS 'FK para sessions(id) — referência direta à sessão (não passa mais por log_session).';
 COMMENT ON TABLE dependency_events IS 'Eventos detectados pelo watcher de dependências';
+COMMENT ON COLUMN user_cli.phone IS 'Número E.164 pro SMS do 2º fator. NULL = auth_2 desativado.';
+COMMENT ON COLUMN user_cli.backup_codes IS 'Hashes argon2id dos 10 códigos de backup (uso único), separados por | ; entrada usada = [USED]. NULL = sem 2FA.';
+COMMENT ON TABLE login_challenges IS 'Desafio de OTP em andamento (2º fator). Uso único (consumed_at), TTL curto, 3 tentativas. code_hash = HMAC, nunca o código puro.';

@@ -61,29 +61,35 @@ nio whoami        # mostra quem está logado (--json pra saída estável)
 nio logout        # encerra a sessão local e limpa o token no banco
 ```
 
-Um segundo fator (código por SMS, via Twilio Verify) está desenhado mas
-ainda não implementado — o fluxo completo, as decisões de arquitetura
-(Kong Gateway OSS pra JWT/permissionamento, Keycloak descartado, RFC
-9700/NIST/ANPD como guia de conformidade) estão em
-`docs/v2/ARQUITETURA-GATEWAY.md`.
+### 2º fator (SMS)
+
+Opt-in por conta. Com `auth_2` ativo, o `nio login` pede um código de 6 dígitos
+enviado por SMS; se o SMS não chega, vale um dos 10 **códigos de backup**.
+
+```bash
+nio security enable-2fa                 # cadastra o celular, confirma via SMS, mostra os códigos de backup
+nio security status                     # ativo? número (mascarado)? quantos backups restam?
+nio security disable-2fa
+nio security regenerate-backup-codes
+```
+
+O gateway gera/valida o OTP em processo (sem Twilio, sem broker) e manda o SMS
+por um **adapter HTTP genérico** — configure `SMS_ENDPOINT_URL` /
+`SMS_AUTH_HEADER` / `SMS_BODY_TEMPLATE` no `.env` (ver `.env.example`). Detalhes
+em `docs/specs/auth/0004-login-2fa-sms-otp.md` e [ADR 0006](docs/adr/0006-2fa-sms-otp.md).
+As decisões de arquitetura do gateway (Kong OSS, Keycloak descartado, RFC
+9700/NIST/ANPD) estão em `docs/v2/ARQUITETURA-GATEWAY.md`.
 
 ## Cliente de IA
 
-No fim do `nio init`, a CLI entrega a sessão pro **cliente de IA primário** — o
-que estiver instalado no host, entre **OpenCode** e **Codex**. Se os dois
-estiverem, o `nio init` pergunta e grava a escolha em `nio.user.json`; override
-por `NIO_PRIMARY_CLIENT=opencode|codex`. `nio agent status` mostra o que foi
-detectado.
+No fim do `nio init`, a CLI entrega o terminal pro operador de IA fixo —
+**OpenCode** rodando o modelo `opencode/big-pickle` (default gravado no
+`~/.config/opencode/opencode.json`, junto do server MCP `nio` e dos MCPs do
+perfil). Ver `docs/v2/ARQUITETURA-CLIENTE-IA.md`.
 
-A config MCP do cliente (`~/.config/opencode/opencode.json` ou
-`~/.codex/config.toml`) recebe o server `nio` + os MCPs do perfil da sessão; as
-skills são provisionadas no formato nativo de cada um (`toCodexDocs` traduz pro
-Codex).
-
-> Roadmap (`~/.claude/plans/cryptic-cooking-mitten.md`): camada Headroom
-> (compressão de contexto, proxy Docker) e um **ladder de failover** — quando o
-> primário esgota a quota, sobe um container com Qwen3.8-Flash, depois
-> Kimi-K2.7-Code.
+> Multi-cliente (OpenCode | Codex), proxy de compressão de contexto e ladder de
+> failover entre modelos são uma **feature futura** — desenho parkeado em
+> `docs/v2/ARQUITETURA-CLIENTES-MULTI-FUTURO.md` (ADR 0004).
 
 ## Comandos do CLI
 
@@ -91,14 +97,23 @@ Operações do CLI, **sem o binário na frente** (declarado no cabeçalho da tab
 gerada da fonte por `bun run gen:docs`.
 
 <!-- COMMANDS:START -->
-<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 16 comandos. -->
+<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 30 comandos. -->
 
 | Comando | Descrição |
 | --- | --- |
-| `agent` | Cliente de IA da CLI (primário / ladder de failover) |
-| `agent status` | Mostra o cliente primário detectado |
 | `clean-legacy` | Remove commands/skills legados (substituídos) de ~/.claude e ~/.codex |
 | `completion [shell]` | Imprime o script de autocomplete (bash\|zsh\|fish). |
+| `docker` | Camada Docker: MCP Gateway + Portainer, compose, debug e cluster (Swarm) |
+| `docker cluster <action> [arg]` | Docker Swarm — stack `nio-cluster` (up\|down\|status\|scale) |
+| `docker compose <action> [service]` | Wrapper sobre `docker compose` do projeto (up\|down\|restart\|ps\|logs) |
+| `docker create` | Cria e sobe um container (wizard ou flags) |
+| `docker debug [container]` | Coleta o contexto de um container e entrega o diagnóstico pro operador de IA |
+| `docker orquest [instruction]` | Orquestra os serviços do projeto via compose, dirigido pelo operador (linguagem natural) |
+| `docker portainer` | Abre o Portainer no navegador |
+| `docker toolkit` | Infra NIO: Docker MCP Gateway + Portainer (docker/docker-compose.yml) |
+| `docker toolkit down` | Derruba a infra e desabilita o MCP no opencode.json |
+| `docker toolkit status` | Estado dos containers + health dos endpoints |
+| `docker toolkit up` | Sobe a infra e registra o gateway no opencode.json |
 | `exec` | Delega a implementação a um agente headless num worktree e aguarda. |
 | `exec-status <jobId>` | Estado de um job de execução (`nio exec`), em JSON |
 | `init` | Cria nio.json no diretório atual e materializa o ambiente da sessão |
@@ -106,6 +121,11 @@ gerada da fonte por `bun run gen:docs`.
 | `logout` | Encerra a sessão local e revoga a auth_session no banco |
 | `plan` | Roda o engine pensante sobre o projeto e escreve/refina o plan.md da raiz. |
 | `register` | Cria um novo usuário no banco (user_cli) |
+| `security` | 2º fator do login (SMS OTP + códigos de backup) |
+| `security disable-2fa` | Desativa o 2º fator |
+| `security enable-2fa` | Ativa o 2º fator via SMS |
+| `security regenerate-backup-codes` | Invalida os códigos de backup e gera 10 novos |
+| `security status` | Mostra o estado do 2º fator |
 | `skills` | Skills, commands e agents do nio (lidos do repo aberto via cache) |
 | `skills status` | Lista os docs do repo de skills (cache local ~/.nio/skills) |
 | `sync` | Instala/atualiza skills, commands e agents nos clientes configurados, a partir do bundle (idempotente); checa atualização do pacote |
@@ -131,6 +151,30 @@ nio completion fish | source
 ```
 
 Recarregue o shell e `nio <tab>` passa a sugerir comandos, subcomandos e flags.
+
+## Docker (`nio docker`)
+
+Camada de gerência de container — metade wrapper determinístico sobre `docker`,
+metade dirigida pelo operador de IA por linguagem natural (via o **Docker MCP
+Gateway**). Roda em qualquer Docker Engine (não exige Docker Desktop). Ver
+[`docs/v2/ARQUITETURA-DOCKER.md`](docs/v2/ARQUITETURA-DOCKER.md) e
+[ADR 0005](docs/adr/0005-camada-docker.md).
+
+```bash
+nio docker toolkit up            # sobe o MCP Gateway (127.0.0.1:8811/mcp) + Portainer (9443)
+                                 # e registra o gateway no opencode.json
+nio docker compose up -f app/docker-compose.yml   # wrapper sobre `docker compose` do projeto
+nio docker create --image redis:7 --port 6379:6379
+nio docker debug <container>     # coleta ps/logs/inspect → operador analisa e propõe o fix
+nio docker orquest "sobe api + worker + redis"     # operador gera o compose e sobe (--dry-run mostra)
+nio docker cluster up "api + worker + redis + postgres"   # Docker Swarm (stack `nio-cluster`)
+nio docker cluster status | scale api=3
+nio docker portainer             # abre a UI
+```
+
+`debug`/`orquest`/`cluster` exigem `nio login` + sessão ativa + `opencode` no
+PATH. O estado do cluster fica em `sessions.config` (Postgres), validado contra
+`docker stack services`.
 
 ## Tools MCP disponíveis
 

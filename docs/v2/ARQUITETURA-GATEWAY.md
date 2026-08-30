@@ -1,16 +1,24 @@
 # Arquitetura do Gateway de Autenticação (v2)
 
+> ⚠️ **Atualização (29–30 ago 2026) — o 2º fator foi implementado, mas diferente
+> do desenho abaixo.** Ver [spec 0004](../specs/auth/0004-login-2fa-sms-otp.md) e
+> [ADR 0006](../adr/0006-2fa-sms-otp.md). Resumo das mudanças em relação a este doc:
+> - **Twilio Verify → adapter de SMS HTTP genérico** (`SMS_ENDPOINT_URL` etc.).
+> - **O estado do OTP é nosso** (tabela `login_challenges`) — sem Twilio, não há
+>   onde guardar geração/TTL/tentativas fora do repo.
+> - **Caminho alternativo ao SMS (exigência NIST)** = 10 **códigos de backup** de
+>   uso único, gerados no `nio security enable-2fa`.
+> - **Mensageria = serviço direto no `nio-gateway`** — sem message broker, sem fila.
+> - O Edge Filter, o Kong (rate-limit) e o `nio-gateway` já existem e estão no ar;
+>   as rotas novas são `POST /verify-2fa` e `/security/*`.
+>
+> O corpo abaixo (Twilio, "a construir", etc.) é o desenho de 23 ago — mantido
+> como contexto histórico das decisões de RFC/produto, que seguem válidas.
+
 > Documento de referência único — consolida as decisões espalhadas pelas
 > specs `docs/specs/auth/0002-cli-native-login.md` (superseded) e
-> `docs/specs/auth/0003-login-2fa-sms.md` (draft, em desmembramento), mais a
-> pesquisa de RFCs/produtos feita em 23 ago 2026. Objetivo: qualquer pessoa
-> (ou agente) que pegue este arquivo entende o desenho completo sem precisar
-> reconstruir o histórico da conversa que o gerou.
->
-> **Estado nesta data: arquitetura desenhada, nada da camada de Gateway
-> implementado ainda.** O que já funciona ponta a ponta hoje é só o 1º fator
-> (usuário/senha direto contra `user_cli`, sem Edge Filter, sem Kong, sem
-> Gateway core, sem 2º fator) — ver `docs/v2/PROGRESSO.md` (23 ago 2026).
+> `docs/specs/auth/0003-login-2fa-sms.md` (superseded por 0004), mais a
+> pesquisa de RFCs/produtos feita em 23 ago 2026.
 
 ## Resumo executivo
 
@@ -95,6 +103,12 @@ Legenda: ✅ implementado e testado · 🟡 scaffold/esqueleto existe, lógica p
 | **Kong Gateway OSS** (self-hosted, DB-less) | **Adotado** — só pra JWT/ACL/rate-limit/balanceamento **depois** do Edge Filter | Os plugins necessários (`jwt`, `acl`, `rate-limiting`, `request-validator`) e o balanceamento entre upstreams são núcleo OSS, sem paywall. Modo DB-less evita somar mais um banco pra operar |
 | Kong `openid-connect` plugin / Kong Konnect | **Descartado** | Enterprise/pago — mas também **não é necessário**: o handshake de credencial (senha+SMS) é feito à mão, o Kong só valida o token que a gente mesmo emite |
 | **Kong AI Gateway** (AI Proxy, Prompt Guard, etc.) | **Descartado — não se aplica** | É pra gatear chamadas HTTP diretas a provedores de LLM. A NIO-CLI não faz isso: `nio exec`/`nio plan` delegam via `spawn()` pra binários locais (`codex`, `claude`) já autenticados por conta própria — a chamada ao modelo acontece dentro desses processos, nunca passa pela NIO-CLI. Não há tráfego pra interceptar hoje. Reabrir se um dia a CLI passar a chamar API de LLM diretamente |
+
+> **Nota (29 ago 2026) — o Docker MCP Gateway não é isto.** A camada Docker
+> (`nio docker`, [ADR 0005](../adr/0005-camada-docker.md)) sobe um
+> `docker/mcp-gateway` que carrega tráfego de **tool MCP** (operador →
+> `docker.sock`), não chamadas de LLM — não reabre esta rejeição. O que reabriria
+> é a camada **Headroom** de `ARQUITETURA-CLIENTES-MULTI-FUTURO.md` (parkeada).
 | **Keycloak** | **Descartado** | Federar contra `user_cli` sem migrar dado exige um User Storage SPI em **Java** (stack diferente do resto do projeto); SMS não é nativo, exigiria outro Authenticator SPI Java chamando a Twilio. Adotar = manter 2 plugins Java pra reproduzir o que o TypeScript já faz |
 | RFC 8628 (Device Authorization Grant) | **Descartado como alternativa ao PKCE já implementado** | Desenhado pra dispositivo *sem* browser (smart TV, console). Pra CLI com browser disponível na máquina, RFC 8252 já recomenda Authorization Code+PKCE com redirect loopback — o que a spec 0002 implementou está certo |
 | Gateway OAuth2/PKCE self-asserted (spec 0002) | **Superseded** | Nunca verificava senha nenhuma (email livre) e nunca foi plugado na CLI. Login real vai por senha+SMS, não por confirmação no navegador. Código não apagado — `authorize-store.ts`/`traceability.ts` são candidatos a reuso de padrão |
@@ -174,6 +188,16 @@ tratar desde a primeira migration, não depois:
 6. **23 ago 2026** — esclarecimento do papel real do Kong (downstream do
    Edge Filter, não pra handshake de credencial nem pra LLM) — Kong Gateway
    OSS **adotado** pra JWT/ACL/rate-limit/balanceamento. Este documento.
+7. **29–30 ago 2026** — 2º fator **implementado** pra fechar a v1 da CLI, com
+   dois desvios deste desenho: Twilio Verify trocado por um **adapter de SMS
+   HTTP genérico** (`SMS_ENDPOINT_URL`/`SMS_AUTH_HEADER`/`SMS_BODY_TEMPLATE`) e
+   o **estado do OTP passou a ser nosso** (tabela `login_challenges`, HMAC do
+   código, TTL 5 min, 3 tentativas), já que sem Twilio não há serviço externo
+   guardando isso. Caminho alternativo exigido pelo NIST = 10 códigos de backup
+   de uso único no `nio security enable-2fa`. Mensageria = serviço direto no
+   `nio-gateway` (sem broker/fila). Rotas novas: `POST /verify-2fa`, `/security/*`.
+   Ver [spec 0004](../specs/auth/0004-login-2fa-sms-otp.md) e
+   [ADR 0006](../adr/0006-2fa-sms-otp.md).
 
 ## Referências
 

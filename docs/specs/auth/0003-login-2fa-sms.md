@@ -2,12 +2,19 @@
 id: "0003"
 title: Login v2 com 2º fator via SMS (Edge Filter → Gateway core → Validator)
 area: auth
-status: draft
+status: superseded
+superseded_by: "0004"
 created: 2026-08-23
 issue:
 ---
 
 # Login v2 com 2º fator via SMS (Edge Filter → Gateway core → Validator)
+
+> **Superada pela [spec 0004](./0004-login-2fa-sms-otp.md) (29 ago 2026, ADR
+> 0006).** O canal (SMS) e as constraints NIST/ANPD desta spec seguem valendo e
+> são citadas na 0004. O que mudou: **Twilio Verify → adapter HTTP genérico** e o
+> **estado do OTP passa a ser nosso** (tabela `login_challenges`), já que sem
+> Twilio a geração/TTL/tentativas do código não têm mais onde viver fora do repo.
 
 ## Problema
 O `nio login` v2 (spec adjacente, já implementado — ver Notas) autentica com

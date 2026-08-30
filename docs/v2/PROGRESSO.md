@@ -1273,3 +1273,181 @@ Codex tinha o motor de config no repo mas dormente (`ALL_TARGETS =
 
 ### Próximo
 - Checkpoint com o dono → plano detalhado da **Parte B** (Headroom proxy Docker).
+
+---
+
+## 2026-08-29 — Reversão da Parte A: volta ao operador único OpenCode + big-pickle
+
+Decisão do dono: a arquitetura multi-cliente / failover vira **feature futura**. A
+modelagem da CLI segue com **um operador fixo — `opencode` + `opencode/big-pickle`**
+(a decisão de 24 ago, `ARQUITETURA-CLIENTE-IA.md`). Formalizado na
+**[ADR 0004](../adr/0004-operador-ia-unico.md)**.
+
+### O que foi revertido (subconjunto da Parte A em `ffd13c3`)
+`git revert ffd13c3` estava fora — o commit carrega também Sprint 4/5
+(SessionManager, recipes, tools `nio_session_*`/`nio_env_*`). Reversão cirúrgica
+dos 17 arquivos da Parte A:
+
+| Operação | Arquivos |
+|---|---|
+| `git checkout ffd13c3~1 --` | `client-install.ts`, `targets.ts`, `client-configs.ts` (+ `-install.test`), `autopull.ts` (+test), `config.ts`, `flows/clients.ts`, `init/clients-step.ts` (+ **teste restaurado**, que `ffd13c3` tinha deletado), `init/provision-step.ts` (+test), `ARQUITETURA-CLIENTE-IA.md` (tira o banner "superado") |
+| `git rm` | `lib/primary-client.ts` (+test), `cli/commands/agent.ts` |
+| edição cirúrgica | `init/index.ts` (só os hunks de cliente — `ensureCoreClients`/`handoffToOperator()` fixo em `opencode`; **mantidos** os hunks de `SessionManager`/`pickRecipe`), `cli.ts` + `scripts/gen-reference.ts` (tira `registerAgentCommand`), `README.md` (seção "Cliente de IA" reescrita) |
+
+### O que **não** mudou
+- `NIO_OPERATOR_MODEL = 'opencode/big-pickle'` — byte-idêntico antes/depois de
+  `ffd13c3`, escrito por `planOpencodeUpdate`/`installOpencodeGlobal`. Intacto.
+- Motor de config do Codex (`codexTarget`, `toCodexDocs`, `planCodexUpdate`,
+  `installCodexGlobal`, `claudeTarget`) — **fica dormente no repo**, como estava
+  antes de `ffd13c3` (desde 27 jul). Não apagado — a feature futura reaproveita.
+- Todo o resto de `ffd13c3` (Sprint 4/5) e `fa3cefe` inteiro.
+- Bônus: `init/provision-step.test.ts`, quebrado no HEAD (importava `ClientChoice`,
+  removido em `ffd13c3`), volta a compilar.
+
+### Registro da feature futura
+- **`docs/adr/0004-operador-ia-unico.md`** (novo).
+- **`docs/v2/ARQUITETURA-CLIENTES-MULTI-FUTURO.md`** (novo) — o desenho das Partes
+  A/B/C, de `~/.claude/plans/cryptic-cooking-mitten.md`, com nota de que a Parte A
+  já foi feita/revertida (o diff de `ffd13c3` é o guia pra retomar).
+- A entrada de 27 ago acima **fica** — é o registro histórico da Parte A.
+
+### Verificação
+- `bunx tsc --noEmit` verde. `bun test` **329 pass / 1 skip / 0 fail** (−9 vs. o
+  baseline de 338: saíram `primary-client.test` ×10 e 3 testes de
+  `planCodexUpdate+profileMcps`; voltou `clients-step.test`).
+- `grep -rn "primary-client\|PrimaryClient\|resolvePrimaryClient\|targetForPrimary\|NIO_PRIMARY_CLIENT\|registerAgentCommand" src scripts` → vazio.
+- `bun src/cli.ts --help` lista `agents` (plural, lista subagentes), **não** `agent`.
+- Smoke do `nio init` (gated em login+Postgres) fica manual: wizard não pergunta
+  "OpenCode ou Codex"; handoff spawna `opencode`.
+
+---
+
+## 2026-08-29 — Camada Docker: `nio docker *` (MCP Gateway + Portainer + Swarm)
+
+Feature nova ([ADR 0005](../adr/0005-camada-docker.md), plano aprovado). Grupo
+`nio docker` híbrido: wrapper determinístico sobre `docker` + handoff pro operador
+de IA via **Docker MCP Gateway**, com Portainer pra visibilidade e Swarm no
+`cluster`. Ver `docs/v2/ARQUITETURA-DOCKER.md`.
+
+### Código
+| Arquivo | Papel |
+|---|---|
+| `docker/docker-compose.yml` + `dev:docker` | Infra NIO (espelha `kong/`): `nio-mcp-gateway` (`docker/mcp-gateway`, `--transport=streaming --port=8811 --servers=docker`, docker.sock, `127.0.0.1:8811`) + `nio-portainer` (`portainer-ce:lts`, `:9443`/`:8000`). Roda sem Docker Desktop. |
+| `src/lib/docker.ts` (+ test) | `DOCKER_MCP_URL`/`PORTAINER_URL`/`CLUSTER_STACK`, `infraComposePath()`, `dockerAvailable()` (`docker` + `docker compose version`), `swarmActive()`, `portOpen()` (TCP puro — Portainer é TLS self-signed), `unreachableDocker()`. |
+| `src/core/docker.ts` | Port `DockerGateway` (contrato **nunca lança**, `DockerResult { status }`), union types (`ComposeAction`, `ClusterAction`), `RunSpec`, `ClusterState`. |
+| `src/adapters/docker/docker-gateway.ts` (+ test) | Impl via `spawnSync('docker', [...])` **sem shell**. Arg-builders puros exportados (`composeArgs`/`runArgs`/`stackDeployArgs`/`serviceScaleArgs`) — testados deep-equal. |
+| `src/app/docker-manager.ts` (+ test) | Prompt builders (`buildDebugPrompt`/`Orquest`/`Cluster`, preâmbulo âncora), `runOperator()` → `opencode run --model opencode/big-pickle`, `collectDebugContext()`, `parseStackServices`/`parseScaleArg`, `read`/`persistClusterState` → `config.extra.docker.cluster`. |
+| `src/cli/commands/docker.ts` (+ registro em `cli.ts` + `gen-reference.ts`) | `toolkit up\|down\|status`, `portainer [--url]`, `compose <up\|down\|restart\|ps\|logs> [svc]`, `create` (wizard/flags), `debug [container] [--json]`, `orquest [instr] [--dry-run]`, `cluster <up\|down\|status\|scale>`. |
+| `src/core/environment.ts` | `McpSpec` ganhou `url?` (MCP remoto). |
+| `src/lib/client-configs.ts` (+ test) | `opencodeMcpEntry` branch `type: 'remote'`; novo `upsertOpencodeMcp(spec, {remove?, path?})` — funde/desabilita **uma** entrada no `opencode.json` com `.bak`. |
+| `src/profiles/mcps.ts` / `index.ts` | + `dockerGatewayMcp = { id: 'docker', url: DOCKER_MCP_URL }`. **Fora** do `BASE_MCPS` (opt-in via `toolkit up`); em `KNOWN_MCPS`. |
+
+### Decisões
+- **Híbrido:** `compose`/`create`/`toolkit`/`portainer` = determinístico;
+  `debug`/`orquest`/`cluster` = operador (`opencode run`, `stdio: inherit`).
+- **MCP Gateway = container NIO-gerenciado** (`nio docker toolkit up` sobe +
+  registra no `opencode.json`), transport `streaming` em `127.0.0.1:8811/mcp`.
+- **`cluster` = Swarm** (`stack deploy nio-cluster`). A NIO **valida** contra
+  `docker stack services` — não confia na saída do operador — e persiste em
+  `config.extra.docker.cluster` (sem migration).
+- Contrato "nunca lança" no `DockerGateway`; `spawnSync` sem shell em tudo.
+
+### Verificação
+- `bunx tsc --noEmit` verde. `bun test` **349 pass / 1 skip / 0 fail** (+20:
+  arg-builders ×8, docker-manager ×12, `upsertOpencodeMcp` ×2 — menos overlap).
+- `bun src/cli.ts docker --help` lista as 7 subárvores. Erros sem Docker/login/
+  ação inválida → pt-BR acionável, exit 1.
+- **Smoke com Docker real** (manual): `nio docker toolkit up` → containers +
+  `mcp.docker` no `opencode.json`; `nio docker compose up -f …`; `nio docker debug
+  <ctr>`; `nio docker cluster up "api + redis"` → `docker stack ls` + estado
+  persistido; Portainer em `:9443`.
+
+### Débito / a confirmar no 1º uso real
+- Entrypoint da imagem `docker/mcp-gateway` + nome exato do server (`--servers=docker`).
+- Bootstrap headless do admin do Portainer (hoje: 1º acesso manual).
+- `opencode run` carregar MCP `type: 'remote'` — fallback: handoff interativo.
+- Portainer Agent (Swarm multi-nó) — fora do escopo v1.
+
+---
+
+## 2026-08-30 — 2º fator no login (SMS OTP direto no gateway) — fecha a v1 da CLI
+
+Feature nova ([ADR 0006](../adr/0006-2fa-sms-otp.md), [spec 0004](../specs/auth/0004-login-2fa-sms-otp.md),
+plano aprovado). A coluna `user_cli.auth_2` finalmente é usada: login com 2º
+fator por **SMS + OTP de 6 dígitos**, mensageria **direta no `nio-gateway`** (sem
+broker/fila), com **10 códigos de backup** de uso único como caminho alternativo
+(exigência NIST SP 800-63B). Supera a spec 0003 (Twilio Verify) e o pivô TOTP de
+`diagrama/ARCHITETURA-2FA-TOTP.md`.
+
+### Decisões travadas
+- **Mensageria = serviço direto no gateway.** O `POST /login` gera o OTP, envia o
+  SMS inline e responde `2fa_required`; sem worker, sem cron, sem `amqplib`/`bullmq`.
+- **SMS via adapter HTTP genérico** — `SMS_ENDPOINT_URL` + `SMS_AUTH_HEADER` (linha
+  `Nome: valor`) + `SMS_BODY_TEMPLATE` (JSON com `{to}`/`{text}`/`{from}`) + `SMS_FROM`
+  opcional. Pluga qualquer provedor por env. **Sem prefixo `NIO_`** (segredo da
+  equipe, regra do `JWT_SECRET`). Faltou url/template → `{ status: 'skipped' }` e o
+  gateway responde 503 "2FA não configurado".
+- **Estado do OTP é nosso** — tabela `login_challenges` (sem Twilio, não há serviço
+  externo guardando geração/TTL/tentativas). `code_hash` = **HMAC-SHA256(código,
+  JWT_SECRET)**; o código puro nunca é persistido nem logado (ANPD Res. 15/2024).
+  TTL **5 min**, **3 tentativas**, uso único (`consumed_at`).
+- **Códigos de backup:** 10 no `enable-2fa`, alfabeto sem confusáveis, hash
+  **argon2id** (reusa `hashPassword` — zero dep nova), juntos por `|`, entrada vira
+  `[USED]` ao consumir. Mostrados 1×. Após 3 OTP errados o login exige um backup.
+- **Trilha auditável** = stderr estruturado no gateway (`logAuthEvent`,
+  `event: 'auth_attempt'`), nunca senha/OTP. Tabela `login_attempts` fica de follow-up.
+
+### Schema — `db/migrations/0004_login_2fa.sql` (+ `db/schema.sql` em lockstep)
+- `user_cli` += `phone TEXT` (E.164, `NULL` = sem 2FA), `backup_codes TEXT`.
+- Nova tabela `login_challenges` (`id UUID`, `user_id → user_cli ON DELETE CASCADE`,
+  `purpose CHECK ('login','enable_2fa')`, `code_hash`, `channel CHECK ('sms')`,
+  `attempts`, `expires_at`, `consumed_at`, `created_at`), índices por `user_id` e
+  `expires_at`, `COMMENT ON`.
+- **Aplicada manualmente no banco de dev local** (`postgres://hugo@localhost/nio_cli`).
+  Qualquer outro banco (CI, colega, produção) precisa rodar a migration.
+
+### Código
+| Arquivo | Papel |
+|---|---|
+| `src/core/session.ts` | `UserCli` += `phone`; entidade `LoginChallenge` + `ChallengePurpose`. |
+| `src/core/repositories.ts` | `UserRepository` += `findById`/`enable2fa`/`disable2fa`/`updateBackupCodes`/`getBackupCodes`; novo port `LoginChallengeRepository`. |
+| `src/adapters/pg/user-repository.ts` (+ test) | `phone`/`backup_codes` no `UserRow`/`COLS`; `mapUserRow` expõe `phone` mas **nunca** `backup_codes` na entidade; 5 métodos novos. |
+| `src/adapters/pg/login-challenge-repository.ts` (+ test do mapper) | molde do `dependency-event-repository`; `create` limpa expirados + desafio ativo do usuário em `withTransaction`. |
+| `src/lib/otp.ts` (+ test) | `generateOtp` (`randomInt`), `hashOtp` (HMAC), `verifyOtp` (`timingSafeEqual`, nunca lança em hex inválido), `isOtpFormat`. |
+| `src/lib/backup-codes.ts` (+ test) | `generateBackupCodes` (10, argon2id), `verifyBackupCode` (índice ou −1, case-insensitive), `markUsed`, `countRemaining`, `isBackupCodeFormat`. |
+| `src/core/messaging.ts` | Port `SmsSender { send(to, text): Promise<SmsResult> }`, contrato **nunca lança** (`status: 'sent'\|'skipped'\|'failed'`). |
+| `src/adapters/sms/http-generic.ts` (+ test) | `createHttpSmsSender`: `parseAuthHeader`, `renderBody` (JSON-escapa `{text}`), `fetch` com `AbortSignal.timeout(10s)`, não-2xx → `failed`. |
+| `src/gateway/services/login.ts` (+ test reescrito) | `issueSession(user)` extraído; `login` com branch `auth_2` (gera OTP + `sms.send`); `verifyLogin(challengeId, code, type)` (OTP → 3 tentativas → exige backup; backup → `markUsed`); `maskPhone`, `challengeUsable`. |
+| `src/gateway/services/security.ts` (novo) | `startSecurityChallenge`, `confirmEnable2fa`, `disable2fa`, `regenerateBackupCodes`, `status` — tudo amarrado ao `userId` do Bearer. |
+| `src/gateway/edge-filter.ts` | `logAuthEvent(ctx, result, meta)` — stderr JSON. |
+| `src/gateway/index.ts` | rotas `POST /verify-2fa` e `/security/*`; `requireAuth` (Bearer → 401); `TOKEN_REQUIRED` cobre login/logout/verify-2fa/`/security/`. |
+| `src/lib/gateway-client.ts` | `GatewayLoginResult` union (`done` \| `2fa_required`); `gatewayVerify2fa`; `gatewaySecurity` (status/enable/confirmEnable/challenge/disable/regenerateBackupCodes). |
+| `src/cli/commands/auth.ts` | `resolveSecondFactor` — loop de prompt do código SMS, cai pro código de backup em `requiresBackupCode`. |
+| `src/cli/commands/security.ts` (novo, + `cli.ts` + `gen-reference.ts`) | `nio security enable-2fa\|disable-2fa\|regenerate-backup-codes\|status` (`--json`); backup codes num `box()`. |
+| `kong/kong.yml` | rotas `nio-gateway-verify-2fa` e `nio-gateway-security` com `rate-limiting` (10/min). |
+| `.env.example` | `SMS_ENDPOINT_URL`/`SMS_AUTH_HEADER`/`SMS_BODY_TEMPLATE`/`SMS_FROM` (comentadas). |
+
+### Verificação
+- `bunx tsc --noEmit` verde. `bun test` **373 pass / 1 skip / 0 fail** (+24 vs. o
+  baseline de 349: `otp`, `backup-codes`, `http-generic` sms, mapper do
+  `login-challenge`, `login.ts` — `issueSession`/branch `auth_2`/`verifyLogin`
+  OTP+backup+expirado+3-tentativas — com repos/sender fake).
+- `bun src/cli.ts security --help` lista `enable-2fa`/`disable-2fa`/`regenerate-backup-codes`/`status`.
+- `bun run gen:docs` → tabela COMMANDS do README inclui a subárvore `security`.
+- Nenhum log (stderr do gateway) inclui o OTP ou a senha em texto puro — só
+  `event: 'auth_attempt'` com `result`/`name`/`userId`/`reason`.
+
+### Smoke manual (pendente — precisa do `nio-gateway` no ar + `SMS_ENDPOINT_URL`)
+- `nio security enable-2fa` → SMS → confirma → 10 códigos no box.
+- `nio login` (user `auth_2=true`) → SMS → código → sessão salva.
+- código errado 3× → prompt "código de backup" → backup válido → sessão.
+- `SMS_ENDPOINT_URL` ausente → "2FA não configurado no servidor".
+- `nio security disable-2fa` / `status`.
+
+### Docs
+- [ADR 0006](../adr/0006-2fa-sms-otp.md) + [spec 0004](../specs/auth/0004-login-2fa-sms-otp.md) (novos).
+- Spec 0003 → `status: superseded` (`superseded_by: 0004`); banner no topo.
+- `diagrama/ARCHITETURA-2FA-TOTP.md` → banner "não é o caminho escolhido".
+- `docs/v2/ARQUITETURA-GATEWAY.md` → banner + item 7 na linha do tempo (Twilio →
+  HTTP genérico, estado do OTP nosso).
+- `README.md` → seção "2º fator (SMS)".

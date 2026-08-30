@@ -48,10 +48,31 @@ export interface UserCli {
   id: number;
   name: string;
   auth2: boolean;
+  /** E.164 do SMS do 2º fator; `null` = 2FA desativado. */
+  phone: string | null;
   ipsUsing: string[];
   timestampCreation: Date;
   timestampPasswordChange: Date | null;
   timestampLastSession: Date | null;
+}
+
+/** `login_challenges.purpose` — pra que serve o desafio de OTP. */
+export type ChallengePurpose = 'login' | 'enable_2fa';
+
+/**
+ * `login_challenges` — desafio de OTP em andamento (2º fator). Uso único, TTL
+ * curto, 3 tentativas. `codeHash` é HMAC — o código puro nunca é persistido.
+ */
+export interface LoginChallenge {
+  id: string; // UUID
+  userId: number;
+  purpose: ChallengePurpose;
+  codeHash: string;
+  channel: 'sms';
+  attempts: number;
+  expiresAt: Date;
+  consumedAt: Date | null;
+  createdAt: Date;
 }
 
 /** `sessions` — fonte da verdade do ambiente (hub do modelo). */

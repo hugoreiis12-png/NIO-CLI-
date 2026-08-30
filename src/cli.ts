@@ -21,6 +21,7 @@ import { registerCommandCommand } from "./cli/commands/command.js";
 import { registerOpenCommand } from "./cli/commands/open.js";
 import { registerDepsCommand } from "./cli/commands/deps.js";
 import { registerDockerCommand } from "./cli/commands/docker.js";
+import { registerSecurityCommands } from "./cli/commands/security.js";
 
 notifyCliIfUpdate();
 
@@ -48,6 +49,7 @@ registerCommandCommand(program);
 registerOpenCommand(program);
 registerDepsCommand(program);
 registerDockerCommand(program);
+registerSecurityCommands(program);
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(`Erro: ${(err as Error).message}`);

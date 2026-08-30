@@ -1,5 +1,11 @@
 # NIO-CLI — Arquitetura de 2º Fator (TOTP + Backup Codes)
 
+> ⚠️ **NÃO É O CAMINHO ESCOLHIDO.** O 2º fator da v1 é **SMS OTP** — o dono quer
+> uma *mensagem de confirmação*, e TOTP não envia nada. Ver
+> [spec 0004](../docs/specs/auth/0004-login-2fa-sms-otp.md) e [ADR 0006](../docs/adr/0006-2fa-sms-otp.md).
+> **O que foi aproveitado deste doc:** o sketch de **códigos de backup** (§4.2) e
+> os nomes de comando/rota (`nio security …`, `/verify-2fa`, `/security/*`).
+
 > Documento de arquitetura para implementação do 2FA open-source no NIO-CLI.
 > Baseado na esteira de autenticação existente (JWT + auth_sessions + gateway HTTP).
 > Data: 2026-08-25

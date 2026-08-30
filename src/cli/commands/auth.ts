@@ -3,10 +3,47 @@ import { input, password } from "../../lib/prompts.js";
 import { brand } from "../../brand.js";
 import { renderMatrixLogo } from "../../matrix-logo.js";
 import { startSpinner } from "../../spinner.js";
+import { c, sym } from "../../lib/colors.js";
 import { createUserRepository } from "../../adapters/pg/user-repository.js";
-import { gatewayLogin, gatewayLogout } from "../../lib/gateway-client.js";
+import {
+  gatewayLogin,
+  gatewayLogout,
+  gatewayVerify2fa,
+  type GatewaySession,
+} from "../../lib/gateway-client.js";
 import { loadSession, saveSession, clearSession } from "../../lib/session-store.js";
 import { authCopy } from "../copy.js";
+
+/**
+ * 2º fator: o `/login` respondeu `2fa_required`. Pede o código (SMS), até 3 vezes;
+ * se as tentativas de OTP esgotam, troca pro prompt de código de backup.
+ * Retorna a sessão emitida, ou `null` (usuário desistiu / esgotou).
+ */
+async function resolveSecondFactor(
+  challengeId: string,
+  phoneHint: string,
+): Promise<GatewaySession | null> {
+  console.log(`  ${c.dim(`código enviado por SMS para ${phoneHint}`)}`);
+  let type: "otp" | "backup" = "otp";
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const code = (
+      await input({
+        message: type === "otp" ? "Código de confirmação (SMS)" : "Código de backup",
+        validate: (v) => v.trim().length > 0 || "obrigatório",
+      })
+    ).trim();
+    const res = await gatewayVerify2fa(challengeId, code, type);
+    if (res.ok) return res;
+    if (res.requiresBackupCode) {
+      console.log(`  ${c.yellow(sym.warn)} tentativas de SMS esgotadas — use um código de backup.`);
+      type = "backup";
+      continue;
+    }
+    const left = res.remaining !== undefined ? ` (${res.remaining} tentativa(s))` : "";
+    console.log(`  ${c.red(sym.err)} código incorreto${left}.`);
+  }
+  return null;
+}
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -54,29 +91,42 @@ function registerLoginCommand(program: Command): void {
       const pass = await password({ message: authCopy.login.passwordPrompt, mask: "*" });
 
       const spinner = startSpinner("Autenticando...");
+      let session: GatewaySession;
       try {
         const result = await gatewayLogin(name.trim(), pass);
         if (!result) {
           spinner.fail(authCopy.login.invalidCredentials);
           process.exit(1);
         }
-        await saveSession({
-          userId: result.userId,
-          name: result.name,
-          token: result.token,
-          sessionId: result.sessionId,
-          loggedInAt: new Date().toISOString(),
-          expiresAt: result.expiresAt,
-        });
         spinner.stop();
-        console.log(renderMatrixLogo());
-        console.log("[ok] Autenticado!");
-        console.log(`Usuário: ${result.name}`);
-        console.log(`ID:      ${result.userId}`);
+
+        if (result.step === "done") {
+          session = result;
+        } else {
+          const s = await resolveSecondFactor(result.challengeId, result.phoneHint);
+          if (!s) {
+            console.error(`${c.red(sym.err)} 2º fator não concluído.`);
+            process.exit(1);
+          }
+          session = s;
+        }
       } catch (err) {
         spinner.fail(`Falha ao autenticar: ${(err as Error).message}`);
         process.exit(1);
       }
+
+      await saveSession({
+        userId: session.userId,
+        name: session.name,
+        token: session.token,
+        sessionId: session.sessionId,
+        loggedInAt: new Date().toISOString(),
+        expiresAt: session.expiresAt,
+      });
+      console.log(renderMatrixLogo());
+      console.log("[ok] Autenticado!");
+      console.log(`Usuário: ${session.name}`);
+      console.log(`ID:      ${session.userId}`);
     });
 }
 

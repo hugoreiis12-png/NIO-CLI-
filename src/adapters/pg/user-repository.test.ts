@@ -8,6 +8,8 @@ const baseRow = {
   timestamp_creation: new Date('2026-08-21T10:00:00Z'),
   timestamp_password_change: null,
   auth_2: false,
+  phone: null,
+  backup_codes: null,
   timestamp_last_session: null,
   ips_using: '["10.0.0.1","10.0.0.2"]',
 };
@@ -33,4 +35,12 @@ test('mapUserRow tolera ips_using nulo ou inválido → []', () => {
 test('mapUserRow preserva flags', () => {
   const user = mapUserRow({ ...baseRow, auth_2: true });
   expect(user.auth2).toBe(true);
+});
+
+test('mapUserRow expõe phone mas nunca backup_codes', () => {
+  const user = mapUserRow({ ...baseRow, phone: '+5511999999999', backup_codes: 'h1|h2' });
+  expect(user.phone).toBe('+5511999999999');
+  expect('backup_codes' in user).toBe(false);
+  expect('backupCodes' in user).toBe(false);
+  expect(mapUserRow({ ...baseRow }).phone).toBeNull();
 });

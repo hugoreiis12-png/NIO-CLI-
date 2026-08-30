@@ -34,6 +34,21 @@ export function logRequest(ctx: RequestContext, extra: Record<string, unknown> =
   console.error(JSON.stringify({ ts: new Date().toISOString(), event: 'gateway_request', ...ctx, ...extra }));
 }
 
+/**
+ * Trilha auditável de auth (exigência ANPD/NIST da spec 0003): quem/quando/
+ * resultado de cada tentativa de login/2FA. Só metadados — **nunca** a senha ou
+ * o código OTP. `result` ∈ password_ok|password_fail|2fa_sent|2fa_ok|2fa_fail|2fa_expired.
+ */
+export function logAuthEvent(
+  ctx: RequestContext,
+  result: string,
+  meta: { name?: string; userId?: number; reason?: string } = {},
+): void {
+  console.error(
+    JSON.stringify({ ts: new Date().toISOString(), event: 'auth_attempt', result, ...ctx, ...meta }),
+  );
+}
+
 function firstHeaderValue(value: string | string[] | undefined): string | null {
   const v = Array.isArray(value) ? value[0] : value;
   return v && v.length > 0 ? v : null;

@@ -16,6 +16,8 @@ import type {
   AuthSession,
   DependencyEvent,
   DependencyType,
+  LoginChallenge,
+  ChallengePurpose,
 } from './session.js';
 
 /** Dados para criar um usuário. `password` é texto puro — o adapter hasheia (argon2id). */
@@ -38,8 +40,48 @@ export interface UserRepository {
    */
   verifyCredentials(name: string, password: string): Promise<UserCli | null>;
 
+  /** Busca por id. `null` se não existe. */
+  findById(id: number): Promise<UserCli | null>;
+
   /** Marca `timestamp_last_session = now()`. */
   touchLastSession(userId: number): Promise<void>;
+
+  /** Liga o 2º fator: `auth_2 = true`, grava `phone` (E.164) e os hashes dos códigos de backup. */
+  enable2fa(userId: number, phone: string, backupCodeHashes: string): Promise<void>;
+
+  /** Desliga o 2º fator: `auth_2 = false`, limpa `phone` e `backup_codes`. */
+  disable2fa(userId: number): Promise<void>;
+
+  /** Substitui `backup_codes` (após usar um, ou regenerar). */
+  updateBackupCodes(userId: number, joined: string): Promise<void>;
+
+  /** Hashes dos códigos de backup (string crua `hash|hash|[USED]|…`), ou `null`. Só o gateway usa. */
+  getBackupCodes(userId: number): Promise<string | null>;
+}
+
+/** Dados para criar um desafio de OTP. `codeHash` é HMAC — nunca o código puro. */
+export interface NewLoginChallengeInput {
+  userId: number;
+  purpose: ChallengePurpose;
+  codeHash: string;
+  channel: 'sms';
+  expiresAt: Date;
+}
+
+/**
+ * Desafios de OTP do 2º fator. `create` apaga os desafios ativos anteriores do
+ * usuário (1 por vez) e os expirados. `findById`/`consume` são uso único.
+ */
+export interface LoginChallengeRepository {
+  create(input: NewLoginChallengeInput): Promise<LoginChallenge>;
+  /** `null` se não existe. Não filtra por consumido/expirado — o serviço decide. */
+  findById(id: string): Promise<LoginChallenge | null>;
+  /** `attempts = attempts + 1`, retorna o novo valor. */
+  incrementAttempts(id: string): Promise<number>;
+  /** `consumed_at = NOW()` — uso único. Idempotente. */
+  consume(id: string): Promise<void>;
+  /** Apaga os `expires_at < NOW()`. Best-effort de limpeza (sem cron). */
+  deleteExpired(): Promise<void>;
 }
 
 /** Dados para criar uma sessão de ambiente. `status` nasce sempre `active`. */

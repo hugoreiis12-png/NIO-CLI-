@@ -3,10 +3,7 @@
 # roda no host, não no container) — proxy puro, nenhuma mudança de código
 # do lado da aplicação quando isto for ligado/desligado.
 #
-# `host.docker.internal` — como o nio-gateway roda no host (não é outro
-# container), o Kong precisa sair do container pra alcançá-lo. Funciona nativo
-# no Docker Desktop (mac/Windows); no Linux precisa do `extra_hosts` do
-# compose (já configurado em `docker-compose.yml`).
+
 _format_version: "3.0"
 
 services:
@@ -28,6 +25,26 @@ services:
         paths:
           - /logout
         strip_path: false
+      # /verify-2fa e /security/* — código OTP + gerência do 2º fator (spec 0004).
+      # rate-limit mais apertado: cada SMS custa; brute-force de OTP de 6 dígitos.
+      - name: nio-gateway-verify-2fa
+        paths:
+          - /verify-2fa
+        strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 10
+              policy: local
+      - name: nio-gateway-security
+        paths:
+          - /security
+        strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 10
+              policy: local
       - name: nio-gateway-health
         paths:
           - /health
