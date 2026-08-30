@@ -1,103 +1,222 @@
-NIO-CLI — orquestrador de ambientes de desenvolvimento. Você escolhe um
-perfil, responde um wizard, e a CLI (com auxílio de IA via MCP) materializa
-o ambiente: toolchains, linguagens, frameworks, dotfiles, aliases e IDE. A
-entidade central é a **Sessão** — um ambiente isolado, com UUID, persistido
-no Postgres.
+# NIO-CLI
 
+**Orquestrador de ambientes de desenvolvimento.** Você escolhe um perfil,
+responde um wizard, e a CLI — com auxílio de IA via MCP — materializa o ambiente:
+toolchains, linguagens, frameworks, dotfiles, aliases e IDE. A entidade central é
+a **Sessão**: um ambiente isolado, com UUID, persistido no Postgres.
 
-## Perfis disponíveis
+> Documentação completa no terminal ou como página: `nio docs` · `nio docs --html --open`.
 
-Fixos no código-fonte (`src/core/session.ts`) — novos perfis só entram
-alterando o fonte:
+---
+
+## Como funciona
+
+```
+você → nio (CLI) ──► nio-gateway ──► Postgres        (login: senha + JWT, 2º fator opcional)
+          │
+          ├──► SessionManager / EnvironmentBuilder    (materializa toolchains, MCPs, dotfiles)
+          │
+          └──► opencode.json  ──►  OpenCode (operador de IA)
+                                     └── MCP `nio` (tools nio_*)  ──► SessionManager ──► Postgres
+```
+
+1. **Você se autentica** (`nio register` / `nio login`). O `nio-gateway` — um
+   serviço HTTP loopback — verifica a senha (argon2id), dispara o 2º fator se
+   estiver ativo, e devolve um **JWT** salvo em `~/.nio/session.json`.
+2. **Você monta uma sessão** (`nio init`). O wizard pergunta perfil + recipe, e o
+   `EnvironmentBuilder` garante os toolchains, resolve os MCPs e grava o `config`
+   materializado na linha `sessions` do Postgres. A sessão é isolada, tem UUID e
+   pode ser reativada depois (`nio sessions`).
+3. **A CLI registra o MCP `nio`** no `opencode.json` e entrega o terminal pro
+   **OpenCode** (operador de IA fixo, modelo `opencode/big-pickle`). A partir daí
+   o agente tem as tools `nio_*` — criar/ativar sessão, re-materializar ambiente,
+   detectar dependências, delegar execução.
+
+O **Postgres é a fonte da verdade** do domínio (usuários, sessões, trilha de
+auth). A CLI e o gateway só falam com o banco que **você** configurar — não há
+default, não há banco embutido.
+
+---
+
+## Instalação
+
+Precisa de **Node.js 20.12+**. Instala como pacote global:
+
+```bash
+npm i -g @nio-cli/cli
+```
+
+Ficam no PATH: `nio` (CLI), `nio-gateway` (serviço de auth), `nio-cli` e
+`nio-lang` (servidores MCP).
+
+### Pré-requisitos de runtime
+
+| Requisito | Pra quê | Como |
+|---|---|---|
+| **PostgreSQL** alcançável | fonte da verdade (sessões, usuários) | schema em `db/schema.sql` aplicado uma vez |
+| **`JWT_SECRET`** (segredo do time) | assinar/validar as sessões | mesmo valor em toda máquina |
+| **OpenCode** | operador de IA | o `nio init` oferece instalar (`npm i -g opencode-ai`) |
+| *(opcional)* provedor de SMS | 2º fator | `SMS_ENDPOINT_URL` + `SMS_AUTH_HEADER` + `SMS_BODY_TEMPLATE` |
+
+---
+
+## Configuração
+
+A CLI lê variáveis de ambiente nesta precedência (a primeira que definir vence, e
+o shell sempre vence os arquivos):
+
+```
+env do shell  >  $NIO_ENV_FILE  >  ./.env  >  ~/.nio/config.env
+```
+
+Pra uma instalação global, o lugar canônico é **`~/.nio/config.env`**:
+
+```bash
+# ~/.nio/config.env
+NIO_DATABASE_URL=postgres://usuario:senha@HOST:5432/nio_cli
+# NIO_DATABASE_SSL=true          # só se o banco exigir TLS (gerenciado/nuvem)
+JWT_SECRET=<mesmo-valor-do-time>
+
+# 2º fator (SMS) — opcional, só no lado do gateway
+# SMS_ENDPOINT_URL=https://api.provedor.com/v2/sms
+# SMS_AUTH_HEADER=X-API-TOKEN: seu-token
+# SMS_BODY_TEMPLATE={"to":"{to}","message":"{text}"}
+```
+
+| Variável | Prefixo | Lida por |
+|---|---|---|
+| `NIO_DATABASE_URL` / `NIO_DATABASE_SSL` | `NIO_` | tudo que toca o banco |
+| `JWT_SECRET` / `JWT_EXPIRES_IN` | **sem** prefixo (segredo do time) | `nio-gateway` + `nio-cli` |
+| `SMS_ENDPOINT_URL` / `SMS_AUTH_HEADER` / `SMS_BODY_TEMPLATE` / `SMS_FROM` | **sem** prefixo | `nio-gateway` |
+| `NIO_GATEWAY_HOST` (default `127.0.0.1`) | `NIO_` | `nio-gateway` — `0.0.0.0` p/ Kong em container |
+| `NIO_GATEWAY_URL` (default `http://127.0.0.1:8000`) | `NIO_` | a CLI, pra achar o gateway/Kong |
+
+O schema de conexão é sempre `postgres://…`; um destino inválido falha explícito,
+nunca cai num default silencioso.
+
+---
+
+## Primeiros passos
+
+```bash
+# 1. config (uma vez)
+mkdir -p ~/.nio && $EDITOR ~/.nio/config.env      # NIO_DATABASE_URL + JWT_SECRET
+
+# 2. suba o gateway de auth (precisa estar no ar pro login/logout/2FA)
+nio-gateway &
+
+# 3. crie seu usuário na base compartilhada
+nio register
+
+# 4. autentique (salva o JWT em ~/.nio/session.json)
+nio login
+
+# 5. (opcional) ative o 2º fator
+nio security enable-2fa
+
+# 6. monte o ambiente da sessão neste diretório
+nio init
+```
+
+O `nio-gateway` só é necessário pros comandos de auth (`login`/`logout`/
+`verify-2fa`/`security`). Todo o resto — `init`, `sessions`, as tools MCP —
+fala com o Postgres direto usando o JWT local. Rode `nio debug` a qualquer
+momento pra ver o que está ok e o que falta.
+
+---
+
+## Arquitetura
+
+Hexagonal. O núcleo não conhece IO; os adapters implementam os contratos.
+
+```
+entrypoints:  src/cli.ts (nio)          src/gateway/index.ts (nio-gateway)
+              src/mcp-server.ts (nio-cli)   src/mcp-server-lang.ts (nio-lang)
+app:          SessionManager · EnvironmentBuilder · DependencyWatcher · DockerManager
+core/:        types.ts / session.ts (entidades)  +  ports.ts / repositories.ts
+              / environment.ts / docker.ts / messaging.ts (interfaces, sem IO)
+adapters/:    pg/ (Postgres)  ide/ (vscode)  pkg/ (npm,pip,…)  docker/  sms/  skills/
+profiles/:    catálogo dos 6 perfis (fixos no fonte)
+```
+
+- **Runtime:** Node 20.12+ é o alvo. Bun roda o projeto em dev, mas **nada**
+  depende de API exclusiva do Bun — só as equivalentes de `node:*`.
+- **Build:** `tsc` puro → `dist/`. Sem bundler.
+- **Banco:** `pg` + um `Pool` único (`src/adapters/pg/client.ts`). Sem Supabase,
+  sem PostgREST, sem `Bun.sql`.
+- **Gateway:** `http.createServer` nativo, loopback, atrás do Kong OSS (opcional,
+  pra rate-limiting). JWT HS256, `jti` = id da `auth_session`. Trilha de auth em
+  stderr estruturado — nunca a senha nem o OTP em texto puro.
+- **Contrato "nunca lança"** nos ports de IO (`ToolchainGateway`, `IdeGateway`,
+  `DockerGateway`, `SmsSender`): falha vira um resultado `{ status, error? }`.
+
+Detalhes: [`docs/v2/`](docs/v2/) (uma `ARQUITETURA-*.md` por camada) e os
+[ADRs](docs/adr/). Histórico cronológico: [`docs/v2/PROGRESSO.md`](docs/v2/PROGRESSO.md).
+
+### Perfis
+
+Fixos no fonte (`src/core/session.ts`) — novos perfis só entram alterando o código:
 
 `fullstack` · `analyst` · `scientist` · `dba` · `qa` · `bi`
 
-## Estado atual (23 ago 2026)
-
-| Peça | Status |
-|---|---|
-| Schema Postgres v2 (5 tabelas: `user_cli`, `sessions`, `log_session`, `session_activity`, `dependency_events`) | ✅ Pronto — `db/schema.sql` |
-| `nio register` / `nio login` / `nio logout` / `nio whoami` | ✅ Funcionando ponta a ponta — senha com hash argon2id, sessão local em `~/.nio/session.json` |
-| Autenticação do MCP server | ✅ v2 — valida a sessão local contra `user_cli.token_session`, sem Supabase |
-| `SessionRepository` (CRUD de sessões, invariante de 1 sessão ativa por usuário) | ✅ Implementado (`src/adapters/pg/session-repository.ts`) — **ainda sem nenhum comando de CLI ou tool MCP que o exponha** |
-| Wizard de perfil / `EnvironmentBuilder` / `DependencyWatcher` | ❌ Não existem ainda |
-| `nio init` | 🟡 Ainda vincula a um projeto do NOS legado (Supabase) — candidato a redesenho pro wizard de sessão/perfil, ver `docs/v2/TASK-remocao-v1.md` |
-| 2º fator de login (SMS) + Gateway (Edge Filter/Kong/Gateway core) | 📐 Arquitetura desenhada e documentada, **zero código ainda** — ver `docs/v2/ARQUITETURA-GATEWAY.md` |
-| Tools MCP de tarefas/sprints/ponto (v1) | ✅ Removidas do servidor — só sobram as 4 tools genéricas de execução (tabela abaixo) |
-| Resquícios de Supabase no código (`src/adapters/supabase/*`, `src/auth.ts`, `package.json`) | 🟡 Ainda presentes, não usados pelos caminhos ativos — remoção final pendente |
-
-Histórico completo e cronológico das decisões: `docs/v2/PROGRESSO.md`.
-Documento de transição: `NIO-CLI-Transicao-v1-v2.md`.
-
-## Instalação (mac / linux / windows)
-
-Precisa apenas de **Node.js 20+**. Instala como pacote global:
-
-```bash
-npm i -g @nio-cli/cli@0.1.0
-```
-
-Pronto. Os comandos `nio` (CLI) e `nio-cli` (servidor MCP) ficam disponíveis no PATH em qualquer SO.
-
-## Banco de dados
-
-PostgreSQL dedicado (database `nio_cli`), via driver `pg` 
-
-```bash
-# .env na raiz (git-ignorado)
-NIO_DATABASE_URL=postgres://usuario:senha@host:5432/nio_cli
-# NIO_DATABASE_SSL=true   # só se o banco exigir TLS
-```
-
-Schema versionado em `db/schema.sql`; alterações incrementais em `db/migrations/`.
-Healthcheck: `bun run db:ping`.
+---
 
 ## Autenticação
 
 ```bash
-nio register    # cria seu usuário (user_cli), senha com hash argon2id
-nio login        # autentica e salva a sessão em ~/.nio/session.json
-nio whoami        # mostra quem está logado (--json pra saída estável)
-nio logout        # encerra a sessão local e limpa o token no banco
+nio register    # cria o usuário (user_cli), senha com hash argon2id
+nio login       # autentica via nio-gateway e salva o JWT em ~/.nio/session.json
+nio whoami      # mostra quem está logado (--json pra saída estável)
+nio logout      # revoga a auth_session no banco e limpa a sessão local
 ```
 
 ### 2º fator (SMS)
 
 Opt-in por conta. Com `auth_2` ativo, o `nio login` pede um código de 6 dígitos
-enviado por SMS; se o SMS não chega, vale um dos 10 **códigos de backup**.
+por SMS; se o SMS não chega, vale um dos 10 **códigos de backup** (mostrados uma
+vez no `enable-2fa`).
 
 ```bash
-nio security enable-2fa                 # cadastra o celular, confirma via SMS, mostra os códigos de backup
-nio security status                     # ativo? número (mascarado)? quantos backups restam?
+nio security enable-2fa               # cadastra o celular, confirma via SMS, mostra os backups
+nio security status                   # ativo? número (mascarado)? quantos backups restam?
 nio security disable-2fa
 nio security regenerate-backup-codes
 ```
 
-O gateway gera/valida o OTP em processo (sem Twilio, sem broker) e manda o SMS
-por um **adapter HTTP genérico** — configure `SMS_ENDPOINT_URL` /
-`SMS_AUTH_HEADER` / `SMS_BODY_TEMPLATE` no `.env` (ver `.env.example`). Detalhes
-em `docs/specs/auth/0004-login-2fa-sms-otp.md` e [ADR 0006](docs/adr/0006-2fa-sms-otp.md).
-As decisões de arquitetura do gateway (Kong OSS, Keycloak descartado, RFC
-9700/NIST/ANPD) estão em `docs/v2/ARQUITETURA-GATEWAY.md`.
+O gateway gera/valida o OTP em processo (sem Twilio, sem broker), guarda só o
+**HMAC** do código (TTL 5 min, 3 tentativas, uso único) e manda o SMS por um
+**adapter HTTP genérico**. Sem `SMS_ENDPOINT_URL` no ambiente, o login com
+`auth_2` responde `503 "2FA não configurado"` — o login de 1 fator segue normal.
+Detalhes: [spec 0004](docs/specs/auth/0004-login-2fa-sms-otp.md) ·
+[ADR 0006](docs/adr/0006-2fa-sms-otp.md) ·
+[`docs/v2/ARQUITETURA-GATEWAY.md`](docs/v2/ARQUITETURA-GATEWAY.md).
 
-## Cliente de IA
+Pra testar sem SMS real, o repo traz um mock: `bun run dev:sms-echo` sobe um
+endpoint local que imprime o código no terminal (aponte `SMS_ENDPOINT_URL` pra ele).
 
-No fim do `nio init`, a CLI entrega o terminal pro operador de IA fixo —
-**OpenCode** rodando o modelo `opencode/big-pickle` (default gravado no
-`~/.config/opencode/opencode.json`, junto do server MCP `nio` e dos MCPs do
-perfil). Ver `docs/v2/ARQUITETURA-CLIENTE-IA.md`.
+---
+
+## Operador de IA
+
+No fim do `nio init`, a CLI entrega o terminal pro operador de IA fixo:
+**OpenCode** rodando `opencode/big-pickle` (default gravado no
+`~/.config/opencode/opencode.json`, junto do MCP `nio` e dos MCPs do perfil). Ver
+[`docs/v2/ARQUITETURA-CLIENTE-IA.md`](docs/v2/ARQUITETURA-CLIENTE-IA.md).
 
 > Multi-cliente (OpenCode | Codex), proxy de compressão de contexto e ladder de
-> failover entre modelos são uma **feature futura** — desenho parkeado em
-> `docs/v2/ARQUITETURA-CLIENTES-MULTI-FUTURO.md` (ADR 0004).
+> failover entre modelos são **feature futura** — desenho parkeado em
+> [`docs/v2/ARQUITETURA-CLIENTES-MULTI-FUTURO.md`](docs/v2/ARQUITETURA-CLIENTES-MULTI-FUTURO.md)
+> ([ADR 0004](docs/adr/0004-operador-ia-unico.md)).
+
+---
 
 ## Comandos do CLI
 
-Operações do CLI, **sem o binário na frente** (declarado no cabeçalho da tabela). Tabela
-gerada da fonte por `bun run gen:docs`.
+Operações do CLI, **sem o binário na frente** (declarado no cabeçalho da tabela).
+Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --help`.
 
 <!-- COMMANDS:START -->
-<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 30 comandos. -->
+<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 31 comandos. -->
 
 | Comando | Descrição |
 | --- | --- |
@@ -114,6 +233,7 @@ gerada da fonte por `bun run gen:docs`.
 | `docker toolkit down` | Derruba a infra e desabilita o MCP no opencode.json |
 | `docker toolkit status` | Estado dos containers + health dos endpoints |
 | `docker toolkit up` | Sobe a infra e registra o gateway no opencode.json |
+| `docs` | Documentação completa da CLI (terminal ou página com --html) |
 | `exec` | Delega a implementação a um agente headless num worktree e aguarda. |
 | `exec-status <jobId>` | Estado de um job de execução (`nio exec`), em JSON |
 | `init` | Cria nio.json no diretório atual e materializa o ambiente da sessão |
@@ -133,31 +253,33 @@ gerada da fonte por `bun run gen:docs`.
 | `whoami` | Mostra o usuário autenticado |
 <!-- COMMANDS:END -->
 
-> `init` ainda descreve o vínculo com um projeto do NOS legado — é o item
-> pendente da tabela de Estado atual, não o desenho final do comando.
+### Diagnóstico da própria CLI
+
+```bash
+nio debug        # bateria de checagens: nio.json, login, Postgres, sessão ativa,
+                 # OpenCode no PATH, cache de skills — ✓ / ⚠ / ✗ com dica em cada
+nio docs         # documentação completa no terminal
+nio docs --html  # a mesma coisa como página (arte); --open abre no navegador
+```
 
 ### Autocomplete (tab)
 
-O `nio init` **oferece** ativar, e o `nio sync` **valida** e prompta se faltar. Pra
-ativar à mão, adicione ao rc do seu shell:
+O `nio init` **oferece** ativar; o `nio sync` **valida** e prompta se faltar. À mão:
 
 ```bash
-# zsh  (~/.zshrc)
-eval "$(nio completion zsh)"
-# bash (~/.bashrc)
-eval "$(nio completion bash)"
-# fish (~/.config/fish/config.fish)
-nio completion fish | source
+eval "$(nio completion zsh)"     # ~/.zshrc
+eval "$(nio completion bash)"    # ~/.bashrc
+nio completion fish | source     # ~/.config/fish/config.fish
 ```
 
-Recarregue o shell e `nio <tab>` passa a sugerir comandos, subcomandos e flags.
+---
 
 ## Docker (`nio docker`)
 
 Camada de gerência de container — metade wrapper determinístico sobre `docker`,
-metade dirigida pelo operador de IA por linguagem natural (via o **Docker MCP
+metade dirigida pelo operador de IA em linguagem natural (via o **Docker MCP
 Gateway**). Roda em qualquer Docker Engine (não exige Docker Desktop). Ver
-[`docs/v2/ARQUITETURA-DOCKER.md`](docs/v2/ARQUITETURA-DOCKER.md) e
+[`docs/v2/ARQUITETURA-DOCKER.md`](docs/v2/ARQUITETURA-DOCKER.md) ·
 [ADR 0005](docs/adr/0005-camada-docker.md).
 
 ```bash
@@ -166,7 +288,7 @@ nio docker toolkit up            # sobe o MCP Gateway (127.0.0.1:8811/mcp) + Por
 nio docker compose up -f app/docker-compose.yml   # wrapper sobre `docker compose` do projeto
 nio docker create --image redis:7 --port 6379:6379
 nio docker debug <container>     # coleta ps/logs/inspect → operador analisa e propõe o fix
-nio docker orquest "sobe api + worker + redis"     # operador gera o compose e sobe (--dry-run mostra)
+nio docker orquest "sobe api + worker + redis"    # operador gera o compose e sobe (--dry-run mostra)
 nio docker cluster up "api + worker + redis + postgres"   # Docker Swarm (stack `nio-cluster`)
 nio docker cluster status | scale api=3
 nio docker portainer             # abre a UI
@@ -176,23 +298,12 @@ nio docker portainer             # abre a UI
 PATH. O estado do cluster fica em `sessions.config` (Postgres), validado contra
 `docker stack services`.
 
-## Tools MCP disponíveis
+---
 
-As tools de domínio de tarefas/sprints/ponto (v1) já foram removidas. Além das
-tools genéricas de execução, o servidor MCP expõe as tools de ambiente v2:
-`nio_profile_get` (catálogo de perfis), `nio_session_list` /
-`nio_session_activate` / `nio_session_create` (sessões) e `nio_env_materialize` /
-`nio_env_detect_deps` (ambiente). Todas passam pelo `SessionManager` e exigem
-`nio login`.
+## Tools MCP
 
-### Recipes de ambiente (repo NIO-SKILLS)
-
-Além dos 6 perfis fixos, o repo `NIO-SKILLS-` pode carregar **recipes** em
-`recipes/<slug>.md` — presets nomeados (`profile` + linguagens + frameworks +
-MCPs + envVars/aliases) que **estendem** um perfil, editáveis sem release da CLI.
-O `nio init` oferece a recipe depois do perfil; `nio_session_create` aceita
-`{ recipe: "<slug>" }`. O merge é determinístico (recipe vence em envVars/aliases;
-união em linguagens/frameworks/MCPs). Ver `recipes/README.md` no repo NIO-SKILLS.
+O servidor `nio-cli` expõe as tools de ambiente v2 (todas passam pelo
+`SessionManager` e exigem `nio login`):
 
 <!-- TOOLS:START -->
 <!-- gerado por `bun run gen:docs` — não edite à mão. 10 tools. -->
@@ -212,6 +323,17 @@ união em linguagens/frameworks/MCPs). Ver `recipes/README.md` no repo NIO-SKILL
 | `session_list` | Lista as sessões de ambiente do usuário autenticado (mais recentes primeiro), com id, nome, perfil, status e o `config` materializado. |
 | `validate_plan` | Lê o `plan.md` da raiz do projeto e roda o engine PENSANTE (claude ou codex local, na assinatura — sem API) para julgar se o plano é complexo o bastante para virar uma spec SDD antes de implementar. |
 <!-- TOOLS:END -->
+
+### Recipes de ambiente (repo NIO-SKILLS)
+
+Além dos 6 perfis fixos, o repo `NIO-SKILLS-` pode carregar **recipes** em
+`recipes/<slug>.md` — presets nomeados (`profile` + linguagens + frameworks +
+MCPs + envVars/aliases) que **estendem** um perfil, editáveis sem release da CLI.
+O `nio init` oferece a recipe depois do perfil; `nio_session_create` aceita
+`{ recipe: "<slug>" }`. Merge determinístico (recipe vence em envVars/aliases;
+união em linguagens/frameworks/MCPs).
+
+---
 
 ## Skills, commands e dependências
 
@@ -248,8 +370,6 @@ Cada cliente recebe no formato que entende:
 > procure os itens do nio) — são **invocados manualmente**, não carregados sozinhos
 > como Agent Skills que o modelo detecta e usa por conta própria. Se não aparecerem:
 > feche o app de vez (Cmd+Q) e reabra, e confirme que o conector nio está conectado.
-> O processo do Cowork lê o mesmo cache `~/.nio/skills` — se o `nio sync` populou, o
-> conteúdo está lá.
 
 ### Visibilidade por cliente
 
@@ -274,39 +394,25 @@ Commands/skills podem depender de libs externas, declaradas como arquivos em
 - **`manual:`** (plugin de marketplace, passos no cliente, UI) → imprime os passos por
   cliente, com os comandos destacados.
 
-A string `install:` (se houver) é **só exibição** — nunca é executada.
+A string `install:` (se houver) é **só exibição** — nunca é executada. A CLI **detecta
+o que já está instalado** e mostra um selo `✓ instalada` (via `npm ls -g`, dir de
+destino, ou o `detect:` do frontmatter).
 
-A CLI **detecta o que já está instalado** e mostra um selo verde `✓ instalada` (sem
-repetir descrição/passos): `npm` via `npm ls -g`, `git` pelo dir de destino, `skills`
-por marcador/probe. Pra deps `manual:` (plugins), declare `detect:` no frontmatter com
-um ou mais globs — suporta `~`, `*` e `**`, e segue symlinks (ok com dotfiles).
-
-### Checagem de cliente
-
-Ao escolher um cliente no `init`, a CLI verifica se ele está de fato instalado na
-máquina. Se não estiver:
-
-- **CLIs** (Claude Code, Codex) → mostra e oferece rodar o instalador:
-  `npm i -g @anthropic-ai/claude-code` · `npm i -g @openai/codex`;
-- **apps** (Claude Desktop/Cowork, VS Code) → mostra o link de download
-  (ex.: https://claude.ai/download) — reabra o app depois de instalar.
+---
 
 ## Claude Desktop / Cowork
 
-Selecione **Cowork** na lista de clientes do `nio init` (ou rode de novo). Com o app
-instalado e você já logado (`nio login`), a CLI **ativa o conector direto** — escreve
-o `nio` no `claude_desktop_config.json` usando caminhos absolutos (`node` +
-`dist/mcp-server.js`) e `NIO_CLIENT=cowork`. Reinicie o Claude Desktop pra carregar.
-O `nio sync` reafirma esse config (atualiza os paths se o node/pacote mudou de lugar).
+Selecione **Cowork** na lista de clientes do `nio init`. Com o app instalado e você
+logado (`nio login`), a CLI **ativa o conector direto** — escreve o `nio` no
+`claude_desktop_config.json` com caminhos absolutos (`node` + `dist/mcp-server.js`)
+e `NIO_CLIENT=cowork`. Reinicie o Claude Desktop pra carregar. O `nio sync` reafirma
+esse config.
 
-### Fallback: extensão `.mcpb`
+**Fallback `.mcpb`:** se a escrita direta falhar, a CLI gera
+`~/Downloads/nio-cli-<versão>.mcpb` e mostra os passos — Configurações → Extensões →
+Configurações avançadas → "Extension Developer" → "Install Extension…".
 
-Se o app estiver instalado mas a escrita direta falhar, ou você não tiver login salvo, a
-CLI cai pro **fallback manual**: gera uma extensão `~/Downloads/nio-cli-<versão>.mcpb`
-e mostra os passos:
-
-**Configurações → Extensões → Configurações avançadas → seção "Extension Developer" →
-"Install Extension…"** → selecione o `.mcpb`.
+---
 
 ## Atualizando
 
@@ -314,32 +420,47 @@ e mostra os passos:
 npm i -g @nio-cli/cli@latest
 ```
 
-O `nio sync` **checa a versão publicada** no início e, se houver uma mais nova, mostra
-um aviso e **oferece atualizar ali mesmo** (roda `npm i -g @nio-cli/cli@latest` com sua
-confirmação; depois é só rodar o sync de novo). Use `nio sync --yes` pra aceitar sem
-prompt. A CLI também avisa em background em qualquer comando (via `update-notifier`).
+O `nio sync` **checa a versão publicada** no início e **oferece atualizar** ali mesmo
+(com sua confirmação). `nio sync --yes` aceita sem prompt. A CLI também avisa em
+background em qualquer comando (`update-notifier`).
+
+---
 
 ## Troubleshooting
 
-- **`nio-cli: command not found`** — confirme o install global com `npm i -g @nio-cli/cli` e que `npm bin -g` está no PATH.
-- **Tools não aparecem no Claude Code** — reinicie o Claude Code depois do `nio init`. Confira com `/mcp` dentro dele.
-- **`Não autenticado`** — rode `nio register` (primeira vez) e depois `nio login`.
-- **Skills não aparecem no Cowork** — elas chegam como **prompts MCP** (slash-commands no menu de conectores/"+"), não como skills autônomas. Feche o Claude Desktop de vez (Cmd+Q) e reabra; confirme o conector conectado.
-- **`Conteúdo de skills não encontrado`** — o cache `~/.nio/skills` está vazio (fetch falhou / offline). Rode `nio sync` com rede, ou defina `NIO_SKILLS_DIR` pra um checkout local. Confirme também que o repo de skills está público.
-- **`ENOENT … mkdir` ao provisionar (dotfiles)** — um symlink em `~/.claude` aponta pra um alvo inexistente. As versões atuais materializam o alvo automaticamente; se persistir, cheque o link.
-- **Sobraram comandos antigos** (`new-spec`, `apply-bug`, `init-sdd` como command…) — rode `nio clean-legacy` (use `--dry-run` pra revisar antes) pra removê-los de `~/.claude` e `~/.codex`.
-- **Erro de conexão com o banco** (`db:ping`, `login`/`register`) — confira `NIO_DATABASE_URL` no `.env` da raiz; `ECONNREFUSED` = Postgres fora do ar ou host/porta errados, `password authentication failed` = credencial errada, erro de SSL = adicione `NIO_DATABASE_SSL=true`.
+| Sintoma | Causa provável / o que fazer |
+|---|---|
+| `nio: command not found` | `npm i -g @nio-cli/cli` e confira `npm bin -g` no PATH |
+| `NIO_DATABASE_URL não definida` | ponha em `~/.nio/config.env` (ou exporte no shell). Bin publicado só lê `.env`/`config.env`, não o `.env` de dev via bun |
+| `Não consegui falar com o nio-gateway` | o `nio-gateway` não está no ar — rode `nio-gateway &` |
+| `Não autenticado` | `nio register` (1ª vez) e depois `nio login` |
+| Erro de conexão com o banco | `ECONNREFUSED` = Postgres fora do ar / host errado; `password authentication failed` = credencial; erro de SSL = `NIO_DATABASE_SSL=true` |
+| `2FA não configurado no servidor` (503) | faltam as `SMS_*` no ambiente do `nio-gateway` |
+| Tools não aparecem no Claude Code | reinicie o cliente depois do `nio init`; cheque com `/mcp` |
+| Skills não aparecem no Cowork | chegam como **prompts MCP** (slash-commands), não skills autônomas. Cmd+Q e reabra; confirme o conector |
+| `Conteúdo de skills não encontrado` | cache `~/.nio/skills` vazio — rode `nio sync` com rede, ou `NIO_SKILLS_DIR` pra um checkout local |
+| Sobraram comandos antigos | `nio clean-legacy` (`--dry-run` pra revisar antes) |
+
+Sempre: `nio debug` mostra o estado de tudo com uma dica por item.
+
+---
 
 ## Convenções
 
-- **Idioma**: UI/CLI em pt-BR. Código (variáveis, funções, tipos) em inglês.
-- **Backups**: qualquer escrita em arquivo de config existente gera `.bak.<timestamp>` ao lado.
+- **Idioma:** UI/CLI em pt-BR. Código (variáveis, funções, tipos) em inglês.
+- **Backups:** toda escrita em config existente gera `.bak.<timestamp>` ao lado.
 - **stdout reservado pro JSON-RPC** no MCP server — logs vão pra stderr.
-- **Regra do hexágono**: `core/ports.ts`/`core/repositories.ts` não importam driver de banco algum; os adapters (`adapters/pg/*`) implementam os contratos.
+- **Regra do hexágono:** `core/ports.ts` / `core/repositories.ts` não importam
+  driver de banco; os adapters (`adapters/*`) implementam os contratos.
+- **Migrations:** fonte da verdade em `db/schema.sql`; deltas incrementais em
+  `db/migrations/NNNN_*.sql`, aplicados à mão (`psql -f`).
+
+---
 
 ## Versão
 
-v0.1.x — **v2 em construção sobre uma base v1 em remoção ativa**. Auth
-(senha) e o backend de sessões estão prontos; wizard de perfil, tools de
-ambiente MCP e o Gateway com 2º fator ainda não. Acompanhe o progresso em
-`docs/v2/PROGRESSO.md`.
+**0.2.0** — v1 da CLI fechada: auth (senha + 2º fator SMS), backend de sessões,
+wizard de ambiente, tools MCP de ambiente, camada Docker e o gateway com Kong.
+Sobre uma base v1 (cliente NOS) em remoção — ver
+[`docs/v2/TASK-remocao-v1.md`](docs/v2/TASK-remocao-v1.md). Progresso:
+[`docs/v2/PROGRESSO.md`](docs/v2/PROGRESSO.md).

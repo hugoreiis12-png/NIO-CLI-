@@ -5,7 +5,7 @@
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import type { Command } from "commander";
 import { brand } from "../../brand.js";
 import { c, sym, section, link } from "../../lib/colors.js";
@@ -22,6 +22,7 @@ import {
 } from "../../lib/docker.js";
 import { upsertOpencodeMcp } from "../../lib/client-configs.js";
 import { isBinaryInstalled } from "../../lib/client-install.js";
+import { openUrl } from "../../lib/open-url.js";
 import { loadSession } from "../../lib/session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { createDockerGateway } from "../../adapters/docker/docker-gateway.js";
@@ -408,16 +409,6 @@ async function runCluster(action: string, arg: string | undefined, opts: { dryRu
 }
 
 // ─── portainer ───────────────────────────────────────────────────────
-
-/** Abre uma URL no navegador padrão (mac/linux/windows). Best-effort. */
-function openUrl(url: string): void {
-  const cmd =
-    process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-  const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
-  child.on("error", () => {});
-  child.unref();
-}
 
 async function runPortainer(opts: { url?: boolean }): Promise<void> {
   if (opts.url) {
