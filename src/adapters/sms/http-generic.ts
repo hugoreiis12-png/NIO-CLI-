@@ -1,8 +1,6 @@
 /**
  * Adapter de SMS genérico via HTTP — pluga qualquer provedor por env, sem código
- * novo. Faz um `POST` num endpoint configurável com um header de auth e um corpo
- * template.
- 
+ * novo. `POST` num endpoint configurável, com header de auth e corpo template.
  */
 import type { SmsResult, SmsSender } from '../../core/messaging.js';
 
