@@ -1,7 +1,9 @@
 import { test, expect } from 'bun:test';
 import React from 'react';
 import { render } from 'ink-testing-library';
-import { Sidebar, MessageView, LiveMessage } from './components.js';
+import { Sidebar, MessageView, LiveMessage, InputBox } from './components.js';
+import { buildPalette } from './palette-source.js';
+import { buildProgram } from '../cli/program.js';
 import type { ChatMessage } from './state.js';
 
 test('Sidebar: mostra sessão, lista e atalhos', () => {
@@ -29,6 +31,28 @@ test('MessageView: renderiza texto do assistant e do usuário', () => {
   expect(f).toContain('oi');
   expect(f).toContain('nio');
   expect(f).toContain('mundo');
+});
+
+test('InputBox: `/…` mostra UMA lista inline; sem `/` não mostra lista', () => {
+  const palette = buildPalette(buildProgram());
+  const listCount = (f: string) => f.split('Esc sai').length - 1;
+
+  const noSlash = render(
+    <InputBox disabled={false} palette={palette} onSubmit={() => {}} onDispatch={() => {}} defaultValue="oi tudo bem" />,
+  ).lastFrame() ?? '';
+  expect(listCount(noSlash)).toBe(0);
+
+  const oneSlash = render(
+    <InputBox disabled={false} palette={palette} onSubmit={() => {}} onDispatch={() => {}} defaultValue="/debug" />,
+  ).lastFrame() ?? '';
+  expect(listCount(oneSlash)).toBe(1);
+  expect(oneSlash).toContain('[cmd] debug');
+
+  // `//…` → ainda UMA lista (não duplica), filtra por tudo depois do 1º `/`
+  const twoSlash = render(
+    <InputBox disabled={false} palette={palette} onSubmit={() => {}} onDispatch={() => {}} defaultValue="//x" />,
+  ).lastFrame() ?? '';
+  expect(listCount(twoSlash)).toBe(1);
 });
 
 test('LiveMessage: limita a `maxLines` (não estoura a tela)', () => {

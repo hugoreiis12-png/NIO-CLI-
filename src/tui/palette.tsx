@@ -1,69 +1,12 @@
 /**
- * Paleta `/` + painel de info + runner de comando + modal de permissão.
- * As 3 ações do dono: comando → info · comando → executa e mostra · capacidade → prompt.
+ * Overlays da paleta: painel de info · runner de comando · modal de permissão.
+ * (A lista `/` em si é inline no `InputBox` — `SlashList` em `components.tsx`.)
  */
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { spawn } from 'node:child_process';
 import { theme, sym } from './theme.js';
-import { buildPalette, filterPalette, type PaletteItem } from './palette-source.js';
-import type { Command } from 'commander';
-
-const KIND_LABEL: Record<PaletteItem['kind'], string> = {
-  command: 'cmd',
-  capability: 'agente',
-  help: 'ajuda',
-};
-
-export function Palette({
-  program,
-  onClose,
-  onInfo,
-  onRun,
-  onPrompt,
-}: {
-  program: Command;
-  onClose: () => void;
-  onInfo: (item: PaletteItem) => void;
-  onRun: (item: Extract<PaletteItem, { kind: 'command' }>) => void;
-  onPrompt: (prompt: string) => void;
-}): React.ReactElement {
-  const all = useMemo(() => buildPalette(program), [program]);
-  const [q, setQ] = useState('');
-  const [i, setI] = useState(0);
-  const items = useMemo(() => filterPalette(all, q).slice(0, 40), [all, q]);
-  const sel = items[Math.min(i, items.length - 1)];
-
-  useInput((input, key) => {
-    if (key.escape) return onClose();
-    if (key.upArrow) return setI((n) => Math.max(0, n - 1));
-    if (key.downArrow) return setI((n) => Math.min(items.length - 1, n + 1));
-    if (key.return) {
-      if (!sel) return;
-      if (sel.kind === 'capability') { onPrompt(sel.prompt); onClose(); return; }
-      onInfo(sel);
-      return;
-    }
-    if (key.ctrl && input === 'r' && sel?.kind === 'command') { onRun(sel); onClose(); return; }
-    if (key.backspace || key.delete) return setQ((v) => v.slice(0, -1));
-    if (input && !key.ctrl && !key.meta) setQ((v) => v + input);
-  });
-
-  return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.accent} paddingX={1}>
-      <Text><Text color={theme.accent}>/</Text>{q}<Text color={theme.dim}>█</Text></Text>
-      {items.map((it, n) => (
-        <Text key={`${it.kind}-${it.name}`} color={n === i ? theme.accentBright : undefined} inverse={n === i}>
-          {' '}[{KIND_LABEL[it.kind]}] {it.name}  <Text color={theme.dim}>{it.desc}</Text>
-        </Text>
-      ))}
-      <Text color={theme.dim}>
-        ↑↓ mover · Enter {sel?.kind === 'capability' ? 'manda pro agente' : 'info'} ·
-        {sel?.kind === 'command' ? ' Ctrl-R roda ·' : ''} Esc fecha
-      </Text>
-    </Box>
-  );
-}
+import type { PaletteItem } from './palette-source.js';
 
 export function InfoPanel({ item, onClose }: { item: PaletteItem; onClose: () => void }): React.ReactElement {
   useInput((_i, key) => {

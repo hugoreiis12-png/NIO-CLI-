@@ -9,15 +9,14 @@ import type { Command } from 'commander';
 import { renderMatrixLogo } from '../matrix-logo.js';
 import { tlog } from './debug.js';
 import { theme } from './theme.js';
-import { Header, Sidebar, MessageView, LiveMessage, StatusLine, InputBox } from './components.js';
-import { Palette, InfoPanel, CommandRunner, PermissionModal } from './palette.js';
-import type { PaletteItem } from './palette-source.js';
+import { Header, Sidebar, MessageView, LiveMessage, StatusLine, InputBox, type PaletteAction } from './components.js';
+import { InfoPanel, CommandRunner, PermissionModal } from './palette.js';
+import { buildPalette, type PaletteItem } from './palette-source.js';
 import { applyEvent, pushUserMessage, syncMessages, emptyChat, type ChatState } from './state.js';
 import { subscribeEvents, type OpencodeHandle } from './opencode.js';
 
 type Overlay =
   | { kind: 'none' }
-  | { kind: 'palette' }
   | { kind: 'info'; item: PaletteItem }
   | { kind: 'run'; item: Extract<PaletteItem, { kind: 'command' }> };
 
@@ -143,6 +142,13 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
       .catch((err) => tlog('prompt falhou', (err as Error).message));
   };
 
+  const palette = useMemo(() => buildPalette(program), [program]);
+  const onDispatch = (item: PaletteItem, action: PaletteAction) => {
+    if (action === 'prompt' && item.kind === 'capability') return send(item.prompt);
+    if (action === 'run' && item.kind === 'command') return setOverlay({ kind: 'run', item });
+    setOverlay({ kind: 'info', item }); // 'info' (comando/help)
+  };
+
   const respondPermission = (r: 'once' | 'always' | 'reject') => {
     const perm = chat.permission;
     if (!perm) return;
@@ -190,23 +196,12 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
 
           {chat.permission ? (
             <PermissionModal title={chat.permission.title} onRespond={respondPermission} />
-          ) : overlay.kind === 'palette' ? (
-            <Palette
-              program={program}
-              onClose={() => setOverlay({ kind: 'none' })}
-              onInfo={(item) => setOverlay({ kind: 'info', item })}
-              onRun={(item) => setOverlay({ kind: 'run', item })}
-              onPrompt={(prompt) => {
-                setOverlay({ kind: 'none' });
-                send(prompt);
-              }}
-            />
           ) : overlay.kind === 'info' ? (
             <InfoPanel item={overlay.item} onClose={() => setOverlay({ kind: 'none' })} />
           ) : overlay.kind === 'run' ? (
             <CommandRunner item={overlay.item} cwd={cwd} onClose={() => setOverlay({ kind: 'none' })} />
           ) : (
-            <InputBox disabled={disabled} onSubmit={send} onSlash={() => setOverlay({ kind: 'palette' })} />
+            <InputBox disabled={disabled} palette={palette} onSubmit={send} onDispatch={onDispatch} />
           )}
         </Box>
       </Box>
