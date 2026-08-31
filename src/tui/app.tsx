@@ -12,7 +12,7 @@ import { theme } from './theme.js';
 import { Header, Sidebar, MessageView, LiveMessage, StatusLine, InputBox } from './components.js';
 import { Palette, InfoPanel, CommandRunner, PermissionModal } from './palette.js';
 import type { PaletteItem } from './palette-source.js';
-import { applyEvent, pushUserMessage, emptyChat, type ChatState } from './state.js';
+import { applyEvent, pushUserMessage, syncMessages, emptyChat, type ChatState } from './state.js';
 import { subscribeEvents, type OpencodeHandle } from './opencode.js';
 
 type Overlay =
@@ -70,7 +70,25 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     return () => clearInterval(t);
   }, [chat.busy]);
 
-  // sessão + stream de eventos
+  /** Re-sincroniza com o server (fonte da verdade): status + mensagens. */
+  const resync = React.useCallback(async () => {
+    const id = sessionId.current;
+    if (!id) return;
+    try {
+      const [st, msgs] = await Promise.all([
+        handle.client.session.status(),
+        handle.client.session.messages({ path: { id } }),
+      ]);
+      const status = (st as { data?: Record<string, { type?: string }> }).data?.[id]?.type;
+      const busy = status === 'busy' || status === 'retry';
+      const raw = ((msgs as { data?: unknown[] }).data ?? []) as Parameters<typeof syncMessages>[1];
+      setChat((prev) => syncMessages(prev, raw, busy));
+    } catch (err) {
+      tlog('resync falhou', (err as Error).message);
+    }
+  }, [handle]);
+
+  // sessão + stream de eventos (reconecta pra sempre)
   useEffect(() => {
     if (splash) return;
     let alive = true;
@@ -87,6 +105,11 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
       setReady(true);
       for await (const evt of subscribeEvents(handle.client, ac.signal)) {
         if (!alive) break;
+        if (evt === null) {
+          void resync(); // (re)conectou → re-sincroniza
+          continue;
+        }
+        if ((evt.type as string) === 'message.part.delta') continue; // ruído: o snapshot vem em message.part.updated
         setChat((prev) => applyEvent(prev, evt));
       }
     })();
@@ -94,7 +117,14 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
       alive = false;
       ac.abort();
     };
-  }, [splash, handle, cwd]);
+  }, [splash, handle, cwd, resync]);
+
+  // rede de segurança: se ficar `busy` sem eventos, confere o status no server
+  useEffect(() => {
+    if (!chat.busy) return;
+    const t = setInterval(resync, 4000);
+    return () => clearInterval(t);
+  }, [chat.busy, resync]);
 
   useInput((_i, key) => {
     if (key.escape && chat.busy && sessionId.current) {
@@ -116,10 +146,13 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   const respondPermission = (r: 'once' | 'always' | 'reject') => {
     const perm = chat.permission;
     if (!perm) return;
+    setChat((prev) => ({ ...prev, permission: null }));
     handle.client
       .postSessionIdPermissionsPermissionId({ path: { id: perm.sessionId, permissionID: perm.id }, body: { response: r } })
-      .catch(() => {});
-    setChat((prev) => ({ ...prev, permission: null }));
+      .catch((err) => tlog('permission respond falhou', (err as Error).message))
+      .finally(() => {
+        void resync();
+      });
   };
 
   // histórico (Static) vs. a última mensagem se estiver streamando

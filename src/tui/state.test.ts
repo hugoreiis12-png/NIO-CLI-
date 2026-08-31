@@ -49,13 +49,22 @@ test('tool part: título + status + output (e error vira output)', () => {
   expect(s.messages[0].parts[1].tool).toEqual({ status: 'error', output: 'falhou feio' });
 });
 
-test('permission.updated → state.permission (properties É a Permission); replied limpa', () => {
+test('permission.updated → state.permission; replied limpa', () => {
   let s = applyEvent(emptyChat, ev('permission.updated', {
     id: 'perm_1', sessionID: 'ses_1', title: 'rodar bash `rm`', type: 'bash',
   }));
   expect(s.permission).toEqual({ id: 'perm_1', sessionId: 'ses_1', title: 'rodar bash `rm`' });
   s = applyEvent(s, ev('permission.replied', { sessionID: 'ses_1', permissionID: 'perm_1', response: 'reject' }));
   expect(s.permission).toBeNull();
+});
+
+test('permission.asked (o que o opencode 1.18 emite de verdade) → modal com título de patterns', () => {
+  const s = applyEvent(emptyChat, ev('permission.asked', {
+    id: 'per_x', sessionID: 'ses_2', permission: 'read', patterns: ['proj/.env'], always: ['*'],
+  }));
+  expect(s.permission?.id).toBe('per_x');
+  expect(s.permission?.sessionId).toBe('ses_2');
+  expect(s.permission?.title).toBe('read proj/.env');
 });
 
 test('session.status idle também limpa busy', () => {
