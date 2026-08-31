@@ -72,6 +72,16 @@ function ToolCard({ part }: { part: ChatPart }): React.ReactElement {
   );
 }
 
+function Part({ part }: { part: ChatPart }): React.ReactElement | null {
+  if (part.kind === 'tool') return <ToolCard part={part} />;
+  if (part.kind === 'reasoning') {
+    if (!part.text.trim()) return null;
+    return <Text color={theme.dim} italic>{'  '}pensando: {part.text.split('\n').join(' ').slice(0, 240)}</Text>;
+  }
+  if (!part.text.trim()) return null;
+  return <Markdown text={part.text} />;
+}
+
 export function MessageList({ messages }: { messages: ChatMessage[] }): React.ReactElement {
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
@@ -83,13 +93,9 @@ export function MessageList({ messages }: { messages: ChatMessage[] }): React.Re
           <Text bold color={m.role === 'user' ? theme.user : theme.accentBright}>
             {m.role === 'user' ? 'você' : 'nio'}
           </Text>
-          {m.parts.map((p) =>
-            p.kind === 'tool' ? (
-              <ToolCard key={p.id} part={p} />
-            ) : (
-              <Markdown key={p.id} text={p.text} />
-            ),
-          )}
+          {m.parts.map((p) => (
+            <Part key={p.id} part={p} />
+          ))}
         </Box>
       ))}
     </Box>

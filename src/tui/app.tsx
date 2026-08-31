@@ -4,7 +4,7 @@
  * `opencode serve` (big-pickle via Headroom); esta é só a casca.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Text, useApp, useInput, useStdout } from 'ink';
+import { Box, Text, useInput, useStdout } from 'ink';
 import type { Command } from 'commander';
 import { renderMatrixLogo } from '../matrix-logo.js';
 import { dlog } from '../lib/debug.js';
@@ -31,7 +31,6 @@ interface AppProps {
 }
 
 export function App({ handle, program, cwd, session, splashMs = 1200 }: AppProps): React.ReactElement {
-  const { exit } = useApp();
   const { stdout } = useStdout();
   const [chat, setChat] = useState<ChatState>(emptyChat);
   const [overlay, setOverlay] = useState<Overlay>({ kind: 'none' });
@@ -71,11 +70,11 @@ export function App({ handle, program, cwd, session, splashMs = 1200 }: AppProps
     return () => { alive = false; abortRef.current.abort(); };
   }, [splash, handle, cwd]);
 
-  // Ctrl-C sai limpo (fecha o server)
+  // Esc aborta a resposta em andamento (Ink já trata Ctrl-C → unmount).
   useInput((_i, key) => {
-    if (key.ctrl && _i === 'c') { handle.close(); exit(); }
     if (key.escape && chat.busy && sessionId.current) {
       handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
+      setChat((prev) => ({ ...prev, busy: false }));
     }
   });
 
