@@ -111,16 +111,27 @@ nunca cai num default silencioso.
 
 ## Primeiros passos
 
+Um comando só:
+
 ```bash
-nio config setup     # cola NIO_DATABASE_URL + JWT_SECRET (o time te passa), testa, salva
-nio-gateway &        # gateway de auth no ar (precisa pro login/logout/2FA)
-nio register         # cria seu usuário na base compartilhada
-nio login            # autentica (salva o JWT em ~/.nio/session.json)
-nio security enable-2fa   # (opcional) 2º fator
-nio init             # monta o ambiente da sessão neste diretório
+nio            # (ou `nio start`) — a esteira guiada
 ```
 
-Se você pular o `nio config setup`, o próprio `nio register`/`init` abre o wizard.
+A esteira detecta em que ponto você está e conduz — **config → gateway → login →
+sessão → handoff pro OpenCode** —, perguntando antes de cada passo. Ela sobe o
+`nio-gateway` sozinha se faltar. Se você sair no meio, ela imprime a linha exata
+pra retomar (`nio start`); nada morre no silêncio.
+
+Por dentro, é isto (cada um roda na mão também):
+
+```bash
+nio config setup     # cola NIO_DATABASE_URL + JWT_SECRET (o time te passa), testa, salva
+nio-gateway          # gateway de auth (a esteira sobe sozinha se faltar)
+nio register         # cria seu usuário na base compartilhada → cai no login
+nio login            # autentica (salva o JWT em ~/.nio/session.json)
+nio security enable-2fa   # (opcional) 2º fator
+nio init             # monta o ambiente da sessão neste diretório → abre o OpenCode
+```
 
 O `nio-gateway` só é necessário pros comandos de auth (`login`/`logout`/
 `verify-2fa`/`security`). Todo o resto — `init`, `sessions`, as tools MCP —
@@ -220,7 +231,7 @@ Operações do CLI, **sem o binário na frente** (declarado no cabeçalho da tab
 Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --help`.
 
 <!-- COMMANDS:START -->
-<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 35 comandos. -->
+<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 36 comandos. -->
 
 | Comando | Descrição |
 | --- | --- |
@@ -256,6 +267,7 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | `security status` | Mostra o estado do 2º fator |
 | `skills` | Skills, commands e agents do nio (lidos do repo aberto via cache) |
 | `skills status` | Lista os docs do repo de skills (cache local ~/.nio/skills) |
+| `start` | Conduz a esteira: config → gateway → login → sessão → OpenCode |
 | `sync` | Instala/atualiza skills, commands e agents nos clientes configurados, a partir do bundle (idempotente); checa atualização do pacote |
 | `validate-plan` | Lê o plan.md da raiz e roda o engine pensante para julgar se o plano precisa de uma spec antes de implementar. |
 | `whoami` | Mostra o usuário autenticado |

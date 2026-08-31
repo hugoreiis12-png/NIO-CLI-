@@ -16,7 +16,8 @@ export async function requireLocalSessionStep(): Promise<StoredSession> {
     box(
       `${c.yellow(sym.warn)} ${c.bold("Você ainda não está autenticado.")}\n` +
         `${c.dim("crie um usuário:")} ${cmd(`${brand.name} register`)}\n` +
-        `${c.dim("depois entre com:")} ${cmd(`${brand.name} login`)}`,
+        `${c.dim("depois entre com:")} ${cmd(`${brand.name} login`)}\n` +
+        `${c.dim("ou seja conduzido:")} ${cmd(`${brand.name} start`)}`,
       { borderColor: "yellow", title: "Autenticação necessária" },
     ),
   );

@@ -13,6 +13,9 @@ import {
 } from "../../lib/auth/gateway-client.js";
 import { loadSession, saveSession, clearSession } from "../../lib/auth/session-store.js";
 import { ensureConfig } from "../../lib/auth/nio-config.js";
+import { ensureGatewayRunning } from "../../lib/auth/gateway-process.js";
+import { continueChain } from "../flows/onboarding.js";
+import { box, cmd } from "../../lib/colors.js";
 import { authCopy } from "../copy.js";
 
 /**
@@ -48,9 +51,25 @@ async function resolveSecondFactor(
 
 const MIN_PASSWORD_LENGTH = 8;
 
-/** Fluxo completo de login: config → prompt nome/senha → gateway (+2FA) → salva a sessão. */
-async function runLogin(): Promise<void> {
+/** Gateway no ar antes do login: sobe sozinho, ou orienta e sai. */
+async function requireGateway(): Promise<void> {
+  const result = await ensureGatewayRunning();
+  if (result.ok) return;
+  console.error(
+    box(
+      `${c.yellow(sym.warn)} ${c.bold("O nio-gateway não está no ar e não consegui subir sozinho.")}\n` +
+        `${c.dim("abra noutra janela:")} ${cmd("nio-gateway")}\n` +
+        `${c.dim("e tente de novo.")}`,
+      { borderColor: "yellow", title: "Gateway necessário" },
+    ),
+  );
+  process.exit(1);
+}
+
+/** Fluxo completo de login: config → gateway → prompt nome/senha → gateway (+2FA) → salva a sessão. */
+export async function runLogin(): Promise<void> {
   await ensureConfig({ interactive: true });
+  await requireGateway();
   const name = await input({ message: authCopy.login.namePrompt });
   const pass = await password({ message: authCopy.login.passwordPrompt, mask: "*" });
 
@@ -93,40 +112,46 @@ async function runLogin(): Promise<void> {
   console.log(`ID:      ${session.userId}`);
 }
 
+/** Cria o usuário em `user_cli` (Postgres direto, argon2id) e cai no login. */
+export async function runRegister(): Promise<void> {
+  await ensureConfig({ interactive: true });
+  const name = await input({
+    message: authCopy.register.namePrompt,
+    validate: (v) => v.trim().length > 0 || authCopy.register.nameInvalid,
+  });
+  const pass = await password({
+    message: authCopy.register.passwordPrompt,
+    mask: "*",
+    validate: (v) => v.length >= MIN_PASSWORD_LENGTH || authCopy.register.passwordInvalid,
+  });
+
+  const repo = createUserRepository();
+  const spinner = startSpinner("Criando usuário...");
+  try {
+    const existing = await repo.findByName(name.trim());
+    if (existing) {
+      spinner.fail(`Usuário "${name.trim()}" já existe.`);
+      process.exit(1);
+    }
+    const user = await repo.create({ name: name.trim(), password: pass });
+    spinner.stop();
+    console.log(`${c.green(sym.ok)} Usuário criado: ${user.name} (id ${user.id})`);
+  } catch (err) {
+    spinner.fail(`Falha ao criar usuário: ${(err as Error).message}`);
+    process.exit(1);
+  }
+
+  console.log(c.dim("\nVamos entrar:"));
+  await runLogin();
+}
+
 function registerRegisterCommand(program: Command): void {
   program
     .command("register")
     .description("Cria um novo usuário no banco (user_cli) e já entra (login)")
     .action(async () => {
-      await ensureConfig({ interactive: true });
-      const name = await input({
-        message: authCopy.register.namePrompt,
-        validate: (v) => v.trim().length > 0 || authCopy.register.nameInvalid,
-      });
-      const pass = await password({
-        message: authCopy.register.passwordPrompt,
-        mask: "*",
-        validate: (v) => v.length >= MIN_PASSWORD_LENGTH || authCopy.register.passwordInvalid,
-      });
-
-      const repo = createUserRepository();
-      const spinner = startSpinner("Criando usuário...");
-      try {
-        const existing = await repo.findByName(name.trim());
-        if (existing) {
-          spinner.fail(`Usuário "${name.trim()}" já existe.`);
-          process.exit(1);
-        }
-        const user = await repo.create({ name: name.trim(), password: pass });
-        spinner.stop();
-        console.log(`${c.green(sym.ok)} Usuário criado: ${user.name} (id ${user.id})`);
-      } catch (err) {
-        spinner.fail(`Falha ao criar usuário: ${(err as Error).message}`);
-        process.exit(1);
-      }
-
-      console.log(c.dim("\nVamos entrar:"));
-      await runLogin();
+      await runRegister();
+      await continueChain({ from: "command" });
     });
 }
 
@@ -134,7 +159,10 @@ function registerLoginCommand(program: Command): void {
   program
     .command("login")
     .description("Autentica via nio-gateway (túnel HTTP) e salva a sessão localmente (JWT)")
-    .action(runLogin);
+    .action(async () => {
+      await runLogin();
+      await continueChain({ from: "command" });
+    });
 }
 
 function registerLogoutCommand(program: Command): void {

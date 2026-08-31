@@ -27,6 +27,7 @@ import { registerDockerCommand } from '../src/cli/commands/docker.ts';
 import { registerSecurityCommands } from '../src/cli/commands/security.ts';
 import { registerDocsCommand } from '../src/cli/commands/docs.ts';
 import { registerConfigCommand } from '../src/cli/commands/config.ts';
+import { registerStartCommand } from '../src/cli/commands/start.ts';
 
 /** Primeira frase de um texto (resumo enxuto pra tabela), com `|` escapado. */
 function cell(text: string): string {
@@ -91,6 +92,7 @@ function buildProgram(): Command {
     registerSecurityCommands,
     registerDocsCommand,
     registerConfigCommand,
+    registerStartCommand,
   ]) {
     reg(program);
   }

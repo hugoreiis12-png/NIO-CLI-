@@ -26,6 +26,8 @@ import { registerDockerCommand } from "./cli/commands/docker.js";
 import { registerSecurityCommands } from "./cli/commands/security.js";
 import { registerDocsCommand } from "./cli/commands/docs.js";
 import { registerConfigCommand } from "./cli/commands/config.js";
+import { registerStartCommand } from "./cli/commands/start.js";
+import { continueChain } from "./cli/flows/onboarding.js";
 
 notifyCliIfUpdate();
 
@@ -35,7 +37,7 @@ let logoShown = false;
 const program = new Command();
 program
   .name(brand.name)
-  .description(`CLI do ${brand.productName} (${brand.productFullName})`)
+  .description(`CLI do ${brand.productName} (${brand.productFullName}) — rode \`nio\` sem argumentos pra esteira guiada`)
   .version(VERSION)
   .addHelpText("beforeAll", () => (logoShown ? "" : renderMatrixLogo()));
 
@@ -59,23 +61,28 @@ registerDockerCommand(program);
 registerSecurityCommands(program);
 registerDocsCommand(program);
 registerConfigCommand(program);
+registerStartCommand(program);
 
-// Animação só pro help de topo (`nio`, `nio -h`, `nio --help`, `nio help`) —
-// subcomandos e comandos reais não passam por aqui.
-const args = process.argv.slice(2);
-const topHelp =
-  args.length === 0 ||
-  (args.length === 1 && (args[0] === "-h" || args[0] === "--help" || args[0] === "help"));
-const helpPromise = topHelp
-  ? animateMatrixLogo().then(() => {
-      logoShown = true;
-    })
-  : Promise.resolve();
-
-helpPromise
-  .then(() => program.parseAsync(process.argv))
-  .catch((err) => {
+const fail = (err: unknown): never => {
   if (DEBUG) console.error(err);
   else console.error(`Erro: ${(err as Error).message}\n(rode com NIO_DEBUG=1 pro stack trace completo)`);
   process.exit(1);
-});
+};
+
+const args = process.argv.slice(2);
+const bare = args.length === 0;
+const topHelp =
+  bare || (args.length === 1 && (args[0] === "-h" || args[0] === "--help" || args[0] === "help"));
+
+if (bare && process.stdout.isTTY && process.stdin.isTTY) {
+  // `nio` sozinho num terminal → a esteira guiada (não o help).
+  continueChain({ from: "cold" }).catch(fail);
+} else {
+  // `nio --help` / `nio | cat` / CI → animação (se topo) + help/comando do commander.
+  const helpPromise = topHelp
+    ? animateMatrixLogo().then(() => {
+        logoShown = true;
+      })
+    : Promise.resolve();
+  helpPromise.then(() => program.parseAsync(process.argv)).catch(fail);
+}

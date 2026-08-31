@@ -5,6 +5,7 @@
 import type { Command } from "commander";
 import { c, sym } from "../../lib/colors.js";
 import { CONFIG_FILE, checkConfig, runConfigWizard } from "../../lib/auth/nio-config.js";
+import { continueChain } from "../flows/onboarding.js";
 
 const LABEL = { missing: "faltando", invalid: "inválido", unreachable: "sem conexão" } as const;
 
@@ -40,8 +41,8 @@ export function registerConfigCommand(program: Command): void {
     .command("setup")
     .description("Wizard: cola os valores do time, testa a conexão e salva")
     .action(async () => {
-      const ok = await runConfigWizard();
-      process.exit(ok ? 0 : 1);
+      if (!(await runConfigWizard())) process.exit(1);
+      await continueChain({ from: "command" });
     });
 
   config

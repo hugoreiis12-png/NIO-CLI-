@@ -128,14 +128,22 @@ export const SECTIONS: DocSection[] = [
     title: 'Primeiros passos',
     blocks: [
       {
+        kind: 'p',
+        text: 'Um comando só: `nio` (sem argumentos) ou `nio start`. A esteira detecta em que ponto você está e conduz — config → gateway → login → sessão → handoff pro OpenCode —, perguntando antes de cada passo. Se você sair no meio, ela imprime a linha pra retomar; nada morre no silêncio.',
+      },
+      {
+        kind: 'p',
+        text: 'Por dentro, a esteira faz (e você pode rodar cada um na mão):',
+      },
+      {
         kind: 'code',
         text: [
           'nio config setup       # cola NIO_DATABASE_URL + JWT_SECRET, testa, salva',
-          'nio-gateway &          # gateway de auth no ar',
-          'nio register           # cria seu usuário na base compartilhada',
+          'nio-gateway            # gateway de auth (a esteira sobe sozinha se faltar)',
+          'nio register           # cria seu usuário na base compartilhada → cai no login',
           'nio login              # salva o JWT em ~/.nio/session.json',
           'nio security enable-2fa # (opcional) 2º fator',
-          'nio init               # monta o ambiente da sessão',
+          'nio init               # monta o ambiente da sessão → abre o OpenCode',
         ].join('\n'),
       },
       { kind: 'p', text: 'A qualquer momento, `nio debug` mostra o que está ok e o que falta.' },

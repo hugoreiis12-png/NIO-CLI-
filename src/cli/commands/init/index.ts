@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import type { Command } from "commander";
 import { brand } from "../../../brand.js";
 import { animateMatrixLogo } from "../../../matrix-logo.js";
@@ -15,7 +14,6 @@ import { ensureCoreClients } from "../../flows/clients.js";
 import { ensureConfig } from "../../../lib/auth/nio-config.js";
 import { section, c, sym } from "../../../lib/colors.js";
 import { startSpinner } from "../../../lib/spinner.js";
-import { isBinaryInstalled } from "../../../lib/clients/client-install.js";
 import { SyncReport, renderReport, browseReport, resolveReportMode } from "../../ui/report.js";
 import { flushTelemetry } from "../../../lib/telemetry.js";
 import { writeManagedDotfiles } from "../../../lib/dotfiles.js";
@@ -43,6 +41,7 @@ import {
   provisionHooksStep,
 } from "./provision-step.js";
 import { promptSelection } from "../../flows/sections.js";
+import { handoffToOperator } from "./handoff.js";
 import type { StoredSession } from "../../../lib/auth/session-store.js";
 
 /**
@@ -250,32 +249,7 @@ async function openSessionIde(session: Session): Promise<void> {
   }
 }
 
-/**
- * Handoff final: entrega o ambiente materializado pro operador de IA fixo
- * (OpenCode — decisão de 2026-07-27). Se o binário não estiver no PATH (usuário
- * recusou a instalação lá em `ensureCoreClients`), só orienta em vez de falhar.
- */
-async function handoffToOperator(): Promise<void> {
-  console.log("");
-  section("Handoff", "entregando a sessão pro OpenCode");
-  if (!isBinaryInstalled("opencode")) {
-    console.log(
-      `  ${c.yellow(sym.warn)} OpenCode não encontrado no PATH. Instale e rode \`opencode\` ` +
-        "nesta pasta pra continuar.",
-    );
-    return;
-  }
-  await new Promise<void>((resolve) => {
-    const child = spawn("opencode", [], { stdio: "inherit" });
-    child.on("exit", () => resolve());
-    child.on("error", (err) => {
-      console.error(`[erro] Falha ao iniciar o OpenCode: ${err.message}`);
-      resolve();
-    });
-  });
-}
-
-async function runInitWizard(): Promise<void> {
+export async function runInitWizard(): Promise<void> {
   const configPath = getProjectConfigPath();
   if (!(await confirmOverwriteIfExists(configPath))) return;
 

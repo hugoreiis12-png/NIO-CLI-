@@ -70,8 +70,13 @@ profiles/:    catálogo dos 6 perfis (hardcoded no fonte)
 
 ## Convenções
 
-- Cache local de sessões em `~/.nio/sessions/` (TTL de 10 dias); depois disso vive
-  só no Postgres e pode ser reativada. 1 sessão ativa por usuário por vez.
+- A `Session` de ambiente vive **só no Postgres** (`sessions`); 1 ativa por usuário
+  por vez (invariante no `SessionRepository`). Não há cache local em `~/.nio/sessions/`.
+- `~/.nio/` guarda só estado por-usuário: `session.json` (JWT do login), `config.env`
+  (credenciais da equipe, chmod 600), `gateway.token`, `skills/`, `lang/`.
+- **Esteira de onboarding** (`src/cli/flows/onboarding.ts`): `nio` sem args / `nio start`
+  detecta o estágio (config → gateway → login → session → ready) e conduz, perguntando
+  antes de cada passo. `login`/`register`/`config setup` encadeiam nela no fim.
 - Estado por-usuário (não por-máquina) para dois colaboradores no mesmo host não
   colidirem.
 - Mensagens de UI e erros em pt-BR (o público é o time interno).
