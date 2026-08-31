@@ -38,6 +38,9 @@
     "dev-environment",
     "environment-orchestration",
     "opencode",
+    "ai-agent",
+    "tui",
+    "ink",
     "postgres",
     "nio"
   ],

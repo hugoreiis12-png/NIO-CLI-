@@ -1617,3 +1617,29 @@ do SDK precisam de afinação ao vivo — passo "Sua parte" do plano.
 ### Fatia 2b (pendente, plano próprio)
 Diff viewer, file tree/viewer, seletor de modelo/agente, attachments, revert/edit,
 trocar de sessão pela sidebar, animação do logo, mouse, cheatsheet.
+
+---
+
+## 2026-08-31 — Release 0.3.0
+
+Fecha o ciclo pós-0.2.0: esteira de onboarding + client de IA reformulado.
+
+- **Esteira de onboarding** (`nio` / `nio start`) — detecta o estágio (config →
+  gateway → login → sessão → ready) e conduz, perguntando antes de cada passo.
+  `login`/`register`/`config setup` encadeiam nela.
+- **`nio ai`** ([ADR 0007](adr/0007-headroom-proxy-obrigatorio.md)) — Headroom
+  (proxy de compressão em container Docker, **obrigatório**) + `opencode serve`
+  headless + **interface NIO em Ink** ([ADR 0008](adr/0008-interface-nio-ink.md),
+  fatia 2a): splash, sidebar verde, chat streamado, paleta `/`, permissões.
+  Fallback pra TUI do OpenCode fora de TTY.
+- **`nio init` → terminal na IDE** — grava `.vscode/tasks.json` (`runOn: folderOpen`
+  → `nio ai`); a sessão abre num terminal integrado, não em janela separada.
+- **`nio docker headroom {up,down,status}`**; `nio debug` checa o Headroom.
+- **Pipeline do gateway** (login + 2FA SMS) verificada ponta a ponta; regressão
+  coberta por `login.integration.test.ts`.
+- **Logo Matrix animado** (chuva) em toda aparição; `NIO_NO_ANIM=1` desliga.
+- Deps novas: `ink`, `react`, `@opencode-ai/sdk` (dependencies).
+
+`bunx tsc --noEmit` verde · `bun test` **410 pass / 2 skip / 0 fail**.
+Pendente: fatia **2b** da interface (diff viewer, file tree, seletor de modelo,
+attachments, trocar de sessão pela sidebar) — plano próprio.
