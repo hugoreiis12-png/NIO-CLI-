@@ -42,6 +42,7 @@ import {
 } from "./provision-step.js";
 import { promptSelection } from "../../flows/sections.js";
 import { handoffToOperator } from "./handoff.js";
+import { writeIdeAutostartTask } from "../../../lib/ide-tasks.js";
 import type { StoredSession } from "../../../lib/auth/session-store.js";
 
 /**
@@ -228,25 +229,33 @@ async function offerFollowUps(config: ProjectConfig): Promise<void> {
 }
 
 /**
- * Abre a IDE da sessão na pasta do projeto (parte da materialização — Sprint 2.2).
- * Best-effort: `skipped` é silencioso (terminal/other), o resto só avisa — nunca
- * aborta o init (a sessão já existe e o ambiente está materializado).
+ * Fim do init. Sessão com IDE (vscode/cursor): grava a task de auto-start, abre a
+ * IDE e para — o `nio ai` sobe num terminal integrado lá dentro (uma superfície,
+ * não duas). Senão (terminal/other, ou IDE indisponível): sobe o client aqui.
+ * Best-effort — nunca aborta o init.
  */
-async function openSessionIde(session: Session): Promise<void> {
-  const result = await createIdeGateway().open(session.ide, session.projectPath);
-  switch (result.status) {
-    case "opened":
-      console.log(`  ${c.green(sym.ok)} Abrindo ${c.bold(result.binary ?? "")} em ${c.dim(session.projectPath)}`);
-      break;
-    case "unavailable":
-      console.log(`  ${c.yellow(sym.warn)} IDE não aberta: ${result.error}`);
-      break;
-    case "failed":
-      console.log(`  ${c.yellow(sym.warn)} Falha ao abrir a IDE: ${result.error}`);
-      break;
-    case "skipped":
-      break; // sem editor pra abrir — segue direto pro handoff.
+export async function handoffToSession(session: Session): Promise<void> {
+  const launchable = session.ide === "vscode" || session.ide === "cursor";
+  if (launchable) {
+    try {
+      writeIdeAutostartTask(session.projectPath);
+    } catch (err) {
+      console.warn(`  ${c.yellow(sym.warn)} não gravei a task da IDE: ${(err as Error).message}`);
+    }
+    const r = await createIdeGateway().open(session.ide, session.projectPath);
+    if (r.status === "opened") {
+      console.log(
+        `  ${c.green(sym.ok)} Sessão aberta no ${c.bold(r.binary ?? session.ide)} — ` +
+          `o NIO sobe num terminal integrado lá dentro.`,
+      );
+      console.log(
+        c.dim(`  Se a IDE perguntar, permita "tarefas automáticas". Senão, rode a task "NIO" ou \`${brand.name} ai\`.`),
+      );
+      return;
+    }
+    console.log(`  ${c.yellow(sym.warn)} ${r.error ?? "IDE não abriu"} — subindo o NIO aqui no terminal.`);
   }
+  await handoffToOperator(session.projectPath);
 }
 
 export async function runInitWizard(): Promise<void> {
@@ -268,8 +277,7 @@ export async function runInitWizard(): Promise<void> {
   const { config, session, mcps } = await resolveSessionSetup(local);
   await installAndProvisionClients(config, mcps);
   await offerFollowUps(config);
-  await openSessionIde(session);
-  await handoffToOperator();
+  await handoffToSession(session);
 }
 
 export function registerInitCommand(program: Command): void {

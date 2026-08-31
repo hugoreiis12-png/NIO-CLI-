@@ -107,8 +107,10 @@ do escopo v1.
 ## Não é AI Gateway
 
 O Docker MCP Gateway carrega tráfego de **tool MCP** (operador → `docker.sock`),
-**não** chamadas de LLM. Não reabre a rejeição do Kong AI Gateway em
-`ARQUITETURA-GATEWAY.md` (isso é a camada Headroom de `ARQUITETURA-CLIENTES-MULTI-FUTURO.md`).
+**não** chamadas de LLM. A camada que carrega LLM é o **Headroom**
+([ADR 0007](../adr/0007-headroom-proxy-obrigatorio.md)) — outro container
+NIO-gerenciado (`headroom/docker-compose.yml`), proxy de compressão obrigatório
+pro `nio ai`.
 
 ## Débito / fora de escopo
 

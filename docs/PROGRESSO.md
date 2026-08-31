@@ -1485,3 +1485,51 @@ ficar legível. 6 commits (`21ef0a0`..`527bbaf`).
 saíram 11 testes da investigação). `bun run build` → 4 bins. `nio docs`/`config
 check`/`debug` OK. `grep` por refs mortas (`docs/v2/`, `InvestigationGateway`,
 `workers/edge-filter`, `core/session.js`) → limpo (fora deste log).
+
+---
+
+## 2026-08-31 — Client de IA embutido: Headroom obrigatório + terminal na IDE (Fase 1)
+
+ADR [0007](adr/0007-headroom-proxy-obrigatorio.md). O `nio init` terminava abrindo
+a IDE numa janela e a TUI do OpenCode noutra tela, sem camada entre agente e LLM.
+
+### Spike (gate) — PASSOU
+- `ghcr.io/headroomlabs-ai/headroom:latest` (v0.37.0). Entrypoint já é `headroom proxy`
+  — `command` passa só flags (`--host 0.0.0.0 --port 8787`).
+- `OPENAI_TARGET_API_URL=https://opencode.ai/zen/v1` → roteia `/v1/chat/completions`
+  e `/v1/responses` pro OpenCode Zen; `Authorization` do OpenCode passa transparente
+  (Headroom sem key própria). Health: `GET /livez`.
+- `opencode.json` com `provider.opencode.options.baseURL = http://127.0.0.1:8787/v1`
+  → `opencode run` passou pelo Headroom (`api_requests: 1`) e o Zen respondeu.
+- `opencode/big-pickle` segue válido (catálogo Zen, 94 modelos).
+
+### O que entrou
+- **`headroom/docker-compose.yml`** (shipado no `package.json` `files`) + `dev:headroom`.
+- **`src/lib/headroom.ts`** — `HEADROOM_PORT/URL`, `headroomComposePath()`,
+  `headroomHealthy()` (`portOpen`), `ensureHeadroomRunning()` (compose up + espera
+  ~30s), `headroomCompose()`.
+- **`src/app/ai-client.ts`** — `launchAiClient({cwd, prompt?})`: Headroom (obrigatório,
+  `HeadroomRequiredError`) → `installOpencodeGlobal(…, HEADROOM_URL)` → `spawn opencode`.
+  Seams de teste (`ensureHeadroom`/`spawnFn`/`isInstalled`).
+- **`src/lib/clients/client-configs.ts`** — `planOpencodeProvider(existing, baseURL)` +
+  `planOpencodeUpdate(…, headroomUrl?)` + `installOpencodeGlobal(…, headroomUrl?)`.
+- **`src/lib/ide-tasks.ts`** — `writeIdeAutostartTask(projectPath)`: merge não-destrutivo
+  de `.vscode/tasks.json` (task `NIO`, `runOn: folderOpen`, `command: nio ai`) +
+  `settings.json` (`task.allowAutomaticTasks: on`). Gitignora só quando cria o `tasks.json`.
+- **`src/cli/commands/ai.ts`** — `nio ai` (sessão ativa → `launchAiClient`) + `nio ai status`.
+- **`src/cli/commands/init/index.ts`** — `openSessionIde`+`handoffToOperator` → `handoffToSession(session)`:
+  IDE → grava a task + abre a IDE + para (o terminal integrado sobe o `nio ai`);
+  terminal/other ou IDE indisponível → `nio ai` no terminal atual.
+- **`handoff.ts`** / **`docker-manager.ts` `runOperator`** / **`onboarding.ts` `handleReady`** /
+  **`nio open`** — passam por `launchAiClient` / `handoffToSession`.
+- **`nio docker headroom {up,down,status}`**; **`nio debug`** ganhou a checagem do Headroom.
+- Docs: ADR 0007, notas em `ARQUITETURA-GATEWAY.md`/`ARQUITETURA-DOCKER.md`/`ARQUITETURA-CLIENTE-IA.md`,
+  Parte B de `ARQUITETURA-CLIENTES-MULTI-FUTURO.md` marcada FEITA, novo
+  `ARQUITETURA-CLIENTE-TUI-FUTURO.md` (Fase 2), README, `nio docs`, `.env.example`, CLAUDE.md.
+
+### Verificação
+`bunx tsc --noEmit` verde. `bun test` **394 pass / 2 skip / 0 fail** (+12). `bun run build`
+(4 bins + `headroom/` no pacote). `bun run gen:docs` (README ganha `ai`).
+
+### Fase 2 (parkeada)
+Interface NIO em OpenTUI ↔ `opencode serve` via `@opencode-ai/sdk` — plano próprio.

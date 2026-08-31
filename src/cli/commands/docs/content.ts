@@ -59,7 +59,7 @@ export const SECTIONS: DocSection[] = [
         items: [
           'Autenticação — `nio register` / `nio login`. O nio-gateway (serviço HTTP loopback) verifica a senha (argon2id), dispara o 2º fator se ativo, e devolve um JWT salvo em ~/.nio/session.json.',
           'Sessão — `nio init`. O wizard pergunta perfil + recipe; o EnvironmentBuilder garante os toolchains, resolve os MCPs e grava o config materializado na linha `sessions` do Postgres.',
-          'Handoff — a CLI registra o MCP `nio` no opencode.json e entrega o terminal pro OpenCode (modelo opencode/big-pickle). O agente passa a ter as tools nio_*.',
+          'Handoff — `nio ai` sobe o Headroom (proxy de compressão, container Docker, obrigatório — ADR 0007), aponta o provider do OpenCode pra ele, e entrega o terminal pro OpenCode (opencode/big-pickle, MCP nio + MCPs do perfil). Com IDE, roda num terminal integrado dela.',
         ],
       },
       {
@@ -84,6 +84,7 @@ export const SECTIONS: DocSection[] = [
           ['PostgreSQL alcançável', 'fonte da verdade — schema de db/schema.sql aplicado uma vez'],
           ['JWT_SECRET (segredo do time)', 'assinar/validar as sessões — mesmo valor em toda máquina'],
           ['OpenCode', 'operador de IA — o `nio init` oferece instalar'],
+          ['Docker', 'obrigatório pro `nio ai` — roda o Headroom (proxy de compressão) em container'],
           ['provedor de SMS (opcional)', '2º fator — SMS_ENDPOINT_URL + SMS_AUTH_HEADER + SMS_BODY_TEMPLATE'],
         ],
       },
@@ -224,6 +225,8 @@ export const SECTIONS: DocSection[] = [
           '"Não consegui falar com o nio-gateway" → suba `nio-gateway &`.',
           '"Não autenticado" → `nio register` (1ª vez) e `nio login`.',
           '"2FA não configurado no servidor" (503) → faltam as SMS_* no ambiente do nio-gateway.',
+          '"Headroom é obrigatório pro client de IA" → suba o Docker; `nio docker headroom up` / `status`.',
+          'A IDE não abriu o terminal do NIO sozinha → permita "tarefas automáticas", ou rode a task "NIO" (Cmd/Ctrl+Shift+P → Run Task), ou só `nio ai`.',
           'Tools não aparecem no cliente → reinicie o cliente depois do `nio init`; cheque com /mcp.',
         ],
       },

@@ -6,6 +6,7 @@ import {
   readCoAuthoredBy,
   disableCoAuthoredBy,
   planOpencodeUpdate,
+  planOpencodeProvider,
   upsertOpencodeMcp,
   NIO_OPERATOR_MODEL,
 } from './client-configs.js';
@@ -25,6 +26,29 @@ test('planOpencodeUpdate: grava model + mcp.nio + MCPs do perfil num config vazi
   expect(mcp.nio.command).toEqual(['nio-cli']);
   expect(mcp.postgres.command).toEqual(PG_MCP.command);
   expect(mcp.postgres.enabled).toBe(true);
+});
+
+test('planOpencodeProvider: aponta provider.opencode.options.baseURL, preserva o resto', () => {
+  const out = planOpencodeProvider(
+    { model: 'x', provider: { anthropic: { options: { foo: 1 } }, opencode: { options: { bar: 2 } } } },
+    'http://127.0.0.1:8787/v1',
+  );
+  const p = out.provider as Record<string, { options: Record<string, unknown> }>;
+  expect(p.opencode.options.baseURL).toBe('http://127.0.0.1:8787/v1');
+  expect(p.opencode.options.bar).toBe(2); // não perdeu opção existente
+  expect(p.anthropic.options.foo).toBe(1); // não mexeu noutro provider
+  expect(out.model).toBe('x');
+});
+
+test('planOpencodeUpdate: com headroomUrl → grava provider.baseURL e só marca alreadyConfigured se bater', () => {
+  const url = 'http://127.0.0.1:8787/v1';
+  const first = planOpencodeUpdate({}, NIO_ENTRY, [], url);
+  const p = first.next.provider as { opencode: { options: { baseURL: string } } };
+  expect(p.opencode.options.baseURL).toBe(url);
+
+  const seeded = first.next;
+  expect(planOpencodeUpdate(seeded, NIO_ENTRY, [], url).alreadyConfigured).toBe(true);
+  expect(planOpencodeUpdate(seeded, NIO_ENTRY, [], 'http://other/v1').alreadyConfigured).toBe(false);
 });
 
 test('planOpencodeUpdate: idempotente — rodar sobre o próprio resultado marca alreadyConfigured', () => {

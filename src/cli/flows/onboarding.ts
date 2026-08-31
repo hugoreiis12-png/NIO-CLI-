@@ -10,8 +10,6 @@ import { checkConfig } from "../../lib/auth/nio-config.js";
 import { loadSession } from "../../lib/auth/session-store.js";
 import { gatewayHealth, ensureGatewayRunning } from "../../lib/auth/gateway-process.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
-import { isBinaryInstalled } from "../../lib/clients/client-install.js";
-import { handoffToOperator } from "../commands/init/handoff.js";
 
 export type Stage = "config" | "gateway" | "login" | "session" | "ready";
 
@@ -86,22 +84,18 @@ async function runStage(stage: Exclude<Stage, "ready">): Promise<void> {
   await runInitWizard();
 }
 
-/** Estágio `ready`: sessão ativa existe. Oferece abrir o OpenCode. */
+/** Estágio `ready`: sessão ativa existe. Oferece abrir a sessão (IDE + `nio ai`). */
 async function handleReady(): Promise<void> {
   const session = await loadSession();
   const active = session ? await createSessionRepository().findActiveByUser(session.userId) : null;
-  if (active) {
-    console.log(
-      `\n${c.green(sym.ok)} Tudo pronto — sessão ativa: ${c.bold(active.name)} (${active.profile}).`,
-    );
-  }
+  if (!active) return;
+  console.log(
+    `\n${c.green(sym.ok)} Tudo pronto — sessão ativa: ${c.bold(active.name)} (${active.profile}).`,
+  );
   if (!process.stdin.isTTY) return;
-  if (!isBinaryInstalled("opencode")) {
-    console.log(c.dim("Instale o OpenCode e rode `opencode` nesta pasta, ou `nio init` pra recriar o ambiente."));
-    return;
-  }
-  if (await confirm({ message: "Abrir o OpenCode agora?", default: true })) {
-    await handoffToOperator();
+  if (await confirm({ message: "Abrir a sessão agora?", default: true })) {
+    const { handoffToSession } = await import("../commands/init/index.js");
+    await handoffToSession(active);
   }
 }
 

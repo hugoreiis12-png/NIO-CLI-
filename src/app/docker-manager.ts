@@ -3,8 +3,7 @@
  * IA (`opencode run` headless, tools do Docker MCP Gateway). Só `debug`/`orquest`/
  * `cluster` (compose/create são wrapper determinístico). Ver ARQUITETURA-DOCKER.md.
  */
-import { spawn } from 'node:child_process';
-import { NIO_OPERATOR_MODEL } from '../lib/clients/client-configs.js';
+import { launchAiClient, HeadroomRequiredError } from './ai-client.js';
 import { CLUSTER_STACK } from '../lib/docker.js';
 import type { ClusterState, DockerGateway } from '../core/docker.js';
 import type { Session } from '../core/types.js';
@@ -82,23 +81,23 @@ export function parseServicesLine(output: string): string[] {
 }
 
 /**
- * Entrega o prompt pro operador (`opencode run`). `stdio: 'inherit'` — o usuário
- * acompanha ao vivo. Resolve com o exit code. Nunca lança.
+ * Entrega o prompt pro operador (headless, via `launchAiClient` → Headroom +
+ * `opencode run`). `stdio: 'inherit'` — o usuário acompanha ao vivo. Resolve com
+ * o exit code. Headroom fora do ar (sem Docker) → avisa e resolve 1.
  */
-export function runOperator(
+export async function runOperator(
   prompt: string,
-  opts: { cwd?: string; spawnFn?: typeof spawn } = {},
+  opts: { cwd?: string } = {},
 ): Promise<number> {
-  const spawnFn = opts.spawnFn ?? spawn;
-  return new Promise((resolve) => {
-    const child = spawnFn(
-      'opencode',
-      ['run', '--model', NIO_OPERATOR_MODEL, prompt],
-      { stdio: 'inherit', cwd: opts.cwd },
-    );
-    child.on('exit', (code) => resolve(code ?? 1));
-    child.on('error', () => resolve(127));
-  });
+  try {
+    return await launchAiClient({ cwd: opts.cwd ?? process.cwd(), prompt });
+  } catch (err) {
+    if (err instanceof HeadroomRequiredError) {
+      console.error(`[erro] ${err.message}`);
+      return 1;
+    }
+    throw err;
+  }
 }
 
 // ─── cluster (Swarm) ─────────────────────────────────────────────────

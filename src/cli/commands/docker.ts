@@ -22,6 +22,12 @@ import {
 } from "../../lib/docker.js";
 import { upsertOpencodeMcp } from "../../lib/clients/client-configs.js";
 import { isBinaryInstalled } from "../../lib/clients/client-install.js";
+import {
+  ensureHeadroomRunning,
+  headroomCompose,
+  headroomHealthy,
+  HEADROOM_URL,
+} from "../../lib/headroom.js";
 import { openUrl } from "../../lib/open-url.js";
 import { loadSession } from "../../lib/auth/session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
@@ -91,6 +97,31 @@ function infraCompose(args: string[]): number {
     stdio: "inherit",
   });
   return res.status ?? 1;
+}
+
+// ─── headroom ────────────────────────────────────────────────────────
+
+async function headroomUp(): Promise<void> {
+  section("Headroom", "proxy de compressão de contexto");
+  const r = await ensureHeadroomRunning();
+  if (!r.ok) {
+    console.error(`${c.red(sym.err)} ${r.error}`);
+    process.exit(1);
+  }
+  console.log(`  ${c.green(sym.ok)} Headroom no ar ${c.dim(HEADROOM_URL)}${r.started ? "" : " (já estava)"}`);
+}
+
+async function headroomDown(): Promise<void> {
+  requireDocker();
+  section("Headroom", "derrubando o container");
+  headroomCompose(["down"]);
+}
+
+async function headroomStatus(): Promise<void> {
+  const up = await headroomHealthy();
+  console.log(
+    `  ${up ? c.green(sym.ok) : c.red(sym.err)} Headroom ${c.dim(HEADROOM_URL)} — ${up ? "no ar" : "fora"}`,
+  );
 }
 
 // ─── toolkit ─────────────────────────────────────────────────────────
@@ -438,6 +469,13 @@ export function registerDockerCommand(program: Command): void {
   toolkit.command("up", { isDefault: true }).description("Sobe a infra e registra o gateway no opencode.json").action(toolkitUp);
   toolkit.command("down").description("Derruba a infra e desabilita o MCP no opencode.json").action(toolkitDown);
   toolkit.command("status").description("Estado dos containers + health dos endpoints").action(toolkitStatus);
+
+  const headroom = cmd
+    .command("headroom")
+    .description("Proxy de compressão de contexto — obrigatório pro `nio ai` (ADR 0007)");
+  headroom.command("up", { isDefault: true }).description("Sobe o container do Headroom").action(headroomUp);
+  headroom.command("down").description("Derruba o container do Headroom").action(headroomDown);
+  headroom.command("status").description("O Headroom está no ar?").action(headroomStatus);
 
   cmd
     .command("compose <action> [service]")

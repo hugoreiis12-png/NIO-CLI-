@@ -107,8 +107,14 @@ Legenda: ✅ implementado e testado · 🟡 scaffold/esqueleto existe, lógica p
 > **Nota (29 ago 2026) — o Docker MCP Gateway não é isto.** A camada Docker
 > (`nio docker`, [ADR 0005](../adr/0005-camada-docker.md)) sobe um
 > `docker/mcp-gateway` que carrega tráfego de **tool MCP** (operador →
-> `docker.sock`), não chamadas de LLM — não reabre esta rejeição. O que reabriria
-> é a camada **Headroom** de `ARQUITETURA-CLIENTES-MULTI-FUTURO.md` (parkeada).
+> `docker.sock`), não chamadas de LLM — não reabre esta rejeição.
+>
+> **Nota (31 ago 2026) — a premissa "nenhum LLM pela CLI" mudou.** A camada
+> **Headroom** ([ADR 0007](../adr/0007-headroom-proxy-obrigatorio.md)) é um proxy
+> Docker de compressão de contexto **obrigatório** pro client de IA (`nio ai`): o
+> `provider.opencode.options.baseURL` do OpenCode aponta pra ele. Tráfego de LLM
+> agora passa por um container NIO-gerenciado — de propósito. Isso **não** é o
+> Kong AI Gateway (Enterprise, gating de rota); é compressão + cache.
 | **Keycloak** | **Descartado** | Federar contra `user_cli` sem migrar dado exige um User Storage SPI em **Java** (stack diferente do resto do projeto); SMS não é nativo, exigiria outro Authenticator SPI Java chamando a Twilio. Adotar = manter 2 plugins Java pra reproduzir o que o TypeScript já faz |
 | RFC 8628 (Device Authorization Grant) | **Descartado como alternativa ao PKCE já implementado** | Desenhado pra dispositivo *sem* browser (smart TV, console). Pra CLI com browser disponível na máquina, RFC 8252 já recomenda Authorization Code+PKCE com redirect loopback — o que a spec 0002 implementou está certo |
 | Gateway OAuth2/PKCE self-asserted (spec 0002) | **Superseded** | Nunca verificava senha nenhuma (email livre) e nunca foi plugado na CLI. Login real vai por senha+SMS, não por confirmação no navegador. Código não apagado — `authorize-store.ts`/`traceability.ts` são candidatos a reuso de padrão |

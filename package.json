@@ -13,6 +13,7 @@
   "files": [
     "dist",
     "docker/docker-compose.yml",
+    "headroom/docker-compose.yml",
     "README.md"
   ],
   "engines": {
@@ -51,6 +52,7 @@
     "dev:lang": "bun run src/mcp-server-lang.ts",
     "dev:kong": "docker compose -f kong/docker-compose.yml --env-file .env up",
     "dev:docker": "docker compose -f docker/docker-compose.yml up",
+    "dev:headroom": "docker compose -f headroom/docker-compose.yml up",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

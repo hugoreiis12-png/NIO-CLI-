@@ -273,6 +273,35 @@ function opencodeMcpOk(spec: McpSpec, cur?: OpencodeServerEntry): boolean {
   return spec.url ? cur.url === spec.url : cur.command?.[0] === spec.command?.[0];
 }
 
+interface OpencodeProviderEntry {
+  options?: Record<string, unknown>;
+}
+
+/**
+ * Aponta o `baseURL` do provider `opencode` (OpenCode Zen) pro Headroom (ADR 0007),
+ * preservando qualquer outro campo de `provider`. Pura, sem IO.
+ */
+export function planOpencodeProvider(
+  existing: Record<string, unknown>,
+  baseURL: string,
+): Record<string, unknown> {
+  const providers = (existing.provider ?? {}) as Record<string, OpencodeProviderEntry | undefined>;
+  const cur = providers.opencode ?? {};
+  return {
+    ...existing,
+    provider: {
+      ...providers,
+      opencode: { ...cur, options: { ...cur.options, baseURL } },
+    },
+  };
+}
+
+/** O provider `opencode` já aponta pro `baseURL` do Headroom? */
+function opencodeProviderOk(existing: Record<string, unknown>, baseURL: string): boolean {
+  const p = (existing.provider as { opencode?: OpencodeProviderEntry } | undefined)?.opencode;
+  return p?.options?.baseURL === baseURL;
+}
+
 /**
  * Decide se o `nio` (+ os MCPs do perfil) já estão OK no `opencode.json` e monta
  * o próximo objeto se precisar atualizar (pura, sem IO). Mesmo padrão de
@@ -285,6 +314,7 @@ export function planOpencodeUpdate(
   existing: Record<string, unknown>,
   nioEntry: { command: string[]; environment: Record<string, string> },
   profileMcps: McpSpec[] = [],
+  headroomUrl?: string,
 ): { alreadyConfigured: boolean; next: Record<string, unknown> } {
   const servers = (existing.mcp ?? {}) as Record<string, OpencodeServerEntry | undefined>;
   const current = servers[brand.mcpServerKey];
@@ -296,7 +326,9 @@ export function planOpencodeUpdate(
       current.enabled !== false,
   );
   const mcpsOk = profileMcps.every((spec) => opencodeMcpOk(spec, servers[spec.id]));
-  const alreadyConfigured = nioOk && existing.model === NIO_OPERATOR_MODEL && mcpsOk;
+  const providerOk = !headroomUrl || opencodeProviderOk(existing, headroomUrl);
+  const alreadyConfigured =
+    nioOk && existing.model === NIO_OPERATOR_MODEL && mcpsOk && providerOk;
 
   const nextMcp: Record<string, OpencodeServerEntry> = {
     ...(servers as Record<string, OpencodeServerEntry>),
@@ -312,11 +344,8 @@ export function planOpencodeUpdate(
     nextMcp[spec.id] = opencodeMcpEntry(spec, servers[spec.id]);
   }
 
-  const next: Record<string, unknown> = {
-    ...existing,
-    model: NIO_OPERATOR_MODEL,
-    mcp: nextMcp,
-  };
+  let next: Record<string, unknown> = { ...existing, model: NIO_OPERATOR_MODEL, mcp: nextMcp };
+  if (headroomUrl) next = planOpencodeProvider(next, headroomUrl);
   return { alreadyConfigured, next };
 }
 
@@ -334,19 +363,20 @@ export function opencodeGlobalPath(): string {
 export function installOpencodeGlobal(
   profileMcps: McpSpec[] = [],
   path = opencodeGlobalPath(),
+  headroomUrl?: string,
 ): InstallResult {
   // `NIO_CLIENT=opencode` avisa o servidor MCP a (1) provisionar/auto-pull pra
   // `~/.config/opencode` e (2) filtrar os docs pelo surface `opencode`.
   const nioEntry = { command: [MCP_COMMAND], environment: { [envName('CLIENT')]: 'opencode' } };
 
   if (!existsSync(path)) {
-    const { next } = planOpencodeUpdate({}, nioEntry, profileMcps);
+    const { next } = planOpencodeUpdate({}, nioEntry, profileMcps, headroomUrl);
     writeJson(path, next);
     return { status: 'created', path };
   }
 
   const existing = readJsonSafe(path) ?? {};
-  const { alreadyConfigured, next } = planOpencodeUpdate(existing, nioEntry, profileMcps);
+  const { alreadyConfigured, next } = planOpencodeUpdate(existing, nioEntry, profileMcps, headroomUrl);
   if (alreadyConfigured) return { status: 'already_configured', path };
 
   const backup = backupFile(path);

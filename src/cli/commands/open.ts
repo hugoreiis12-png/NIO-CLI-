@@ -4,6 +4,7 @@ import type { Command } from "commander";
 import { loadSession } from "../../lib/auth/session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { createIdeGateway } from "../../adapters/ide/ide-gateway.js";
+import { writeIdeAutostartTask } from "../../lib/ide-tasks.js";
 import { c, sym } from "../../lib/colors.js";
 import { brand } from "../../brand.js";
 
@@ -30,6 +31,14 @@ async function runOpen(): Promise<void> {
     );
     process.exit(1);
     return;
+  }
+
+  if (session.ide === "vscode" || session.ide === "cursor") {
+    try {
+      writeIdeAutostartTask(session.projectPath);
+    } catch {
+      /* best-effort */
+    }
   }
 
   const result = await createIdeGateway().open(session.ide, session.projectPath);

@@ -27,6 +27,7 @@ import { registerSecurityCommands } from "./cli/commands/security.js";
 import { registerDocsCommand } from "./cli/commands/docs.js";
 import { registerConfigCommand } from "./cli/commands/config.js";
 import { registerStartCommand } from "./cli/commands/start.js";
+import { registerAiCommand } from "./cli/commands/ai.js";
 import { continueChain } from "./cli/flows/onboarding.js";
 
 notifyCliIfUpdate();
@@ -62,6 +63,7 @@ registerSecurityCommands(program);
 registerDocsCommand(program);
 registerConfigCommand(program);
 registerStartCommand(program);
+registerAiCommand(program);
 
 const fail = (err: unknown): never => {
   if (DEBUG) console.error(err);

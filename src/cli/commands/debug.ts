@@ -5,6 +5,7 @@ import { loadSession } from "../../lib/auth/session-store.js";
 import { ping, closePool } from "../../adapters/pg/client.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { isBinaryInstalled } from "../../lib/clients/client-install.js";
+import { headroomHealthy, HEADROOM_URL } from "../../lib/headroom.js";
 import { skillsCached } from "../../lib/skills/skills-cache.js";
 import { opencodeGlobalPath } from "../../lib/clients/client-configs.js";
 import { section, c, sym } from "../../lib/colors.js";
@@ -94,6 +95,18 @@ async function runChecks(): Promise<Check[]> {
     existsSync(opencodeGlobalPath())
       ? { label: "opencode.json", level: "ok", detail: "configurado" }
       : { label: "opencode.json", level: "warn", detail: "ausente", hint: `Gerado pelo \`${brand.name} init\`.` },
+  );
+
+  // 6b. Headroom (proxy obrigatório do `nio ai`)
+  checks.push(
+    (await headroomHealthy())
+      ? { label: "Headroom", level: "ok", detail: HEADROOM_URL }
+      : {
+          label: "Headroom",
+          level: "warn",
+          detail: "fora do ar",
+          hint: `Obrigatório pro \`${brand.name} ai\` — suba o Docker e rode \`${brand.name} docker headroom up\`.`,
+        },
   );
 
   // 7. Cache de skills

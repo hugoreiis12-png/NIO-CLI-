@@ -142,7 +142,13 @@ bunx tsc --noEmit && bun test
 
 ---
 
-## PARTE B — Headroom como proxy Docker — ESBOÇO
+## PARTE B — Headroom como proxy Docker — ✅ FASE 1 FEITA (31 ago 2026)
+
+> Implementada como **obrigatória** pro `nio ai` — [ADR 0007](../adr/0007-headroom-proxy-obrigatorio.md).
+> `headroom/docker-compose.yml` (shipado), `src/lib/headroom.ts`, `src/app/ai-client.ts`,
+> `planOpencodeProvider` no `client-configs.ts`, `nio docker headroom {up,down,status}`.
+> Spike confirmou: Zen/big-pickle roteia pelo Headroom via `OPENAI_TARGET_API_URL`.
+> O esboço abaixo (contexto histórico):
 
 - **`headroom/docker-compose.yml`** (espelha `kong/docker-compose.yml`):
   `image: ghcr.io/headroomlabs-ai/headroom:latest`, `command: ["proxy", "--port",

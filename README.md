@@ -27,10 +27,11 @@ você → nio (CLI) ──► nio-gateway ──► Postgres        (login: senh
    `EnvironmentBuilder` garante os toolchains, resolve os MCPs e grava o `config`
    materializado na linha `sessions` do Postgres. A sessão é isolada, tem UUID e
    pode ser reativada depois (`nio sessions`).
-3. **A CLI registra o MCP `nio`** no `opencode.json` e entrega o terminal pro
-   **OpenCode** (operador de IA fixo, modelo `opencode/big-pickle`). A partir daí
-   o agente tem as tools `nio_*` — criar/ativar sessão, re-materializar ambiente,
-   detectar dependências, delegar execução.
+3. **`nio ai` sobe o client de IA** — o Headroom (proxy de compressão, container
+   Docker, obrigatório), aponta o provider do OpenCode pra ele, e entrega o
+   terminal pro **OpenCode** (`opencode/big-pickle`, MCP `nio` + MCPs do perfil).
+   Com IDE, isso roda num terminal integrado dela. A partir daí o agente tem as
+   tools `nio_*` — criar/ativar sessão, re-materializar ambiente, delegar execução.
 
 O **Postgres é a fonte da verdade** do domínio (usuários, sessões, trilha de
 auth). A CLI e o gateway só falam com o banco que **você** configurar — não há
@@ -56,6 +57,7 @@ Ficam no PATH: `nio` (CLI), `nio-gateway` (serviço de auth), `nio-cli` e
 | **PostgreSQL** alcançável | fonte da verdade (sessões, usuários) | schema em `db/schema.sql` aplicado uma vez |
 | **`JWT_SECRET`** (segredo do time) | assinar/validar as sessões | mesmo valor em toda máquina |
 | **OpenCode** | operador de IA | o `nio init` oferece instalar (`npm i -g opencode-ai`) |
+| **Docker** | obrigatório pro `nio ai` — roda o Headroom (proxy de compressão) | `docker compose version` |
 | *(opcional)* provedor de SMS | 2º fator | `SMS_ENDPOINT_URL` + `SMS_AUTH_HEADER` + `SMS_BODY_TEMPLATE` |
 
 ---
@@ -130,7 +132,7 @@ nio-gateway          # gateway de auth (a esteira sobe sozinha se faltar)
 nio register         # cria seu usuário na base compartilhada → cai no login
 nio login            # autentica (salva o JWT em ~/.nio/session.json)
 nio security enable-2fa   # (opcional) 2º fator
-nio init             # monta o ambiente da sessão neste diretório → abre o OpenCode
+nio init             # monta o ambiente da sessão → `nio ai` (Headroom + OpenCode, num terminal da IDE)
 ```
 
 O `nio-gateway` só é necessário pros comandos de auth (`login`/`logout`/
@@ -211,15 +213,29 @@ endpoint local que imprime o código no terminal (aponte `SMS_ENDPOINT_URL` pra 
 
 ---
 
-## Operador de IA
+## Operador de IA (`nio ai`)
 
-No fim do `nio init`, a CLI entrega o terminal pro operador de IA fixo:
-**OpenCode** rodando `opencode/big-pickle` (default gravado no
-`~/.config/opencode/opencode.json`, junto do MCP `nio` e dos MCPs do perfil). Ver
-[`docs/arch/ARQUITETURA-CLIENTE-IA.md`](docs/arch/ARQUITETURA-CLIENTE-IA.md).
+No fim do `nio init` a CLI sobe o **client de IA** da sessão — e o mesmo `nio ai`
+retoma a qualquer momento. Ele:
 
-> Multi-cliente (OpenCode | Codex), proxy de compressão de contexto e ladder de
-> failover entre modelos são **feature futura** — desenho parkeado em
+1. **Sobe o Headroom** — proxy de compressão de contexto em container Docker
+   (`headroom/docker-compose.yml`), **obrigatório** ([ADR 0007](docs/adr/0007-headroom-proxy-obrigatorio.md)).
+   Sem Docker, `nio ai` para com erro acionável (o `nio init` não morre — materializa
+   o ambiente e deixa a linha `nio ai` pra retomar). Manual: `nio docker headroom {up,down,status}`.
+2. **Aponta o provider pro Headroom** — grava `provider.opencode.options.baseURL`
+   no `~/.config/opencode/opencode.json` (junto do `model: opencode/big-pickle`,
+   do MCP `nio` e dos MCPs do perfil).
+3. **Entrega o terminal pro OpenCode.** Se a sessão tem IDE (VS Code / Cursor), o
+   `nio init` grava um `.vscode/tasks.json` (task `NIO`, `runOn: folderOpen`) e o
+   `nio ai` sobe num **terminal integrado da IDE** — uma superfície, não duas.
+   Sem IDE, roda no terminal atual.
+
+Ver [`docs/arch/ARQUITETURA-CLIENTE-IA.md`](docs/arch/ARQUITETURA-CLIENTE-IA.md).
+
+> A **interface NIO própria** (OpenTUI sobre `opencode serve`) é a Fase 2 —
+> [`docs/arch/ARQUITETURA-CLIENTE-TUI-FUTURO.md`](docs/arch/ARQUITETURA-CLIENTE-TUI-FUTURO.md).
+> Multi-cliente (OpenCode | Codex) e o ladder de failover entre modelos seguem
+> parkeados em
 > [`docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md`](docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md)
 > ([ADR 0004](docs/adr/0004-operador-ia-unico.md)).
 
@@ -231,10 +247,12 @@ Operações do CLI, **sem o binário na frente** (declarado no cabeçalho da tab
 Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --help`.
 
 <!-- COMMANDS:START -->
-<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 36 comandos. -->
+<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 42 comandos. -->
 
 | Comando | Descrição |
 | --- | --- |
+| `ai` | Sobe o client de IA da sessão ativa (Headroom + OpenCode no projeto) |
+| `ai status` | Estado do Headroom (proxy obrigatório do client de IA) |
 | `clean-legacy` | Remove commands/skills legados (substituídos) de ~/.claude e ~/.codex |
 | `completion [shell]` | Imprime o script de autocomplete (bash\|zsh\|fish). |
 | `config` | Config compartilhada da equipe (~/.nio/config.env) |
@@ -246,6 +264,10 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | `docker compose <action> [service]` | Wrapper sobre `docker compose` do projeto (up\|down\|restart\|ps\|logs) |
 | `docker create` | Cria e sobe um container (wizard ou flags) |
 | `docker debug [container]` | Coleta o contexto de um container e entrega o diagnóstico pro operador de IA |
+| `docker headroom` | Proxy de compressão de contexto — obrigatório pro `nio ai` (ADR 0007) |
+| `docker headroom down` | Derruba o container do Headroom |
+| `docker headroom status` | O Headroom está no ar? |
+| `docker headroom up` | Sobe o container do Headroom |
 | `docker orquest [instruction]` | Orquestra os serviços do projeto via compose, dirigido pelo operador (linguagem natural) |
 | `docker portainer` | Abre o Portainer no navegador |
 | `docker toolkit` | Infra NIO: Docker MCP Gateway + Portainer (docker/docker-compose.yml) |

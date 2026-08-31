@@ -18,6 +18,16 @@
 > multi-cliente (OpenCode | Codex) + failover — implementada em `ffd13c3` e
 > revertida na [ADR 0004](../adr/0004-operador-ia-unico.md) — é feature futura;
 > desenho em `ARQUITETURA-CLIENTES-MULTI-FUTURO.md`.
+>
+> **Nota (31 ago 2026) — o handoff mudou ([ADR 0007](../adr/0007-headroom-proxy-obrigatorio.md)).**
+> O passo `spawn('opencode')` do fim do `nio init` virou **`nio ai`** →
+> `launchAiClient()`: sobe o **Headroom** (proxy de compressão, obrigatório),
+> aponta o `provider.opencode.options.baseURL` pra ele, e só então entrega o
+> terminal pro OpenCode. E quando a sessão tem IDE (vscode/cursor), o `nio init`
+> grava um `.vscode/tasks.json` que roda `nio ai` num **terminal integrado da
+> IDE** — em vez de abrir a IDE numa janela e o OpenCode noutra tela.
+> A **interface OpenTUI própria** (trocar a TUI do OpenCode pela do NIO, falando
+> com `opencode serve` via SDK) é a Fase 2 — `ARQUITETURA-CLIENTE-TUI-FUTURO.md`.
 
 ## Resumo executivo
 
