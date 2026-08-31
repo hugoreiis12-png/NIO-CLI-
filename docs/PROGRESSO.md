@@ -1533,3 +1533,42 @@ a IDE numa janela e a TUI do OpenCode noutra tela, sem camada entre agente e LLM
 
 ### Fase 2 (parkeada)
 Interface NIO em OpenTUI ↔ `opencode serve` via `@opencode-ai/sdk` — plano próprio.
+
+---
+
+## 2026-08-31 — Verificação da pipeline do gateway (login + 2FA SMS)
+
+Pedido do dono: confirmar que o `nio login` — inclusive o 2º fator por SMS — está
+funcionando ponta a ponta. Estado antes: infra toda no ar, migration 0004 aplicada
+no DB local, testes de área verdes, mas **nenhum teste cobria o fio real DB+OTP+challenge**
+(só fakes) e nenhum user com `auth_2=true`.
+
+### Verificação manual ao vivo (curl → gateway :3000 real + DB real + sms-echo :4545)
+Com um user descartável `nio_verify_*` (removido no fim):
+
+| Caso | Resultado |
+|---|---|
+| 1FA `/login` (sem auth_2) | `200 {step:'done', token, sessionId}` · JWT `jti` == `sessionId` == linha em `auth_sessions` (válida, não revogada) |
+| 1FA senha errada | `401` |
+| `/login` sem `X-Nio-Gateway-Token` | `403` |
+| `/login` com header `Origin` | `403` (edge-filter) |
+| 2FA `/login` (auth_2=true) | `200 {step:'2fa_required', challengeId, phoneHint:'+55•••••••6666'}` |
+| SMS chega no sms-echo | código de 6 dígitos capturado |
+| 2FA `/verify-2fa` OTP correto | `200 {step:'done', token, sessionId}` |
+| OTP errado 1×/2× | `401 remaining:2` / `401 remaining:1` |
+| OTP errado 3× | `429 {reason:'attempts_exhausted', requiresBackupCode:true}` |
+| depois: código de backup | `200 {step:'done', ...}` |
+| 2FA com gateway **sem** `SMS_*` | `503 "2FA não configurado no servidor (SMS_*)."` (1º fator passa, 2º não envia) |
+
+**Conclusão: a pipeline está funcionando** — feliz e negativos, em HTTP real.
+
+### Fecha o gap de teste
+- **`src/gateway/services/login.integration.test.ts`** (novo, gated em `NIO_DATABASE_URL`+`JWT_SECRET`):
+  `login()` grava um `login_challenges` real → `verifyLogin()` real valida OTP/backup e emite JWT →
+  confere `auth_sessions` + `consumed_at`. Casos: OTP ok, OTP errado ×3 → `attempts_exhausted`,
+  backup code, challenge expirado, challenge consumido (rejeita reuso), challenge inexistente, 1FA
+  (done + senha errada). Cria e apaga o user. **2 pass.**
+- **`scripts/sms-echo.ts`** — grava o último código em `~/.nio/sms-echo-last.json` (além de imprimir),
+  pra scripts de verificação lerem sem parsear stdout.
+
+`bunx tsc --noEmit` verde · `bun test` **396 pass / 2 skip / 0 fail** (+2).

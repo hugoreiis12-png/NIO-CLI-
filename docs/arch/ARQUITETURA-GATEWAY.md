@@ -12,6 +12,12 @@
 > - O Edge Filter, o Kong (rate-limit) e o `nio-gateway` já existem e estão no ar;
 >   as rotas novas são `POST /verify-2fa` e `/security/*`.
 >
+> **Verificado ponta a ponta (31 ago 2026)** — HTTP real + DB real + SMS mock:
+> 1FA, 2FA OTP, OTP errado ×3 → 429 `attempts_exhausted`, código de backup, e o
+> `503` quando faltam os `SMS_*`. Regressão coberta por
+> `src/gateway/services/login.integration.test.ts` (fio DB+OTP+challenge). Ver
+> `docs/PROGRESSO.md` (2026-08-31 — Verificação da pipeline do gateway).
+>
 > O corpo abaixo (Twilio, "a construir", etc.) é o desenho de 23 ago — mantido
 > como contexto histórico das decisões de RFC/produto, que seguem válidas.
 

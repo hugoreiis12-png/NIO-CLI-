@@ -2,13 +2,18 @@
  * Mock de provedor de SMS pra testar o 2º fator sem SMS de verdade.
  * Uso: `bun run dev:sms-echo` (porta em SMS_ECHO_PORT, default 4545).
  *
- * Aceita o POST do adapter `http-generic` e imprime `{to, text}` + o código
- * de 6 dígitos no terminal; responde 200 como um provedor faria. Aponte o
- * gateway pra cá com SMS_ENDPOINT_URL=http://127.0.0.1:4545/send.
+ * Aceita o POST do adapter `http-generic`, imprime `{to, text}` + o código de 6
+ * dígitos no terminal, e grava o último código em `~/.nio/sms-echo-last.json`
+ * (pra scripts de verificação lerem sem parsear stdout). Responde 200 como um
+ * provedor faria. Aponte o gateway pra cá com SMS_ENDPOINT_URL=http://127.0.0.1:4545/send.
  */
 import { createServer } from 'node:http';
+import { writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 const PORT = Number(process.env.SMS_ECHO_PORT?.trim()) || 4545;
+const LAST_FILE = join(homedir(), '.nio', 'sms-echo-last.json');
 let count = 0;
 
 const server = createServer((req, res) => {
@@ -38,6 +43,14 @@ const server = createServer((req, res) => {
     }
     const code = text.match(/\b(\d{6})\b/)?.[1];
 
+    if (code) {
+      try {
+        writeFileSync(LAST_FILE, JSON.stringify({ to, code, text, at: new Date().toISOString() }) + '\n');
+      } catch {
+        /* best-effort — o terminal ainda mostra o código */
+      }
+    }
+
     console.log('\n' + '─'.repeat(60));
     console.log(`  SMS #${count}  ${req.method} ${req.url}`);
     console.log(`  para:   ${to}`);
@@ -57,4 +70,5 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`  SMS_ENDPOINT_URL=http://127.0.0.1:${PORT}/send`);
   console.log('  SMS_BODY_TEMPLATE={"to":"{to}","message":"{text}"}');
   console.log('  SMS_AUTH_HEADER=X-Echo-Token: dev   (opcional — só pra ver passar)');
+  console.log(`Último código também em ${LAST_FILE}`);
 });
