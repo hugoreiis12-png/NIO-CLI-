@@ -27,11 +27,11 @@ você → nio (CLI) ──► nio-gateway ──► Postgres        (login: senh
    `EnvironmentBuilder` garante os toolchains, resolve os MCPs e grava o `config`
    materializado na linha `sessions` do Postgres. A sessão é isolada, tem UUID e
    pode ser reativada depois (`nio sessions`).
-3. **`nio ai` sobe o client de IA** — o Headroom (proxy de compressão, container
-   Docker, obrigatório), aponta o provider do OpenCode pra ele, e entrega o
-   terminal pro **OpenCode** (`opencode/big-pickle`, MCP `nio` + MCPs do perfil).
-   Com IDE, isso roda num terminal integrado dela. A partir daí o agente tem as
-   tools `nio_*` — criar/ativar sessão, re-materializar ambiente, delegar execução.
+3. **`nio ai` abre a interface NIO** — o Headroom (proxy de compressão, container
+   Docker, obrigatório), o `opencode serve` headless (`opencode/big-pickle`, MCP
+   `nio` + MCPs do perfil), e a UI do NIO em Ink (chat, sidebar, paleta `/`). Com
+   IDE, roda num terminal integrado dela. A partir daí o agente tem as tools
+   `nio_*` — criar/ativar sessão, re-materializar ambiente, delegar execução.
 
 O **Postgres é a fonte da verdade** do domínio (usuários, sessões, trilha de
 auth). A CLI e o gateway só falam com o banco que **você** configurar — não há
@@ -225,15 +225,18 @@ retoma a qualquer momento. Ele:
 2. **Aponta o provider pro Headroom** — grava `provider.opencode.options.baseURL`
    no `~/.config/opencode/opencode.json` (junto do `model: opencode/big-pickle`,
    do MCP `nio` e dos MCPs do perfil).
-3. **Entrega o terminal pro OpenCode.** Se a sessão tem IDE (VS Code / Cursor), o
-   `nio init` grava um `.vscode/tasks.json` (task `NIO`, `runOn: folderOpen`) e o
-   `nio ai` sobe num **terminal integrado da IDE** — uma superfície, não duas.
-   Sem IDE, roda no terminal atual.
+3. **Sobe o `opencode serve` headless e abre a interface NIO** (Ink — chat
+   streamado, sidebar verde, paleta `/` com os comandos e capacidades do NIO). O
+   motor é o `opencode/big-pickle`; a casca é nossa. Se a sessão tem IDE (VS Code /
+   Cursor), o `nio init` grava um `.vscode/tasks.json` (task `NIO`, `runOn: folderOpen`)
+   e o `nio ai` sobe num **terminal integrado da IDE** — uma superfície, não duas.
+   Sem IDE, roda no terminal atual. Sem TTY / sem `opencode` → cai na TUI do OpenCode.
 
-Ver [`docs/arch/ARQUITETURA-CLIENTE-IA.md`](docs/arch/ARQUITETURA-CLIENTE-IA.md).
+Ver [`docs/arch/ARQUITETURA-CLIENTE-IA.md`](docs/arch/ARQUITETURA-CLIENTE-IA.md) e
+[`docs/arch/ARQUITETURA-CLIENTE-TUI.md`](docs/arch/ARQUITETURA-CLIENTE-TUI.md).
 
-> A **interface NIO própria** (OpenTUI sobre `opencode serve`) é a Fase 2 —
-> [`docs/arch/ARQUITETURA-CLIENTE-TUI-FUTURO.md`](docs/arch/ARQUITETURA-CLIENTE-TUI-FUTURO.md).
+> A interface NIO (Ink) está na **fatia 2a** ([ADR 0008](docs/adr/0008-interface-nio-ink.md)).
+> A paridade completa com o OpenCode (diff viewer, file tree, seletor de modelo…) é a 2b.
 > Multi-cliente (OpenCode | Codex) e o ladder de failover entre modelos seguem
 > parkeados em
 > [`docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md`](docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md)
@@ -251,7 +254,7 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 
 | Comando | Descrição |
 | --- | --- |
-| `ai` | Sobe o client de IA da sessão ativa (Headroom + OpenCode no projeto) |
+| `ai` | Abre a interface NIO da sessão ativa (Headroom + opencode serve + Ink) |
 | `ai status` | Estado do Headroom (proxy obrigatório do client de IA) |
 | `clean-legacy` | Remove commands/skills legados (substituídos) de ~/.claude e ~/.codex |
 | `completion [shell]` | Imprime o script de autocomplete (bash\|zsh\|fish). |

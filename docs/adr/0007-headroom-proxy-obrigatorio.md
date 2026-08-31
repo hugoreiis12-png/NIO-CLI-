@@ -54,8 +54,8 @@ válido no catálogo Zen.
   cache-hit, base pronta pro ladder de failover (Parte C).
 - Uma superfície (IDE) em vez de duas (IDE + janela do OpenCode).
 - `nio ai` é reutilizável (task da IDE, handoff do init, retomada manual, headless
-  do docker) — um lugar só pra evoluir (a Fase 2 troca o `spawn opencode` pela
-  interface OpenTUI, sem mexer nos call-sites).
+  do docker) — um lugar só pra evoluir (a Fase 2 trocou o `spawn opencode` pela
+  interface NIO em Ink, sem mexer nos call-sites — ADR 0008).
 
 **Negativas / trade-offs:**
 - **Reverte a premissa "nenhum LLM passa pela CLI"** de `ARQUITETURA-GATEWAY.md` —
@@ -75,14 +75,15 @@ válido no catálogo Zen.
   `OPENAI_TARGET_API_URL`.
 - **Extensão VS Code/Cursor própria** pra abrir o terminal — descartado: `tasks.json`
   com `runOn: folderOpen` faz o mesmo sem nada a publicar/assinar.
-- **Interface NIO em OpenTUI agora** — adiado pra Fase 2 (`ARQUITETURA-CLIENTE-TUI-FUTURO.md`):
-  é reimplementar o front do OpenCode; risco de travar a Fase 1.
+- **Interface NIO própria agora** — foi adiada pra Fase 2 (feita depois, em Ink —
+  ver `ARQUITETURA-CLIENTE-TUI.md` / ADR 0008): reimplementar o front do OpenCode
+  arriscava travar a Fase 1.
 
 ## Referências
 
 - `headroom/docker-compose.yml`, `src/lib/headroom.ts`, `src/app/ai-client.ts`,
   `src/lib/ide-tasks.ts`, `src/cli/commands/ai.ts`.
 - `src/lib/clients/client-configs.ts` — `planOpencodeProvider` / `planOpencodeUpdate(…, headroomUrl)`.
-- `docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md` (Parte B), `docs/arch/ARQUITETURA-CLIENTE-TUI-FUTURO.md` (Fase 2).
+- `docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md` (Parte B), `docs/arch/ARQUITETURA-CLIENTE-TUI.md` (Fase 2).
 - [ADR 0004](0004-operador-ia-unico.md) (operador único), [ADR 0005](0005-camada-docker.md) (camada Docker).
 - https://github.com/headroomlabs-ai/headroom

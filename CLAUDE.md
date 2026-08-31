@@ -39,7 +39,8 @@
 entrypoints:  src/cli.ts (nio)              src/gateway/index.ts (nio-gateway)
               src/mcp-server.ts (nio-cli)   src/mcp-server-lang.ts (nio-lang)
 app/:         SessionManager · EnvironmentBuilder · DependencyWatcher · DockerManager
-              · LanguageConfigurator · ai-client (launchAiClient)
+              · LanguageConfigurator · ai-client (headless) 
+tui/:         interface NIO em Ink (launchNioTui) ↔ opencode serve via @opencode-ai/sdk
 core/:        types.ts (entidades + enums do schema)
               + ports por domínio, só interfaces, ZERO IO:
                 repositories.ts (User/Session/AuthSession/LoginChallenge/DependencyEvent)
@@ -77,12 +78,16 @@ profiles/:    catálogo dos 6 perfis (hardcoded no fonte)
 - **Esteira de onboarding** (`src/cli/flows/onboarding.ts`): `nio` sem args / `nio start`
   detecta o estágio (config → gateway → login → session → ready) e conduz, perguntando
   antes de cada passo. `login`/`register`/`config setup` encadeiam nela no fim.
-- **Client de IA** (`nio ai`, `src/app/ai-client.ts`, ADR 0007): sobe o **Headroom**
-  (proxy de compressão em container Docker, `headroom/docker-compose.yml`, **obrigatório**),
-  aponta `provider.opencode.options.baseURL` pra ele, e entrega o terminal pro OpenCode.
-  Com IDE (vscode/cursor), o `nio init` grava `.vscode/tasks.json` (`runOn: folderOpen`
-  → `nio ai`) → o client sobe num terminal integrado da IDE, não em janela separada.
-  Fase 2 (parkeada): trocar a TUI do OpenCode por uma interface NIO em OpenTUI.
+- **Client de IA** (`nio ai`, ADR 0007+0008): sobe o **Headroom** (proxy de compressão
+  em container Docker, `headroom/docker-compose.yml`, **obrigatório**), aponta
+  `provider.opencode.options.baseURL` pra ele (`ensureHeadroomAndWire` em
+  `src/app/ai-client.ts`), sobe `opencode serve` headless e renderiza a **interface
+  NIO em Ink** (`src/tui/`, import lazy) — chat streamado via `@opencode-ai/sdk`,
+  sidebar verde, paleta `/`. Motor = `opencode/big-pickle`. Headless (`nio docker
+  debug/orquest/cluster`) segue em `launchAiClient` (`opencode run`). Com IDE
+  (vscode/cursor), o `nio init` grava `.vscode/tasks.json` (`runOn: folderOpen` →
+  `nio ai`). Árvore de comandos: `buildProgram()` em `src/cli/program.ts`.
+  `tsconfig` tem `"jsx": "react-jsx"`. Fatia 2b (paridade OpenCode) pendente.
 - Estado por-usuário (não por-máquina) para dois colaboradores no mesmo host não
   colidirem.
 - Mensagens de UI e erros em pt-BR (o público é o time interno).

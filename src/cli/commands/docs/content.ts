@@ -59,7 +59,7 @@ export const SECTIONS: DocSection[] = [
         items: [
           'Autenticação — `nio register` / `nio login`. O nio-gateway (serviço HTTP loopback) verifica a senha (argon2id), dispara o 2º fator se ativo, e devolve um JWT salvo em ~/.nio/session.json.',
           'Sessão — `nio init`. O wizard pergunta perfil + recipe; o EnvironmentBuilder garante os toolchains, resolve os MCPs e grava o config materializado na linha `sessions` do Postgres.',
-          'Handoff — `nio ai` sobe o Headroom (proxy de compressão, container Docker, obrigatório — ADR 0007), aponta o provider do OpenCode pra ele, e entrega o terminal pro OpenCode (opencode/big-pickle, MCP nio + MCPs do perfil). Com IDE, roda num terminal integrado dela.',
+          'Handoff — `nio ai` sobe o Headroom (proxy de compressão, container Docker, obrigatório — ADR 0007), aponta o provider pra ele, sobe o `opencode serve` headless (opencode/big-pickle, MCP nio + MCPs do perfil) e abre a interface NIO (Ink) — chat, sidebar e paleta `/`. Com IDE, roda num terminal integrado dela.',
         ],
       },
       {

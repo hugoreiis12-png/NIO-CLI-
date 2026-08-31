@@ -1525,7 +1525,7 @@ a IDE numa janela e a TUI do OpenCode noutra tela, sem camada entre agente e LLM
 - **`nio docker headroom {up,down,status}`**; **`nio debug`** ganhou a checagem do Headroom.
 - Docs: ADR 0007, notas em `ARQUITETURA-GATEWAY.md`/`ARQUITETURA-DOCKER.md`/`ARQUITETURA-CLIENTE-IA.md`,
   Parte B de `ARQUITETURA-CLIENTES-MULTI-FUTURO.md` marcada FEITA, novo
-  `ARQUITETURA-CLIENTE-TUI-FUTURO.md` (Fase 2), README, `nio docs`, `.env.example`, CLAUDE.md.
+  `ARQUITETURA-CLIENTE-TUI.md` (Fase 2), README, `nio docs`, `.env.example`, CLAUDE.md.
 
 ### Verificação
 `bunx tsc --noEmit` verde. `bun test` **394 pass / 2 skip / 0 fail** (+12). `bun run build`
@@ -1572,3 +1572,48 @@ Com um user descartável `nio_verify_*` (removido no fim):
   pra scripts de verificação lerem sem parsear stdout.
 
 `bunx tsc --noEmit` verde · `bun test` **396 pass / 2 skip / 0 fail** (+2).
+
+---
+
+## 2026-08-31 — Interface NIO em Ink (Fase 2, fatia 2a)
+
+ADR [0008](adr/0008-interface-nio-ink.md). O `nio ai` (Fase 1) entregava o terminal
+pra TUI do OpenCode. Agora abre a **interface do NIO**.
+
+### Decisão: Ink, não OpenTUI
+OpenTUI (a lib da TUI do OpenCode) exige **Bun** (`bun:ffi` → Zig; Node só ≥26 com
+flag). Quebraria o `npm i -g` em Node. **Ink** (React p/ terminal, Node ≥18) fica
+parecido, não idêntico — trade-off aceito pelo dono.
+
+### O que entrou
+- **`src/cli/program.ts`** — `buildProgram()` extraído do `cli.ts` (o bootstrap fica
+  fino). Fonte única da árvore de comandos pra TUI.
+- **`src/app/ai-client.ts`** — `launchAiClient` volta a ser **só headless**
+  (`opencode run`, pro `nio docker …`); exporta `ensureHeadroomAndWire`.
+- **`src/tui/`** (novo) — `launchNioTui`: `ensureHeadroomAndWire` → `createOpencodeServer`
+  (headless, lê o `opencode.json`) → `createOpencodeClient` → `render(<App/>)` (Ink).
+  `App` = splash (logo Matrix) · `Sidebar` (**descrições em verde**) · `MessageList`
+  (chat streamado por `client.event.subscribe()`, cards de tool-call) · `InputBar` ·
+  `Palette` (`/`) · `PermissionModal`. Degrada pra TUI do OpenCode (sem TTY / sem
+  `opencode` / server não sobe).
+- **Paleta `/`** — 3 ações: comando → info · comando + Ctrl-R → executa `nio <cmd>`
+  e mostra a saída (confirma se destrutivo) · capacidade (tool `nio_*`) → prompt
+  pro agente. Fonte: `buildPalette(program)` + `toolDefinitions` + `SECTIONS`.
+- `nio ai` e `handoffToOperator` chamam `launchNioTui` (import lazy — Ink/React só
+  carregam aí).
+- Deps: `ink@^5.2`, `react@^18.3`, `@opencode-ai/sdk@1.18.25` (dependencies);
+  `@types/react`, `ink-testing-library` (dev). `tsconfig` += `"jsx": "react-jsx"` e
+  `exclude` += `*.test.tsx`.
+- Docs: ADR 0008, `ARQUITETURA-CLIENTE-TUI-FUTURO.md` → `ARQUITETURA-CLIENTE-TUI.md`
+  (OpenTUI→Ink, 2a feito / 2b pendente), README, `nio docs`, CLAUDE.md.
+
+### Verificação
+`bunx tsc --noEmit` verde · `bun test` **402 pass / 2 skip / 0 fail** (+6:
+palette-source ×4, components ×2, app ×2, ai-client reescrito) · `bun run build`
+(gera `dist/tui/`) · `bun run gen:docs`. `createOpencodeServer` + client validados
+isolados (session.create/list OK, ~635ms). O render interativo + o loop de eventos
+do SDK precisam de afinação ao vivo — passo "Sua parte" do plano.
+
+### Fatia 2b (pendente, plano próprio)
+Diff viewer, file tree/viewer, seletor de modelo/agente, attachments, revert/edit,
+trocar de sessão pela sidebar, animação do logo, mouse, cheatsheet.

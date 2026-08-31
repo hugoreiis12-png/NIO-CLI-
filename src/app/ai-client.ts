@@ -1,8 +1,7 @@
 /**
- * `launchAiClient` — ponto único de "subir o client de IA". Sobe o Headroom
- * (obrigatório, ADR 0007), aponta o `baseURL` do provider do OpenCode pra ele, e
- * entrega o terminal pro `opencode`. Usado pelo `nio ai`, pelo handoff do
- * `nio init` e pelo `runOperator` (headless) do `nio docker`.
+ * Client de IA — Headroom (obrigatório, ADR 0007) + OpenCode. `ensureHeadroomAndWire`
+ * sobe o Headroom e grava o `baseURL` no `opencode.json` (reusado pela TUI).
+ * `launchAiClient` é **headless** (`opencode run`, pro `nio docker …`); o interativo é `launchNioTui`.
  */
 import { spawn } from 'node:child_process';
 import { ensureHeadroomRunning, HEADROOM_URL, type HeadroomEnsureResult } from '../lib/headroom.js';
@@ -19,12 +18,6 @@ export class HeadroomRequiredError extends Error {
   }
 }
 
-export interface LaunchAiOptions {
-  cwd: string;
-  /** Com `prompt` → headless (`opencode run`); sem → TUI interativa. */
-  prompt?: string;
-}
-
 /** Seams pra teste. Default = implementações reais. */
 export interface LaunchAiDeps {
   ensureHeadroom?: () => Promise<HeadroomEnsureResult>;
@@ -32,8 +25,13 @@ export interface LaunchAiDeps {
   isInstalled?: (bin: string) => boolean;
 }
 
-/** Sobe o Headroom e grava o `baseURL` no opencode.json. Lança se o Headroom falhar. */
-async function prepareHeadroom(ensure: () => Promise<HeadroomEnsureResult>): Promise<void> {
+/**
+ * Sobe o Headroom e aponta o `provider.opencode.options.baseURL` do `opencode.json`
+ * pra ele. Lança `HeadroomRequiredError` se o Headroom não sobe.
+ */
+export async function ensureHeadroomAndWire(
+  ensure: () => Promise<HeadroomEnsureResult> = ensureHeadroomRunning,
+): Promise<void> {
   const h = await ensure();
   if (!h.ok) throw new HeadroomRequiredError(h.error ?? 'não consegui subir o Headroom.');
   if (h.started) console.log(`  ${c.green(sym.ok)} Headroom no ar (${HEADROOM_URL}).`);
@@ -41,28 +39,33 @@ async function prepareHeadroom(ensure: () => Promise<HeadroomEnsureResult>): Pro
     installOpencodeGlobal([], undefined, HEADROOM_URL);
     dlog('opencode.json: provider.opencode.options.baseURL =', HEADROOM_URL);
   } catch (err) {
-    console.warn(
-      `  ${c.yellow(sym.warn)} não gravei o baseURL no opencode.json: ${(err as Error).message}`,
-    );
+    console.warn(`  ${c.yellow(sym.warn)} não gravei o baseURL no opencode.json: ${(err as Error).message}`);
   }
 }
 
-export async function launchAiClient(opts: LaunchAiOptions, deps: LaunchAiDeps = {}): Promise<number> {
+/** Operador headless (`opencode run --model … "<prompt>"`). Resolve com o exit code. */
+export async function launchAiClient(
+  opts: { cwd: string; prompt: string },
+  deps: LaunchAiDeps = {},
+): Promise<number> {
   const spawnFn = deps.spawnFn ?? spawn;
   const isInstalled = deps.isInstalled ?? isBinaryInstalled;
 
-  await prepareHeadroom(deps.ensureHeadroom ?? ensureHeadroomRunning);
+  await ensureHeadroomAndWire(deps.ensureHeadroom);
 
   if (!isInstalled('opencode')) {
     console.log(
-      `  ${c.yellow(sym.warn)} OpenCode não está no PATH. Instale com \`npm i -g opencode-ai\` e rode \`nio ai\`.`,
+      `  ${c.yellow(sym.warn)} OpenCode não está no PATH. Instale com \`npm i -g opencode-ai\`.`,
     );
     return 127;
   }
 
-  const args = opts.prompt ? ['run', '--model', NIO_OPERATOR_MODEL, opts.prompt] : [];
   return new Promise((resolve) => {
-    const child = spawnFn('opencode', args, { stdio: 'inherit', cwd: opts.cwd });
+    const child = spawnFn(
+      'opencode',
+      ['run', '--model', NIO_OPERATOR_MODEL, opts.prompt],
+      { stdio: 'inherit', cwd: opts.cwd },
+    );
     child.on('exit', (code) => resolve(code ?? 0));
     child.on('error', (err) => {
       console.error(`[erro] Falha ao iniciar o OpenCode: ${err.message}`);

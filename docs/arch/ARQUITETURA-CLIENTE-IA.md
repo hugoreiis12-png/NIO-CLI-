@@ -26,8 +26,9 @@
 > terminal pro OpenCode. E quando a sessão tem IDE (vscode/cursor), o `nio init`
 > grava um `.vscode/tasks.json` que roda `nio ai` num **terminal integrado da
 > IDE** — em vez de abrir a IDE numa janela e o OpenCode noutra tela.
-> A **interface OpenTUI própria** (trocar a TUI do OpenCode pela do NIO, falando
-> com `opencode serve` via SDK) é a Fase 2 — `ARQUITETURA-CLIENTE-TUI-FUTURO.md`.
+> A **interface NIO própria** (trocar a TUI do OpenCode pela do NIO, em **Ink**,
+> falando com `opencode serve` via `@opencode-ai/sdk`) é a Fase 2 — fatia 2a feita,
+> ver `ARQUITETURA-CLIENTE-TUI.md` e [ADR 0008](../adr/0008-interface-nio-ink.md).
 
 ## Resumo executivo
 

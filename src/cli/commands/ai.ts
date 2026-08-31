@@ -9,7 +9,7 @@ import { c, sym } from "../../lib/colors.js";
 import { loadSession } from "../../lib/auth/session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { headroomHealthy, HEADROOM_URL } from "../../lib/headroom.js";
-import { launchAiClient, HeadroomRequiredError } from "../../app/ai-client.js";
+import { HeadroomRequiredError } from "../../app/ai-client.js";
 import type { Session } from "../../core/types.js";
 
 /** Sessão ativa do usuário logado, ou encerra (padrão de `nio open`/`nio docker`). */
@@ -40,7 +40,8 @@ async function requireActiveSession(): Promise<Session> {
 async function runAi(): Promise<void> {
   const session = await requireActiveSession();
   try {
-    const code = await launchAiClient({ cwd: session.projectPath });
+    const { launchNioTui } = await import("../../tui/index.js");
+    const code = await launchNioTui({ cwd: session.projectPath });
     if (code !== 0) process.exitCode = code;
   } catch (err) {
     if (err instanceof HeadroomRequiredError) {
@@ -55,7 +56,7 @@ async function runAi(): Promise<void> {
 export function registerAiCommand(program: Command): void {
   const ai = program
     .command("ai")
-    .description("Sobe o client de IA da sessão ativa (Headroom + OpenCode no projeto)")
+    .description("Abre a interface NIO da sessão ativa (Headroom + opencode serve + Ink)")
     .action(runAi);
 
   ai
