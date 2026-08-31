@@ -3,7 +3,7 @@
  * Formas confirmadas com o SDK 1.18.25 (`NIO_DEBUG=1` loga o evento cru).
  */
 import type { Event } from '@opencode-ai/sdk';
-import { dlog } from '../lib/debug.js';
+import { tlog } from './debug.js';
 
 export interface ChatPart {
   id: string;
@@ -89,7 +89,7 @@ function applyPart(state: ChatState, raw: Record<string, unknown>): void {
 export function applyEvent(prev: ChatState, evt: Event): ChatState {
   const state = clone(prev);
   const p = (evt as { properties?: Record<string, unknown> }).properties ?? {};
-  dlog('tui event:', evt.type, JSON.stringify(p).slice(0, 160));
+  tlog('event', evt.type, JSON.stringify(p).slice(0, 200));
 
   switch (evt.type) {
     case 'message.updated': {

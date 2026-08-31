@@ -36,7 +36,8 @@ test('App: pula o splash → mostra header, sidebar e input', async () => {
   const f = lastFrame() ?? '';
   expect(f).toContain('N I O');
   expect(f).toContain('demo'); // sidebar: sessão
-  expect(f).toContain('paleta de comandos'); // sidebar: atalhos
+  expect(f).toContain('paleta'); // sidebar: atalhos
+  expect(f).toContain('›'); // input
   unmount();
 });
 
@@ -45,5 +46,30 @@ test('App: splash mostra o wordmark do operador', () => {
     <App handle={fakeHandle()} program={buildProgram()} cwd="/tmp/p" session={null} splashMs={5000} />,
   );
   expect(lastFrame() ?? '').toContain('operador NIO');
+  unmount();
+});
+
+test('App: resposta gigante em andamento NÃO estoura o frame (Static + LiveMessage capado)', async () => {
+  const bigStream = (async function* () {
+    yield { type: 'message.updated', properties: { info: { id: 'msg_a', role: 'assistant' } } };
+    let acc = '';
+    for (let i = 0; i < 80; i++) {
+      acc += `raciocínio linha ${i}\n`;
+      yield { type: 'message.part.updated', properties: { part: { type: 'text', text: acc, messageID: 'msg_a', id: 'prt_t' } } };
+    }
+  })();
+  const h = fakeHandle();
+  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe = async () => ({ stream: bigStream });
+
+  const { lastFrame, stdin, unmount } = render(
+    <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
+  );
+  // dispara o busy
+  await new Promise((r) => setTimeout(r, 10));
+  stdin.write('oi\r');
+  await new Promise((r) => setTimeout(r, 80));
+
+  const lines = (lastFrame() ?? '').split('\n');
+  expect(lines.length).toBeLessThan(40); // não vira uma parede de 80+ linhas
   unmount();
 });

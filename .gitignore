@@ -6,3 +6,8 @@ dist/
 .env.local
 *.mcpb
 nio-docs.html
+
+# artefatos de `nio init` rodado no próprio repo (dev testando)
+/nio.json
+/nio.user.json
+/AGENTS.md

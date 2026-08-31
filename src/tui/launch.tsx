@@ -57,7 +57,10 @@ export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
 
   const program = buildProgram();
   const session = await resolveSessionMeta();
-  const app = render(<App handle={handle} program={program} cwd={cwd} session={session} />);
+  const app = render(<App handle={handle} program={program} cwd={cwd} session={session} />, {
+    patchConsole: false, // nada de console fora do controle do Ink
+    exitOnCtrlC: true,
+  });
   try {
     await app.waitUntilExit();
   } finally {
