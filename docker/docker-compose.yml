@@ -1,44 +1,84 @@
-# Camada Docker da NIO-CLI — infra local (`nio docker toolkit up`).
-#
-#  - mcp-gateway : Docker MCP Gateway (docker/mcp-gateway), transport `streaming`
-#                  em 127.0.0.1:8811/mcp. Agrega o server `docker` do catálogo
-#                  (docker/compose/swarm como tools MCP). Registrado no
-#                  `opencode.json` pelo `nio docker toolkit up` → o operador
-#                  (OpenCode/big-pickle) ganha as tools e dirige por linguagem natural.
-#  - portainer   : Portainer CE — visibilidade do gerenciamento de containers e
-#                  da stack `nio-cluster` (Swarm). 1º acesso pede setup token.
-#
-# Mesmo padrão do `kong/docker-compose.yml`: portas pinadas em 127.0.0.1,
+# Stack NIO unificado — 1 compose, 1 rede (`nio-net`), 1 stack no Portainer.
+# Substitui os 3 composes antigos (docker/ + kong/ + headroom/). O gateway agora
+# é container (Dockerfile.gateway) e o Kong o alcança por NOME na rede, sem
+# host.docker.internal. Ver docs/container-architecture.md.
+name: nio
 
-# `restart: unless-stopped`, `extra_hosts` p/ Linux. Roda em qualquer Docker
-# Engine — não exige Docker Desktop.
-services:
-  mcp-gateway:
-    image: docker/mcp-gateway:latest
-    container_name: nio-mcp-gateway
-    restart: unless-stopped
-    command:
-      - "--transport=streaming"
-      - "--port=8811"
-      - "--servers=docker"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "127.0.0.1:8811:8811"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-  portainer:
-    image: portainer/portainer-ce:lts
-    container_name: nio-portainer
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - nio_portainer_data:/data
-    ports:
-      - "127.0.0.1:9443:9443"
-      - "127.0.0.1:8000:8000"
+networks:
+  nio-net:
+    name: nio-net
+    driver: bridge
 
 volumes:
-  nio_portainer_data:
-    name: nio_portainer_data
+  nio_portainer_data: { name: nio_portainer_data }
+  nio_headroom_cache: { name: nio_headroom_cache }
+
+services:
+  nio-gateway:
+    build:
+      context: ..                       # raiz do repo (onde estão dist/ e package.json)
+      dockerfile: Dockerfile.gateway    # relativo ao context (raiz)
+    image: nio-gateway:local
+    container_name: nio-gateway
+    restart: unless-stopped
+    env_file: [ ../.env ]               # NIO_DATABASE_URL, JWT_SECRET (gitignored)
+    environment:
+      # o gateway lê env via env() que PREFIXA NIO_ → a var é NIO_GATEWAY_HOST
+      # (não GATEWAY_HOST). 0.0.0.0 = ouvir na interface da rede, não só loopback.
+      NIO_GATEWAY_HOST: "0.0.0.0"
+    ports: [ "127.0.0.1:3000:3000" ]    # acesso direto da CLI (padrão)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    networks: [ nio-net ]
+
+  headroom:
+    image: ghcr.io/headroomlabs-ai/headroom@sha256:35b799e94eef4644cb15a2e695b4b99698fe7668614623e9338cb10c10ececf9  # headroom:latest, pinado 2026-09-03
+    container_name: nio-headroom
+    restart: unless-stopped
+    command: ["--host", "0.0.0.0", "--port", "8787"]
+    environment:
+      OPENAI_TARGET_API_URL: "${NIO_HEADROOM_OPENAI_TARGET:-https://opencode.ai/zen/v1}"
+      HEADROOM_UPDATE_CHECK: "off"
+    ports: [ "127.0.0.1:8787:8787" ]
+    volumes: [ "nio_headroom_cache:/root/.headroom" ]
+    networks: [ nio-net ]
+
+  mcp-gateway:
+    image: docker/mcp-gateway@sha256:f5a679a05fc39022a046167bef92aeeb01bcd59485ad27843ae5227db7950688  # docker/mcp-gateway:latest, pinado 2026-09-03
+    container_name: nio-mcp-gateway
+    restart: unless-stopped
+    command: ["--transport=streaming", "--port=8811", "--servers=docker"]
+    ports: [ "127.0.0.1:8811:8811" ]
+    volumes: [ "/var/run/docker.sock:/var/run/docker.sock" ]
+    networks: [ nio-net ]
+
+  portainer:
+    image: portainer/portainer-ce@sha256:511f3f06c96fe3b993ebeaafde311c1959cae73a7ef825dba6397d51b450dffa  # portainer-ce:lts, pinado 2026-09-03
+    container_name: nio-portainer
+    restart: unless-stopped
+    ports: [ "127.0.0.1:9443:9443" ]    # UI (edge :8000 REMOVIDO — libera p/ Kong)
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "nio_portainer_data:/data"
+    networks: [ nio-net ]
+
+  kong:
+    image: kong@sha256:2a8cf3b110cdaba1cb00adc665b8635ed1fc75c907f7a4298613c68e4976de0a  # kong:3.9, pinado 2026-09-03
+    container_name: nio-kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+    volumes: [ "./kong.yml:/kong/kong.yml:ro" ]          # docker/kong.yml (T3)
+    ports:
+      - "127.0.0.1:${NIO_KONG_PROXY_PORT:-8000}:8000"    # sem colisão: Portainer largou :8000
+      - "127.0.0.1:${NIO_KONG_ADMIN_PORT:-8001}:8001"
+    depends_on:
+      nio-gateway: { condition: service_healthy }
+    networks: [ nio-net ]

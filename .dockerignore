@@ -1,0 +1,20 @@
+# Contexto de build da imagem do gateway (Dockerfile.gateway copia só dist/ + package.json).
+# Mantém o contexto pequeno e — crítico — o .env (segredos) FORA do build.
+.env
+.env.*
+node_modules
+.git
+.github
+docs
+scripts
+src
+test
+.vscode
+.opencode
+kong
+headroom
+bun.lock
+*.log
+*.md
+*.tgz
+nio-docs.html

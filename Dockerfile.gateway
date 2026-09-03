@@ -1,0 +1,12 @@
+FROM node:20-slim
+# curl p/ o healthcheck do compose
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+# dist já buildado (tsc) + manifesto; instala só deps de runtime.
+# npm install (não 'ci') porque o repo usa bun.lock, sem package-lock.json.
+COPY package.json ./
+COPY dist ./dist
+RUN npm install --omit=dev --no-audit --no-fund
+EXPOSE 3000
+CMD ["node", "dist/gateway/index.js"]

@@ -13,7 +13,9 @@
   "files": [
     "dist",
     "docker/docker-compose.yml",
-    "headroom/docker-compose.yml",
+    "docker/kong.yml",
+    "Dockerfile.gateway",
+    ".env.example",
     "README.md"
   ],
   "engines": {
@@ -45,7 +47,7 @@
     "nio"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc && node --input-type=commonjs -e \"require('fs').cpSync('src/cli/copy','dist/cli/copy',{recursive:true})\" && chmod +x dist/cli.js dist/mcp-server.js dist/gateway/index.js dist/mcp-server-lang.js",
+    "build": "rm -rf dist && tsc && node --input-type=commonjs -e \"const fs=require('fs');fs.cpSync('src/cli/copy','dist/cli/copy',{recursive:true});for(const f of ['cli.js','mcp-server.js','gateway/index.js','mcp-server-lang.js'])fs.chmodSync('dist/'+f,0o755)\"",
     "gen:docs": "bun run scripts/gen-reference.ts",
     "db:ping": "bun run scripts/db-ping.ts",
     "dev:sms-echo": "bun run scripts/sms-echo.ts",
@@ -53,9 +55,7 @@
     "dev:mcp": "bun run src/mcp-server.ts",
     "dev:gateway": "bun run src/gateway/index.ts",
     "dev:lang": "bun run src/mcp-server-lang.ts",
-    "dev:kong": "docker compose -f kong/docker-compose.yml --env-file .env up",
-    "dev:docker": "docker compose -f docker/docker-compose.yml up",
-    "dev:headroom": "docker compose -f headroom/docker-compose.yml up",
+    "dev:docker": "docker compose -f docker/docker-compose.yml up --build",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

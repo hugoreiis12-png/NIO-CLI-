@@ -4,10 +4,8 @@
  * cá antes de spawnar o OpenCode. Espelha `src/lib/docker.ts`.
  */
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
 import { env } from '../brand.js';
-import { dockerAvailable, portOpen } from './docker.js';
+import { dockerAvailable, portOpen, infraComposePath } from './docker.js';
 import { dlog } from './debug.js';
 
 /** Porta do proxy Headroom (loopback only). `NIO_HEADROOM_PORT`, default 8787. */
@@ -21,12 +19,6 @@ export const HEADROOM_URL =
 export const HEADROOM_URL_CONTAINER = `http://host.docker.internal:${HEADROOM_PORT}/v1`;
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-/** `headroom/docker-compose.yml` do pacote — constante, não entrada do usuário. */
-export function headroomComposePath(): string {
-  // Compila pra `dist/lib/headroom.js`; a raiz do pacote é dois níveis acima.
-  return join(fileURLToPath(new URL('../..', import.meta.url)), 'headroom', 'docker-compose.yml');
-}
 
 /** O container do Headroom (`nio-headroom`) está escutando? TCP puro. */
 export function headroomHealthy(): Promise<boolean> {
@@ -57,14 +49,15 @@ export async function ensureHeadroomRunning(): Promise<HeadroomEnsureResult> {
     };
   }
 
-  dlog('subindo o Headroom:', headroomComposePath());
+  // Stack unificado (docker/docker-compose.yml): sobe só o serviço `headroom`.
+  dlog('subindo o Headroom (stack unificado):', infraComposePath());
   const res = spawnSync(
     'docker',
-    ['compose', '-f', headroomComposePath(), 'up', '-d'],
-    { stdio: 'ignore', env: { ...process.env, NIO_HEADROOM_PORT: String(HEADROOM_PORT) } },
+    ['compose', '-f', infraComposePath(), 'up', '-d', 'headroom'],
+    { stdio: 'ignore' },
   );
   if (res.status !== 0) {
-    return { ok: false, started: false, error: '`docker compose -f headroom/... up -d` saiu != 0.' };
+    return { ok: false, started: false, error: '`docker compose -f docker/... up -d headroom` saiu != 0.' };
   }
 
   for (let i = 0; i < 60; i++) {
@@ -72,14 +65,4 @@ export async function ensureHeadroomRunning(): Promise<HeadroomEnsureResult> {
     if (await headroomHealthy()) return { ok: true, started: true };
   }
   return { ok: false, started: false, error: 'o container subiu mas o Headroom não respondeu em ~30s.' };
-}
-
-/** `docker compose -f headroom/... <args>` herdando o terminal. Exit code. */
-export function headroomCompose(args: string[]): number {
-  const res = spawnSync(
-    'docker',
-    ['compose', '-f', headroomComposePath(), ...args],
-    { stdio: 'inherit', env: { ...process.env, NIO_HEADROOM_PORT: String(HEADROOM_PORT) } },
-  );
-  return res.status ?? 1;
 }
