@@ -70,7 +70,15 @@ dbTest(
 
       // pause → sem ativa → materialize sem prefixo lança.
       await manager.setStatus(user.id, a.session.id, 'paused');
-      await expect(manager.materialize(user.id)).rejects.toBeInstanceOf(SessionNotFoundError);
+      // try/catch em vez de `expect().rejects`: no bun 1.3.14 o matcher `.rejects`
+      // trava (~30s) quando o promise passa pela aquisição de client do pool `pg`.
+      let rejeitou: unknown;
+      try {
+        await manager.materialize(user.id);
+      } catch (err) {
+        rejeitou = err;
+      }
+      expect(rejeitou).toBeInstanceOf(SessionNotFoundError);
 
       await manager.delete(user.id, a.session.id);
       await manager.delete(user.id, b.session.id);
