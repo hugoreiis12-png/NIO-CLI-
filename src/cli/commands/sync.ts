@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { brand } from "../../brand.js";
-import { spawnSync } from "node:child_process";
+import { spawnSyncPortable } from "../../lib/proc.js";
 import { confirm } from "../../lib/prompts.js";
 import { loadSession } from "../../lib/auth/session-store.js";
 import { SessionManager } from "../../app/session-manager.js";
@@ -126,7 +126,7 @@ export function registerSyncCommand(program: Command): void {
                   }))));
             if (doUpdate) {
               console.log(`  ${c.dim(`${sym.gear} rodando…`)}`);
-              const res = spawnSync(
+              const res = spawnSyncPortable(
                 "npm",
                 ["install", "-g", `${upd.name}@latest`],
                 { stdio: "inherit" },

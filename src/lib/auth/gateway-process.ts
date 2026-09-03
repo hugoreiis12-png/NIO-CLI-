@@ -3,11 +3,12 @@
  * `nio login` sobem o gateway sozinhos quando ele está fora do ar, em vez de
  * mandar o usuário abrir outra janela. Deixa o processo rodando (é serviço).
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { GATEWAY_URL } from '../../gateway/config.js';
 import { isBinaryInstalled } from '../clients/client-install.js';
+import { dockerAvailable, infraComposePath } from '../docker.js';
 import { c, sym } from '../colors.js';
 import { dlog } from '../debug.js';
 
@@ -49,16 +50,49 @@ export interface GatewayEnsureResult {
 }
 
 /**
- * Garante o gateway no ar: já responde → nada a fazer; senão dá spawn detached e
- * espera o `/health` (até ~12s). Deixa o processo rodando desacoplado.
+ * Sobe o serviço `nio-gateway` do stack unificado e espera o `/health` (~12s).
+ * Só é chamado quando há Docker. Devolve `null` se não tentou (deixa o fallback
+ * host agir), `true`/`false` conforme subiu ou não.
+ */
+async function tryContainerGateway(): Promise<boolean | null> {
+  if (!dockerAvailable()) return null;
+  dlog('subindo o gateway (container do stack): docker compose up -d nio-gateway');
+  const res = spawnSync(
+    'docker',
+    ['compose', '-f', infraComposePath(), 'up', '-d', 'nio-gateway'],
+    { stdio: 'ignore' },
+  );
+  if (res.status !== 0) {
+    dlog('`docker compose up -d nio-gateway` saiu != 0 — tentando fallback host');
+    return null;
+  }
+  for (let i = 0; i < 40; i++) {
+    await sleep(300);
+    if (await gatewayHealth()) {
+      console.log(`  ${c.green(sym.ok)} nio-gateway no ar (container do stack)`);
+      return true;
+    }
+  }
+  dlog('o container subiu mas o /health não respondeu em ~12s — tentando fallback host');
+  return null;
+}
+
+/**
+ * Garante o gateway no ar: já responde → nada. Senão sobe o **container** do stack
+ * (modelo unificado); se não há Docker (ou o container não respondeu), cai no
+ * **fallback host** (spawn detached de `node dist/gateway/index.js`).
  */
 export async function ensureGatewayRunning(): Promise<GatewayEnsureResult> {
   if (await gatewayHealth()) return { ok: true, started: false };
 
+  const viaContainer = await tryContainerGateway();
+  if (viaContainer === true) return { ok: true, started: true };
+
+  // Fallback host: Docker ausente, o compose falhou, ou o container não respondeu.
   const command = resolveGatewayCommand();
   if (!command) return { ok: false, started: false };
 
-  dlog(`subindo o gateway: ${command.cmd} ${command.args.join(' ')}`);
+  dlog(`subindo o gateway (host): ${command.cmd} ${command.args.join(' ')}`);
   const child = spawn(command.cmd, command.args, { detached: true, stdio: 'ignore' });
   child.unref();
 

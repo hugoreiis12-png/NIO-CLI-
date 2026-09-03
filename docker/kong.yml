@@ -1,17 +1,11 @@
-# Config declarativa do Kong (DB-less — sem banco próprio, recarrega no
-# restart do container). Kong entra na FRENTE do `nio-gateway` (porta 3000,
-# roda no host, não no container) — proxy puro, nenhuma mudança de código
-# do lado da aplicação quando isto for ligado/desligado.
-#
-
+# Config declarativa do Kong (DB-less). Kong entra na frente do `nio-gateway` e aplica as regras de roteamento e plugins (rate-limitng) 
 _format_version: "3.0"
 
 services:
   - name: nio-gateway
-    url: http://host.docker.internal:3000
+    url: http://nio-gateway:3000
     routes:
-      # /login é o alvo de brute-force identificado em docs/v2/PROGRESSO.md
-      # (24 ago) — único com rate-limiting por enquanto.
+      # /login — alvo de brute-force; rate-limit apertado.
       - name: nio-gateway-login
         paths:
           - /login
@@ -25,8 +19,8 @@ services:
         paths:
           - /logout
         strip_path: false
-      # /verify-2fa e /security/* — código OTP + gerência do 2º fator (spec 0004).
-      # rate-limit mais apertado: cada SMS custa; brute-force de OTP de 6 dígitos.
+      # /verify-2fa e /security/* — OTP + gerência do 2º fator (spec 0004).
+      # cada SMS custa; brute-force de OTP de 6 dígitos → limite mais baixo.
       - name: nio-gateway-verify-2fa
         paths:
           - /verify-2fa

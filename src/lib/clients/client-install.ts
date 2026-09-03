@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSyncPortable } from '../proc.js';
 
 /**
  * Metadados dos clientes de IA suportados — pra checar se estão instalados e
@@ -31,7 +31,8 @@ export const CLIENTS: Record<string, ClientInfo> = {
 /** Detecta se um binário existe no PATH (roda `<bin> --version`). */
 export function isBinaryInstalled(binary: string): boolean {
   try {
-    const res = spawnSync(binary, ['--version'], { stdio: 'ignore', timeout: 5000 });
+    // `spawnSyncPortable` acha shims `.cmd`/`.bat` no Windows (ver src/lib/proc.ts).
+    const res = spawnSyncPortable(binary, ['--version'], { stdio: 'ignore', timeout: 5000 });
     // ENOENT → não está no PATH. Qualquer exit code (mesmo != 0) = existe.
     return !res.error;
   } catch {

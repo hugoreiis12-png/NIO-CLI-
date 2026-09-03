@@ -17,6 +17,7 @@ import {
   dockerAvailable,
   infraComposePath,
   mcpGatewayHealthy,
+  portOpen,
   portainerHealthy,
   unreachableDocker,
 } from "../../lib/docker.js";
@@ -24,10 +25,11 @@ import { upsertOpencodeMcp } from "../../lib/clients/client-configs.js";
 import { isBinaryInstalled } from "../../lib/clients/client-install.js";
 import {
   ensureHeadroomRunning,
-  headroomCompose,
   headroomHealthy,
   HEADROOM_URL,
 } from "../../lib/headroom.js";
+import { gatewayHealth } from "../../lib/auth/gateway-process.js";
+import { GATEWAY_URL } from "../../gateway/config.js";
 import { openUrl } from "../../lib/open-url.js";
 import { loadSession } from "../../lib/auth/session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
@@ -114,7 +116,9 @@ async function headroomUp(): Promise<void> {
 async function headroomDown(): Promise<void> {
   requireDocker();
   section("Headroom", "derrubando o container");
-  headroomCompose(["down"]);
+  // `down` derrubaria o STACK inteiro (compose único) — paramos/removemos só o serviço.
+  infraCompose(["stop", "headroom"]);
+  infraCompose(["rm", "-f", "headroom"]);
 }
 
 async function headroomStatus(): Promise<void> {
@@ -130,7 +134,8 @@ async function toolkitUp(): Promise<void> {
   requireDocker();
   section("Docker toolkit", "subindo MCP Gateway + Portainer");
 
-  if (infraCompose(["up", "-d"]) !== 0) {
+  // Escopo explícito: o compose é único (5 serviços); sem os nomes subiria tudo.
+  if (infraCompose(["up", "-d", "mcp-gateway", "portainer"]) !== 0) {
     console.error(`${c.red(sym.err)} Falha ao subir a infra (\`docker compose\` saiu != 0).`);
     process.exit(1);
   }
@@ -157,7 +162,9 @@ async function toolkitUp(): Promise<void> {
 async function toolkitDown(): Promise<void> {
   requireDocker();
   section("Docker toolkit", "derrubando MCP Gateway + Portainer");
-  infraCompose(["down"]);
+  // Só os 2 serviços — `down` derrubaria o stack inteiro.
+  infraCompose(["stop", "mcp-gateway", "portainer"]);
+  infraCompose(["rm", "-f", "mcp-gateway", "portainer"]);
   try {
     const r = upsertOpencodeMcp(dockerGatewayMcp, { remove: true });
     if (r.status !== "already_configured") {
@@ -171,11 +178,84 @@ async function toolkitDown(): Promise<void> {
 async function toolkitStatus(): Promise<void> {
   requireDocker();
   section("Docker toolkit", "status");
-  infraCompose(["ps"]);
+  infraCompose(["ps", "mcp-gateway", "portainer"]);
   const [gw, pt] = await Promise.all([mcpGatewayHealthy(), portainerHealthy()]);
   console.log("");
   console.log(`  ${gw ? c.green(sym.ok) : c.red(sym.err)} MCP Gateway  ${c.dim(DOCKER_MCP_URL)}`);
   console.log(`  ${pt ? c.green(sym.ok) : c.red(sym.err)} Portainer    ${c.dim(PORTAINER_URL)}`);
+}
+
+// ─── stack (o compose unificado inteiro) ─────────────────────────────
+
+/** Porta do proxy Kong (ingresso do gateway). `NIO_KONG_PROXY_PORT`, default 8000. */
+const KONG_PORT = Number(process.env.NIO_KONG_PROXY_PORT?.trim()) || 8000;
+
+/** Health compacto dos 5 serviços do stack. */
+async function printStackHealth(): Promise<void> {
+  const [gw, kong, hr, mcp, pt] = await Promise.all([
+    gatewayHealth(),
+    portOpen(KONG_PORT),
+    headroomHealthy(),
+    mcpGatewayHealthy(),
+    portainerHealthy(),
+  ]);
+  const line = (ok: boolean, name: string, url: string) =>
+    console.log(`  ${ok ? c.green(sym.ok) : c.red(sym.err)} ${name.padEnd(12)} ${c.dim(url)}`);
+  console.log("");
+  line(gw, "gateway", GATEWAY_URL);
+  line(kong, "kong", `http://127.0.0.1:${KONG_PORT}`);
+  line(hr, "headroom", HEADROOM_URL);
+  line(mcp, "mcp-gateway", DOCKER_MCP_URL);
+  line(pt, "portainer", PORTAINER_URL);
+}
+
+async function stackUp(): Promise<void> {
+  requireDocker();
+  section("Docker stack", "subindo o stack NIO (gateway · kong · headroom · mcp · portainer)");
+
+  // `--build` gera a imagem do nio-gateway a partir do dist/ + Dockerfile.gateway.
+  if (infraCompose(["up", "-d", "--build"]) !== 0) {
+    console.error(`${c.red(sym.err)} Falha ao subir o stack (\`docker compose\` saiu != 0).`);
+    process.exit(1);
+  }
+
+  // Registra o MCP `docker` no opencode.json (idempotente) — o operador ganha as tools.
+  try {
+    const r = upsertOpencodeMcp(dockerGatewayMcp);
+    const msg = { created: "criado", updated: "atualizado", already_configured: "já estava" }[r.status];
+    console.log(`  ${c.green(sym.ok)} opencode.json — MCP \`docker\` ${msg} (${c.dim(DOCKER_MCP_URL)})`);
+    if (r.backup) console.log(`  ${c.dim(`backup: ${r.backup}`)}`);
+  } catch (err) {
+    console.warn(`  ${c.yellow(sym.warn)} não consegui registrar o MCP no opencode.json: ${(err as Error).message}`);
+  }
+
+  // Espera o gateway publicar a porta no host antes de reportar (o `up -d` volta
+  // assim que os containers "iniciam", mas o port-forward/boot leva alguns segundos).
+  for (let i = 0; i < 20 && !(await gatewayHealth()); i++) {
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  await printStackHealth();
+  console.log("");
+  console.log(c.dim(`  se algum serviço vier ✗, aguarde alguns segundos e rode \`${brand.name} docker stack status\`.`));
+  console.log(c.dim(`  1º acesso ao Portainer pede setup de admin — abra ${PORTAINER_URL} e crie o usuário.`));
+}
+
+async function stackDown(): Promise<void> {
+  requireDocker();
+  section("Docker stack", "derrubando o stack NIO inteiro");
+  infraCompose(["down"]); // aqui o `down` total é legítimo — é o stack inteiro.
+  try {
+    upsertOpencodeMcp(dockerGatewayMcp, { remove: true });
+  } catch {
+    /* best-effort */
+  }
+}
+
+async function stackStatus(): Promise<void> {
+  requireDocker();
+  section("Docker stack", "status");
+  infraCompose(["ps"]);
+  await printStackHealth();
 }
 
 // ─── compose (projeto) ───────────────────────────────────────────────
@@ -461,7 +541,14 @@ async function runPortainer(opts: { url?: boolean }): Promise<void> {
 export function registerDockerCommand(program: Command): void {
   const cmd = program
     .command("docker")
-    .description("Camada Docker: MCP Gateway + Portainer, compose, debug e cluster (Swarm)");
+    .description("Camada Docker: stack NIO, compose, debug e cluster (Swarm)");
+
+  const stack = cmd
+    .command("stack")
+    .description("Stack NIO unificado (gateway · kong · headroom · mcp · portainer) — docker/docker-compose.yml");
+  stack.command("up", { isDefault: true }).description("Sobe o stack inteiro (build do gateway) + registra o MCP").action(stackUp);
+  stack.command("down").description("Derruba o stack inteiro").action(stackDown);
+  stack.command("status").description("ps + health dos 5 serviços").action(stackStatus);
 
   const toolkit = cmd
     .command("toolkit")

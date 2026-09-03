@@ -203,8 +203,15 @@ test('runDependencyInstall — git cria dirname(dest); exit!=0 preserva code; pr
   const errPlan: DependencyPlan = { kind: 'npm', pkg: 'x', program: 'this-binary-does-not-exist-xyz', args: [], command: '' };
   const res = runDependencyInstall(errPlan);
   expect(res.ok).toBe(false);
-  expect(res.code).toBeNull();
-  expect((res.error ?? '').length).toBeGreaterThan(0);
+  // Binário ausente: no POSIX vira ENOENT (spawn error → code null). No Windows o
+  // spawn roda via shell (pra achar shims `.cmd`), então "não reconhecido" chega
+  // como exit code != 0, sem `error`. Ambos são falha — só a forma difere.
+  if (process.platform === 'win32') {
+    expect(res.code).not.toBe(0);
+  } else {
+    expect(res.code).toBeNull();
+    expect((res.error ?? '').length).toBeGreaterThan(0);
+  }
 });
 
 test('runDependencyInstall — claude-plugin: para no 1º passo que falha; ok se todos passam', () => {

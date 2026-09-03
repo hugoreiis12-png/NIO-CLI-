@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnSyncPortable } from "../../lib/proc.js";
 import { confirm } from "../../lib/prompts.js";
 import { CLIENTS, isBinaryInstalled, type ClientInfo } from "../../lib/clients/client-install.js";
 import { c, sym, cmd, link, box } from "../../lib/colors.js";
@@ -46,7 +46,7 @@ export async function ensureClientInstalled(
           default: false,
         })));
     if (run) {
-      const res = spawnSync("npm", ["install", "-g", info.npm], {
+      const res = spawnSyncPortable("npm", ["install", "-g", info.npm], {
         stdio: "inherit",
       });
       console.log(

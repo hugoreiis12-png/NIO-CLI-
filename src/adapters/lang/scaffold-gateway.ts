@@ -19,7 +19,7 @@
  *    — registra no marker + o preview mostra que nada roda.
  *  Framework/ORM sem mapeamento (`PackageMap`) também caem no marker (não instala).
  */
-import { spawnSync } from 'node:child_process';
+import { spawnSyncPortable } from '../../lib/proc.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type {
@@ -152,7 +152,7 @@ function buildPlanWith(
 function runStep(step: ScaffoldStep): ScaffoldStepResult {
   try {
     if (step.kind === 'run') {
-      const res = spawnSync(step.program, step.args, { cwd: step.cwd, stdio: 'inherit' });
+      const res = spawnSyncPortable(step.program, step.args, { cwd: step.cwd, stdio: 'inherit' });
       if (res.error) return { step, status: 'failed', error: res.error.message };
       if (res.status !== 0) return { step, status: 'failed', error: `código ${res.status}` };
     } else {

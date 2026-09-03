@@ -219,7 +219,8 @@ No fim do `nio init` a CLI sobe o **client de IA** da sessão — e o mesmo `nio
 retoma a qualquer momento. Ele:
 
 1. **Sobe o Headroom** — proxy de compressão de contexto em container Docker
-   (`headroom/docker-compose.yml`), **obrigatório** ([ADR 0007](docs/adr/0007-headroom-proxy-obrigatorio.md)).
+   (serviço `headroom` do stack unificado `docker/docker-compose.yml`), **obrigatório**
+   ([ADR 0007](docs/adr/0007-headroom-proxy-obrigatorio.md)).
    Sem Docker, `nio ai` para com erro acionável (o `nio init` não morre — materializa
    o ambiente e deixa a linha `nio ai` pra retomar). Manual: `nio docker headroom {up,down,status}`.
 2. **Aponta o provider pro Headroom** — grava `provider.opencode.options.baseURL`

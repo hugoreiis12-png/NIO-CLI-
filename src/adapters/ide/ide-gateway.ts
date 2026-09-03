@@ -6,9 +6,9 @@
  *
  * **Nunca lança** (contrato do port): tudo vira um `status` no `OpenResult`.
  */
-import { spawn, spawnSync } from 'node:child_process';
 import type { Ide } from '../../core/types.js';
 import type { IdeGateway, OpenResult } from '../../core/environment.js';
+import { spawnPortable, spawnSyncPortable } from '../../lib/proc.js';
 
 /**
  * Launcher CLI de cada IDE que a CLI sabe abrir. `null` = a sessão não tem editor
@@ -28,22 +28,14 @@ export function resolveLauncher(ide: Ide): { binary: string } | null {
 }
 
 /**
- * Candidatos de binário por plataforma. No Windows os launchers de editor são
- * shims `.cmd` — o spawn SEM shell não resolve `.cmd` sozinho, então tentamos
- * `<bin>.cmd` antes do nome cru (mantém `shell: false`, seguro contra injeção).
+ * `true` se o launcher responde a `--version` (existe no PATH). No Windows os
+ * launchers de editor são shims `.cmd`; `spawnSyncPortable` os resolve via shell
+ * (ver src/lib/proc.ts — spawn cru dá ENOENT/EINVAL).
  */
-function binaryCandidates(binary: string): string[] {
-  return process.platform === 'win32' ? [`${binary}.cmd`, binary] : [binary];
-}
-
-/** Primeiro candidato que responde a `--version` (existe no PATH). `null` se nenhum. */
-function detectBinary(binary: string): string | null {
-  for (const candidate of binaryCandidates(binary)) {
-    const res = spawnSync(candidate, ['--version'], { stdio: 'ignore', timeout: 5000 });
-    // ENOENT → não está no PATH. Qualquer exit code (mesmo != 0) = existe.
-    if (!res.error) return candidate;
-  }
-  return null;
+function isBinaryInstalled(binary: string): boolean {
+  const res = spawnSyncPortable(binary, ['--version'], { stdio: 'ignore', timeout: 5000 });
+  // ENOENT → não está no PATH. Qualquer exit code (mesmo != 0) = existe.
+  return !res.error;
 }
 
 export function createIdeGateway(): IdeGateway {
@@ -52,19 +44,19 @@ export function createIdeGateway(): IdeGateway {
       const launcher = resolveLauncher(ide);
       if (!launcher) return { ide, status: 'skipped' };
 
-      const binary = detectBinary(launcher.binary);
-      if (!binary) {
+      const binary = launcher.binary;
+      if (!isBinaryInstalled(binary)) {
         return {
           ide,
           status: 'unavailable',
-          error: `"${launcher.binary}" não está no PATH (instale o comando de linha do editor)`,
+          error: `"${binary}" não está no PATH (instale o comando de linha do editor)`,
         };
       }
 
       try {
         // Detached + unref + stdio ignore: o editor vira processo independente e
         // sobrevive ao término da CLI, sem prender o terminal.
-        const child = spawn(binary, [projectPath], { detached: true, stdio: 'ignore' });
+        const child = spawnPortable(binary, [projectPath], { detached: true, stdio: 'ignore' });
         // Swallow de um 'error' assíncrono (ex.: ENOENT tardio) pra não derrubar
         // a CLI — a detecção acima já confirmou o binário, isso é só rede de segurança.
         child.on('error', () => {});
