@@ -8,7 +8,7 @@
  * NÃO confundir com `dependency-install.ts` (instala deps de skills declaradas no
  * frontmatter). Aqui é o manifest do projeto do usuário.
  */
-import { spawnSync } from 'node:child_process';
+import { spawnSyncPortable } from '../proc.js';
 import type { DependencyType } from '../../core/types.js';
 import type { InstallOutcome } from './dependencies.js';
 
@@ -36,7 +36,7 @@ export function installProjectDeps(type: DependencyType, projectPath: string): I
   if (!installer) {
     return { ok: false, code: null, error: `sem instalador automático para "${type}"` };
   }
-  const res = spawnSync(installer.program, installer.args, {
+  const res = spawnSyncPortable(installer.program, installer.args, {
     cwd: projectPath,
     stdio: 'inherit',
   });

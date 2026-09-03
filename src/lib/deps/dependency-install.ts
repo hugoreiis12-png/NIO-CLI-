@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSyncPortable } from '../proc.js';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, isAbsolute, parse } from 'node:path';
@@ -141,7 +141,7 @@ export function isDependencyInstalled(dep: ResolvedDependency): boolean {
   if (!plan) return false;
   if (plan.kind === 'git') return existsSync(plan.dest);
   if (plan.kind === 'npm') {
-    const res = spawnSync('npm', ['ls', '-g', plan.pkg, '--depth=0'], { stdio: 'ignore' });
+    const res = spawnSyncPortable('npm', ['ls', '-g', plan.pkg, '--depth=0'], { stdio: 'ignore' });
     return res.status === 0;
   }
   if (plan.kind === 'skills') {
@@ -158,12 +158,16 @@ export interface InstallOutcome {
   error?: string;
 }
 
-/** Executa o plano. `spawnSync` com args em array e SEM shell — zero injeção. */
+/**
+ * Executa o plano via `spawnSyncPortable` (acha shims `.cmd`/`.bat` no Windows).
+ * Programa/args vêm de planos allowlisted + validados por regex (ver dependencies.ts),
+ * nunca texto livre do usuário — o quoting do helper é seguro pra essa origem.
+ */
 export function runDependencyInstall(plan: DependencyPlan): InstallOutcome {
   // claude-plugin: vários passos sequenciais (`marketplace add` → `install`).
   if (plan.kind === 'claude-plugin') {
     for (const step of plan.steps) {
-      const res = spawnSync(step.program, step.args, { stdio: 'inherit' });
+      const res = spawnSyncPortable(step.program, step.args, { stdio: 'inherit' });
       if (res.error) return { ok: false, code: null, error: res.error.message };
       if (res.status !== 0) return { ok: false, code: res.status };
     }
@@ -171,7 +175,7 @@ export function runDependencyInstall(plan: DependencyPlan): InstallOutcome {
   }
 
   if (plan.kind === 'git') mkdirSync(dirname(plan.dest), { recursive: true });
-  const res = spawnSync(plan.program, plan.args, { stdio: 'inherit' });
+  const res = spawnSyncPortable(plan.program, plan.args, { stdio: 'inherit' });
   if (res.error) return { ok: false, code: null, error: res.error.message };
   return { ok: res.status === 0, code: res.status };
 }

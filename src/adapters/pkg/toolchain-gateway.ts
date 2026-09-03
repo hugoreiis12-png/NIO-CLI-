@@ -7,7 +7,7 @@
  *
  * **Nunca lança** (contrato do port): qualquer falha vira `status: 'failed'`.
  */
-import { spawnSync } from 'node:child_process';
+import { spawnSyncPortable } from '../../lib/proc.js';
 import { globExists } from '../../lib/deps/dependency-install.js';
 import type { EnsureResult, ToolchainGateway, ToolchainSpec } from '../../core/environment.js';
 
@@ -27,8 +27,9 @@ function ensure(spec: ToolchainSpec): EnsureResult {
     };
   }
 
-  // spawnSync sem shell — args em array, nunca string concatenada.
-  const res = spawnSync(spec.install.program, spec.install.args, { stdio: 'inherit' });
+  // spawnSyncPortable: acha shims `.cmd`/`.bat` no Windows (ex.: npm). Program/args
+  // vêm do catálogo de toolchains, nunca do usuário.
+  const res = spawnSyncPortable(spec.install.program, spec.install.args, { stdio: 'inherit' });
   if (res.error) {
     return { id: spec.id, status: 'failed', error: res.error.message };
   }
