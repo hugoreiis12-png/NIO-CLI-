@@ -1,0 +1,87 @@
+# Stack NIO — variante de DEPLOY (CD via Portainer GitOps no host Linux).
+# Difere do docker-compose.yml (dev): o nio-gateway vem PRONTO do GHCR (sem build),
+# os segredos entram por env var do stack (não env_file), e o Kong/Portainer ficam
+# expostos na LAN. Ver docs/ci-cd-architecture.md.
+#
+# O tag da imagem do gateway é pinado pelo workflow image.yml a cada release (v*).
+name: nio
+
+networks:
+  nio-net:
+    name: nio-net
+    driver: bridge
+
+volumes:
+  nio_portainer_data: { name: nio_portainer_data }
+  nio_headroom_cache: { name: nio_headroom_cache }
+
+services:
+  nio-gateway:
+    image: ghcr.io/hugoreiis12-png/nio-gateway:latest  # bumped by .github/workflows/image.yml
+    container_name: nio-gateway
+    restart: unless-stopped
+    environment:
+      NIO_GATEWAY_HOST: "0.0.0.0"       # ouvir na rede do container
+      NIO_GATEWAY_PORT: "3000"
+      NIO_DATABASE_URL: "${NIO_DATABASE_URL}"   # env var do stack no Portainer
+      JWT_SECRET: "${JWT_SECRET}"               # env var do stack no Portainer
+    ports:
+      - "127.0.0.1:3000:3000"           # host-local: clientes remotos entram pelo Kong (:8000)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    networks: [ nio-net ]
+
+  headroom:
+    image: ghcr.io/headroomlabs-ai/headroom@sha256:35b799e94eef4644cb15a2e695b4b99698fe7668614623e9338cb10c10ececf9  # headroom:latest, pinado 2026-09-03
+    container_name: nio-headroom
+    restart: unless-stopped
+    command: ["--host", "0.0.0.0", "--port", "8787"]
+    environment:
+      OPENAI_TARGET_API_URL: "${NIO_HEADROOM_OPENAI_TARGET:-https://opencode.ai/zen/v1}"
+      HEADROOM_UPDATE_CHECK: "off"
+    ports:
+      - "127.0.0.1:8787:8787"           # host-local (expor na LAN só se clientes de IA rodarem fora do host)
+    volumes: [ "nio_headroom_cache:/root/.headroom" ]
+    networks: [ nio-net ]
+
+  mcp-gateway:
+    image: docker/mcp-gateway@sha256:f5a679a05fc39022a046167bef92aeeb01bcd59485ad27843ae5227db7950688  # docker/mcp-gateway:latest, pinado 2026-09-03
+    container_name: nio-mcp-gateway
+    restart: unless-stopped
+    command: ["--transport=streaming", "--port=8811", "--servers=docker"]
+    ports:
+      - "127.0.0.1:8811:8811"           # host-local
+    volumes: [ "/var/run/docker.sock:/var/run/docker.sock" ]
+    networks: [ nio-net ]
+
+  portainer:
+    image: portainer/portainer-ce@sha256:511f3f06c96fe3b993ebeaafde311c1959cae73a7ef825dba6397d51b450dffa  # portainer-ce:lts, pinado 2026-09-03
+    container_name: nio-portainer
+    restart: unless-stopped
+    ports:
+      - "9443:9443"                     # UI de gestão — acessível na LAN
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "nio_portainer_data:/data"
+    networks: [ nio-net ]
+
+  kong:
+    image: kong@sha256:2a8cf3b110cdaba1cb00adc665b8635ed1fc75c907f7a4298613c68e4976de0a  # kong:3.9, pinado 2026-09-03
+    container_name: nio-kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+    volumes: [ "./kong.yml:/kong/kong.yml:ro" ]   # docker/kong.yml no repo
+    ports:
+      - "8000:8000"                     # INGRESSO na LAN — clientes remotos batem aqui (rate-limit)
+      - "127.0.0.1:8001:8001"           # admin API só local (não expor na LAN)
+    depends_on:
+      nio-gateway: { condition: service_healthy }
+    networks: [ nio-net ]
