@@ -46,7 +46,9 @@ services:
       OPENAI_TARGET_API_URL: "${NIO_HEADROOM_OPENAI_TARGET:-https://opencode.ai/zen/v1}"
       HEADROOM_UPDATE_CHECK: "off"
     ports:
-      - "127.0.0.1:8787:8787"           # host-local (expor na LAN só se clientes de IA rodarem fora do host)
+      # LAN — Headroom COMPARTILHADO: clientes sem Docker apontam NIO_HEADROOM_URL
+      # pra cá (http://<host>:<porta>/v1). Porta configurável; default 8787.
+      - "${NIO_HEADROOM_PORT:-8787}:8787"
     volumes: [ "nio_headroom_cache:/root/.headroom" ]
     networks: [ nio-net ]
 
