@@ -1,6 +1,6 @@
 {
   "name": "@nio-cli/cli",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Orquestrador de ambientes de desenvolvimento: escolhe um perfil, responde um wizard e a CLI (com auxílio de IA via MCP) materializa toolchains, linguagens, frameworks, dotfiles e IDE.",
   "type": "module",
   "license": "UNLICENSED",
