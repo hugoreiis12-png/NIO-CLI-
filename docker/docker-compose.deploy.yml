@@ -1,7 +1,9 @@
-# Stack NIO — variante de DEPLOY (CD via Portainer GitOps no host Linux).
+# Stack NIO — variante de DEPLOY (CD via Portainer GitOps). APP-ONLY: gateway,
+# headroom, mcp e kong. O Portainer NÃO entra aqui — é o plano de gestão, roda
+# standalone e deploya este compose (não gerencia a si mesmo).
 # Difere do docker-compose.yml (dev): o nio-gateway vem PRONTO do GHCR (sem build),
-# os segredos entram por env var do stack (não env_file), e o Kong/Portainer ficam
-# expostos na LAN. Ver docs/ci-cd-architecture.md.
+# os segredos entram por env var do stack (não env_file), e o Kong fica exposto na
+# LAN. Ver docs/ci-cd-architecture.md.
 #
 # O tag da imagem do gateway é pinado pelo workflow image.yml a cada release (v*).
 name: nio
@@ -12,7 +14,6 @@ networks:
     driver: bridge
 
 volumes:
-  nio_portainer_data: { name: nio_portainer_data }
   nio_headroom_cache: { name: nio_headroom_cache }
 
 services:
@@ -58,16 +59,8 @@ services:
     volumes: [ "/var/run/docker.sock:/var/run/docker.sock" ]
     networks: [ nio-net ]
 
-  portainer:
-    image: portainer/portainer-ce@sha256:511f3f06c96fe3b993ebeaafde311c1959cae73a7ef825dba6397d51b450dffa  # portainer-ce:lts, pinado 2026-09-03
-    container_name: nio-portainer
-    restart: unless-stopped
-    ports:
-      - "9443:9443"                     # UI de gestão — acessível na LAN
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - "nio_portainer_data:/data"
-    networks: [ nio-net ]
+  # NOTA: o Portainer NÃO faz parte deste stack — ele é o plano de gestão, roda
+  # standalone e é quem deploya este compose (não pode gerenciar a si mesmo).
 
   kong:
     image: kong@sha256:2a8cf3b110cdaba1cb00adc665b8635ed1fc75c907f7a4298613c68e4976de0a  # kong:3.9, pinado 2026-09-03
