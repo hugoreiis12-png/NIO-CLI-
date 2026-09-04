@@ -78,9 +78,10 @@ profiles/:    catálogo dos 6 perfis (hardcoded no fonte)
 - **Esteira de onboarding** (`src/cli/flows/onboarding.ts`): `nio` sem args / `nio start`
   detecta o estágio (config → gateway → login → session → ready) e conduz, perguntando
   antes de cada passo. `login`/`register`/`config setup` encadeiam nela no fim.
-- **Client de IA** (`nio ai`, ADR 0007+0008): sobe o **Headroom** (proxy de compressão
-  em container Docker, serviço `headroom` do stack unificado `docker/docker-compose.yml`,
-  **obrigatório**), aponta
+- **Client de IA** (`nio ai`, ADR 0007+0008+0009): usa o **Headroom** (proxy de compressão,
+  serviço `headroom` do stack unificado `docker/docker-compose.yml`) em **3 níveis best-effort**
+  (`ensureHeadroomAndWire`, ADR 0009): remoto (`NIO_HEADROOM_URL`) → local (Docker) → direto
+  no LLM (sem compressão, com aviso). **Nunca bloqueia** por falta de Docker. Aponta
   `provider.opencode.options.baseURL` pra ele (`ensureHeadroomAndWire` em
   `src/app/ai-client.ts`), sobe `opencode serve` headless e renderiza a **interface
   NIO em Ink** (`src/tui/`, import lazy) — chat streamado via `@opencode-ai/sdk`,

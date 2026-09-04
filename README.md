@@ -57,7 +57,7 @@ Ficam no PATH: `nio` (CLI), `nio-gateway` (serviço de auth), `nio-cli` e
 | **PostgreSQL** alcançável | fonte da verdade (sessões, usuários) | schema em `db/schema.sql` aplicado uma vez |
 | **`JWT_SECRET`** (segredo do time) | assinar/validar as sessões | mesmo valor em toda máquina |
 | **OpenCode** | operador de IA | o `nio init` oferece instalar (`npm i -g opencode-ai`) |
-| **Docker** | obrigatório pro `nio ai` — roda o Headroom (proxy de compressão) | `docker compose version` |
+| **Docker** | *recomendado* pro `nio ai` — roda o Headroom (proxy de compressão). Sem Docker o `nio ai` **não bloqueia**: usa `NIO_HEADROOM_URL` remoto ou fala direto no LLM (ADR 0009) | `docker compose version` |
 | *(opcional)* provedor de SMS | 2º fator | `SMS_ENDPOINT_URL` + `SMS_AUTH_HEADER` + `SMS_BODY_TEMPLATE` |
 
 ---

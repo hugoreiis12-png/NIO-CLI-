@@ -18,6 +18,13 @@ export const HEADROOM_URL =
 /** Mesma coisa, mas alcançável de dentro de um container (Fase C, futuro). */
 export const HEADROOM_URL_CONTAINER = `http://host.docker.internal:${HEADROOM_PORT}/v1`;
 
+/**
+ * LLM upstream (OpenAI-compatível) pro modo `direct` (fallback sem Headroom, ADR 0009).
+ * É o mesmo alvo que o container do Headroom proxeia (`OPENAI_TARGET_API_URL`).
+ */
+export const HEADROOM_UPSTREAM =
+  env('HEADROOM_OPENAI_TARGET')?.trim() || 'https://opencode.ai/zen/v1';
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** O container do Headroom (`nio-headroom`) está escutando? TCP puro. */

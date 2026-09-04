@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { EventEmitter } from 'node:events';
-import { launchAiClient, ensureHeadroomAndWire, HeadroomRequiredError } from './ai-client.js';
+import { launchAiClient, ensureHeadroomAndWire } from './ai-client.js';
 
 /** spawn falso — emite exit 0 no próximo tick, registra a argv. */
 function fakeSpawn() {
@@ -14,10 +14,10 @@ function fakeSpawn() {
   return { fn, calls };
 }
 
-test('ensureHeadroomAndWire: Headroom fora → lança HeadroomRequiredError', async () => {
-  await expect(
-    ensureHeadroomAndWire(async () => ({ ok: false, started: false, error: 'sem Docker' })),
-  ).rejects.toBeInstanceOf(HeadroomRequiredError);
+test('ensureHeadroomAndWire: sem Docker e sem remoto → degrada pro modo direct (não lança)', async () => {
+  delete process.env.NIO_HEADROOM_URL;
+  const mode = await ensureHeadroomAndWire(async () => ({ ok: false, started: false, error: 'sem Docker' }));
+  expect(mode).toBe('direct');
 });
 
 test('launchAiClient: headless → opencode run --model <m> "<prompt>"', async () => {
@@ -33,15 +33,16 @@ test('launchAiClient: headless → opencode run --model <m> "<prompt>"', async (
   expect(calls[0].args.at(-1)).toBe('diga oi');
 });
 
-test('launchAiClient: Headroom fora → propaga HeadroomRequiredError, NÃO spawna', async () => {
+test('launchAiClient: sem Docker → degrada (modo direct) e SPAWNA mesmo assim', async () => {
+  delete process.env.NIO_HEADROOM_URL;
   const { fn, calls } = fakeSpawn();
-  await expect(
-    launchAiClient(
-      { cwd: '/x', prompt: 'oi' },
-      { ensureHeadroom: async () => ({ ok: false, started: false, error: 'sem Docker' }), spawnFn: fn, isInstalled: () => true },
-    ),
-  ).rejects.toBeInstanceOf(HeadroomRequiredError);
-  expect(calls).toHaveLength(0);
+  const code = await launchAiClient(
+    { cwd: '/x', prompt: 'oi' },
+    { ensureHeadroom: async () => ({ ok: false, started: false, error: 'sem Docker' }), spawnFn: fn, isInstalled: () => true },
+  );
+  expect(code).toBe(0);
+  expect(calls).toHaveLength(1);
+  expect(calls[0].cmd).toBe('opencode');
 });
 
 test('launchAiClient: OpenCode ausente → 127, não spawna', async () => {
