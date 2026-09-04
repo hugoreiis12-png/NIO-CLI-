@@ -57,7 +57,7 @@ Ficam no PATH: `nio` (CLI), `nio-gateway` (serviço de auth), `nio-cli` e
 | **PostgreSQL** alcançável | fonte da verdade (sessões, usuários) | schema em `db/schema.sql` aplicado uma vez |
 | **`JWT_SECRET`** (segredo do time) | assinar/validar as sessões | mesmo valor em toda máquina |
 | **OpenCode** | operador de IA | o `nio init` oferece instalar (`npm i -g opencode-ai`) |
-| **Docker** | *recomendado* pro `nio ai` — roda o Headroom (proxy de compressão). Sem Docker o `nio ai` **não bloqueia**: usa `NIO_HEADROOM_URL` remoto ou fala direto no LLM (ADR 0009) | `docker compose version` |
+| **Docker** | **não é necessário** pro `nio ai` (Headroom desativado, ADR 0010 — client fala direto no LLM). Ainda usado por `nio docker` (toolkit/cluster) e pelo gateway conteinerizado | `docker compose version` |
 | *(opcional)* provedor de SMS | 2º fator | `SMS_ENDPOINT_URL` + `SMS_AUTH_HEADER` + `SMS_BODY_TEMPLATE` |
 
 ---
@@ -218,15 +218,12 @@ endpoint local que imprime o código no terminal (aponte `SMS_ENDPOINT_URL` pra 
 No fim do `nio init` a CLI sobe o **client de IA** da sessão — e o mesmo `nio ai`
 retoma a qualquer momento. Ele:
 
-1. **Sobe o Headroom** — proxy de compressão de contexto em container Docker
-   (serviço `headroom` do stack unificado `docker/docker-compose.yml`), **obrigatório**
-   ([ADR 0007](docs/adr/0007-headroom-proxy-obrigatorio.md)).
-   Sem Docker, `nio ai` para com erro acionável (o `nio init` não morre — materializa
-   o ambiente e deixa a linha `nio ai` pra retomar). Manual: `nio docker headroom {up,down,status}`.
-2. **Aponta o provider pro Headroom** — grava `provider.opencode.options.baseURL`
-   no `~/.config/opencode/opencode.json` (junto do `model: opencode/big-pickle`,
-   do MCP `nio` e dos MCPs do perfil).
-3. **Sobe o `opencode serve` headless e abre a interface NIO** (Ink — chat
+1. **Prepara o `opencode.json`** — grava o provider `opencode` **direto no OpenCode Zen**
+   (sem `baseURL` de proxy), junto do `model: opencode/big-pickle`, do MCP `nio` e dos MCPs
+   do perfil. O **Headroom foi desativado** ([ADR 0010](docs/adr/0010-headroom-desativado.md)):
+   o client fala direto no LLM, sem compressão — **não precisa de Docker** pro `nio ai`.
+   (O `nio docker headroom` continua existindo, dormente, pra quem quiser subir manualmente.)
+2. **Sobe o `opencode serve` headless e abre a interface NIO** (Ink — chat
    streamado, sidebar verde, paleta `/` com os comandos e capacidades do NIO). O
    motor é o `opencode/big-pickle`; a casca é nossa. Se a sessão tem IDE (VS Code /
    Cursor), o `nio init` grava um `.vscode/tasks.json` (task `NIO`, `runOn: folderOpen`)

@@ -302,6 +302,28 @@ function opencodeProviderOk(existing: Record<string, unknown>, baseURL: string):
   return p?.options?.baseURL === baseURL;
 }
 
+/** Tem um `baseURL` de provider `opencode` gravado? (Headroom DESATIVADO → não deve ter). */
+function opencodeHasBaseURL(existing: Record<string, unknown>): boolean {
+  const p = (existing.provider as { opencode?: OpencodeProviderEntry } | undefined)?.opencode;
+  return p?.options?.baseURL !== undefined;
+}
+
+/**
+ * Remove o `baseURL` do provider `opencode` (Headroom DESATIVADO — client fala direto
+ * no OpenCode Zen). Limpa `options`/`provider.opencode` que ficarem vazios. Pura, sem IO.
+ */
+export function clearOpencodeProviderBaseURL(existing: Record<string, unknown>): Record<string, unknown> {
+  const providers = existing.provider as Record<string, OpencodeProviderEntry | undefined> | undefined;
+  const cur = providers?.opencode;
+  if (cur?.options?.baseURL === undefined) return existing; // nada a limpar
+  const restOptions: Record<string, unknown> = { ...cur.options };
+  delete restOptions.baseURL; // Record plano → delete permitido
+  // `options: undefined` some no JSON.stringify (chaves undefined são omitidas).
+  const opencode: OpencodeProviderEntry =
+    Object.keys(restOptions).length > 0 ? { ...cur, options: restOptions } : { ...cur, options: undefined };
+  return { ...existing, provider: { ...providers, opencode } };
+}
+
 /**
  * Decide se o `nio` (+ os MCPs do perfil) já estão OK no `opencode.json` e monta
  * o próximo objeto se precisar atualizar (pura, sem IO). Mesmo padrão de
@@ -326,7 +348,10 @@ export function planOpencodeUpdate(
       current.enabled !== false,
   );
   const mcpsOk = profileMcps.every((spec) => opencodeMcpOk(spec, servers[spec.id]));
-  const providerOk = !headroomUrl || opencodeProviderOk(existing, headroomUrl);
+  // Headroom DESATIVADO: sem headroomUrl, o provider NÃO deve ter baseURL (direto no Zen).
+  const providerOk = headroomUrl
+    ? opencodeProviderOk(existing, headroomUrl)
+    : !opencodeHasBaseURL(existing);
   const alreadyConfigured =
     nioOk && existing.model === NIO_OPERATOR_MODEL && mcpsOk && providerOk;
 
@@ -345,7 +370,7 @@ export function planOpencodeUpdate(
   }
 
   let next: Record<string, unknown> = { ...existing, model: NIO_OPERATOR_MODEL, mcp: nextMcp };
-  if (headroomUrl) next = planOpencodeProvider(next, headroomUrl);
+  next = headroomUrl ? planOpencodeProvider(next, headroomUrl) : clearOpencodeProviderBaseURL(next);
   return { alreadyConfigured, next };
 }
 

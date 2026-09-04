@@ -14,17 +14,16 @@ function fakeSpawn() {
   return { fn, calls };
 }
 
-test('ensureHeadroomAndWire: sem Docker e sem remoto → degrada pro modo direct (não lança)', async () => {
-  delete process.env.NIO_HEADROOM_URL;
-  const mode = await ensureHeadroomAndWire(async () => ({ ok: false, started: false, error: 'sem Docker' }));
-  expect(mode).toBe('direct');
+test('ensureHeadroomAndWire: não lança (Headroom desativado — wiring direto)', async () => {
+  const r = await ensureHeadroomAndWire();
+  expect(r).toBeUndefined();
 });
 
 test('launchAiClient: headless → opencode run --model <m> "<prompt>"', async () => {
   const { fn, calls } = fakeSpawn();
   const code = await launchAiClient(
     { cwd: '/proj', prompt: 'diga oi' },
-    { ensureHeadroom: async () => ({ ok: true, started: false }), spawnFn: fn, isInstalled: () => true },
+    { spawnFn: fn, isInstalled: () => true },
   );
   expect(code).toBe(0);
   expect(calls[0].cmd).toBe('opencode');
@@ -33,23 +32,11 @@ test('launchAiClient: headless → opencode run --model <m> "<prompt>"', async (
   expect(calls[0].args.at(-1)).toBe('diga oi');
 });
 
-test('launchAiClient: sem Docker → degrada (modo direct) e SPAWNA mesmo assim', async () => {
-  delete process.env.NIO_HEADROOM_URL;
-  const { fn, calls } = fakeSpawn();
-  const code = await launchAiClient(
-    { cwd: '/x', prompt: 'oi' },
-    { ensureHeadroom: async () => ({ ok: false, started: false, error: 'sem Docker' }), spawnFn: fn, isInstalled: () => true },
-  );
-  expect(code).toBe(0);
-  expect(calls).toHaveLength(1);
-  expect(calls[0].cmd).toBe('opencode');
-});
-
 test('launchAiClient: OpenCode ausente → 127, não spawna', async () => {
   const { fn, calls } = fakeSpawn();
   const code = await launchAiClient(
     { cwd: '/proj', prompt: 'oi' },
-    { ensureHeadroom: async () => ({ ok: true, started: false }), spawnFn: fn, isInstalled: () => false },
+    { spawnFn: fn, isInstalled: () => false },
   );
   expect(code).toBe(127);
   expect(calls).toHaveLength(0);

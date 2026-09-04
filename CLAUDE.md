@@ -78,14 +78,13 @@ profiles/:    catálogo dos 6 perfis (hardcoded no fonte)
 - **Esteira de onboarding** (`src/cli/flows/onboarding.ts`): `nio` sem args / `nio start`
   detecta o estágio (config → gateway → login → session → ready) e conduz, perguntando
   antes de cada passo. `login`/`register`/`config setup` encadeiam nela no fim.
-- **Client de IA** (`nio ai`, ADR 0007+0008+0009): usa o **Headroom** (proxy de compressão,
-  serviço `headroom` do stack unificado `docker/docker-compose.yml`) em **3 níveis best-effort**
-  (`ensureHeadroomAndWire`, ADR 0009): remoto (`NIO_HEADROOM_URL`) → local (Docker) → direto
-  no LLM (sem compressão, com aviso). **Nunca bloqueia** por falta de Docker. Aponta
-  `provider.opencode.options.baseURL` pra ele (`ensureHeadroomAndWire` em
-  `src/app/ai-client.ts`), sobe `opencode serve` headless e renderiza a **interface
-  NIO em Ink** (`src/tui/`, import lazy) — chat streamado via `@opencode-ai/sdk`,
-  sidebar verde, paleta `/`. Motor = `opencode/big-pickle`. Headless (`nio docker
+- **Client de IA** (`nio ai`, ADR 0007+0008; **Headroom DESATIVADO na 0010**): fala
+  **direto no OpenCode Zen**, sem proxy de compressão. `ensureHeadroomAndWire`
+  (`src/app/ai-client.ts`) só garante o `opencode.json` — provider `opencode` **sem**
+  `baseURL` (direto) + o model default —, sobe `opencode serve` headless e renderiza a
+  **interface NIO em Ink** (`src/tui/`, import lazy) — chat streamado via `@opencode-ai/sdk`,
+  sidebar verde, paleta `/`. Motor = `opencode/big-pickle`. (Headroom e `nio docker headroom`
+  ficam **dormentes**, não removidos.) Headless (`nio docker
   debug/orquest/cluster`) segue em `launchAiClient` (`opencode run`). Com IDE
   (vscode/cursor), o `nio init` grava `.vscode/tasks.json` (`runOn: folderOpen` →
   `nio ai`). Árvore de comandos: `buildProgram()` em `src/cli/program.ts`.

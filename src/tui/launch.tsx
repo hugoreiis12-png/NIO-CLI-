@@ -36,7 +36,7 @@ function fallbackToOpencodeTui(cwd: string): Promise<number> {
 }
 
 export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
-  await ensureHeadroomAndWire(); // best-effort (ADR 0009): remoto → local → direto, nunca bloqueia
+  await ensureHeadroomAndWire(); // Headroom DESATIVADO: só garante o opencode.json (provider direto, model)
 
   if (!process.stdout.isTTY || !process.stdin.isTTY) {
     console.error('  `nio ai` precisa de um terminal interativo.');
