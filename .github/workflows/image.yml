@@ -58,17 +58,19 @@ jobs:
       - name: Pin a versão no compose de deploy + commit
         run: |
           TAG="${{ github.ref_name }}"
-          # Substitui só o tag da imagem do nio-gateway no compose de deploy.
-          sed -i -E "s#(ghcr.io/hugoreiis12-png/nio-gateway:)[^ ]+#\\1${TAG}#" docker/docker-compose.deploy.yml
-          if git diff --quiet -- docker/docker-compose.deploy.yml; then
-            echo "compose de deploy já aponta pra ${TAG} — nada a commitar."
-            exit 0
-          fi
+          # Faz o checkout da main ANTES de mexer no arquivo — senão o sed suja a
+          # working tree (checkout da tag) e o `git checkout main` recusa
+          # ("local changes would be overwritten"). O dist/ é gitignored, então a
+          # tree fica limpa pro checkout.
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git checkout main
           sed -i -E "s#(ghcr.io/hugoreiis12-png/nio-gateway:)[^ ]+#\\1${TAG}#" docker/docker-compose.deploy.yml
+          if git diff --quiet -- docker/docker-compose.deploy.yml; then
+            echo "compose de deploy já aponta pra ${TAG} — nada a commitar."
+            exit 0
+          fi
           git add docker/docker-compose.deploy.yml
           git commit -m "chore(deploy): nio-gateway ${TAG} [skip ci]"
           git push origin main
