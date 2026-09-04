@@ -136,7 +136,7 @@ export function LiveMessage({
   return (
     <Box flexDirection="column" paddingX={1}>
       <Author role={message.role} />
-      {reasoning && !text && (
+      {reasoning && (
         <Text color={theme.dim} wrap="truncate-end">{'  '}{sym.bullet} {reasoning.slice(-160)}</Text>
       )}
       {tools.map((t) => (
@@ -152,12 +152,28 @@ export function LiveMessage({
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-export function StatusLine({ busy, frame }: { busy: boolean; frame: number }): React.ReactElement | null {
+/**
+ * Reflete o processamento do opencode: spinner + **fase atual** (pensando /
+ * raciocinando / executando ferramenta / escrevendo) + **tempo decorrido** — pra que
+ * o gap silencioso do 1º token (o modelo pode levar ~20s) não pareça travamento.
+ */
+export function StatusLine({
+  busy,
+  frame,
+  seconds = 0,
+  label = 'processando',
+}: {
+  busy: boolean;
+  frame: number;
+  seconds?: number;
+  label?: string;
+}): React.ReactElement | null {
   if (!busy) return null;
   return (
     <Box paddingX={1}>
       <Text color={theme.warn}>
-        {FRAMES[frame % FRAMES.length]} processando…  <Text color={theme.dim}>Esc aborta</Text>
+        {FRAMES[frame % FRAMES.length]} {label}…{' '}
+        <Text color={theme.dim}>{seconds}s · Esc aborta</Text>
       </Text>
     </Box>
   );

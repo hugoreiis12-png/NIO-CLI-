@@ -54,6 +54,7 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   const [frame, setFrame] = useState(0);
   const sessionId = useRef<string>('');
   const abortRef = useRef(new AbortController());
+  const busyStartedAt = useRef<number>(0); // pro tempo decorrido no StatusLine
 
   const [splash, setSplash] = useState(splashMs > 0);
   useEffect(() => {
@@ -62,9 +63,10 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     return () => clearTimeout(t);
   }, [splashMs]);
 
-  // spinner
+  // spinner — marca o início do processamento (pro tempo decorrido) e tica o frame
   useEffect(() => {
     if (!chat.busy) return;
+    busyStartedAt.current = Date.now();
     const t = setInterval(() => setFrame((f) => f + 1), 90);
     return () => clearInterval(t);
   }, [chat.busy]);
@@ -171,6 +173,20 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     };
   }, [chat.messages, chat.busy]);
 
+  // fase atual (reflete o que o opencode está fazendo) — mostrada no StatusLine
+  const phase = useMemo(() => {
+    const parts = live?.parts ?? [];
+    const tool = parts.find((p) => p.kind === 'tool' && (p.tool?.status === 'running' || p.tool?.status === 'pending'));
+    if (tool) return `executando ${tool.text}`;
+    const hasText = parts.some((p) => p.kind === 'text' && p.text.trim());
+    const hasReasoning = parts.some((p) => p.kind === 'reasoning' && p.text.trim());
+    if (hasText) return 'escrevendo';
+    if (hasReasoning) return 'raciocinando';
+    return 'pensando';
+  }, [live]);
+  // tempo decorrido (o frame do spinner força o re-render ~11×/s enquanto busy)
+  const elapsed = chat.busy ? Math.max(0, Math.floor((Date.now() - busyStartedAt.current) / 1000)) : 0;
+
   if (splash) {
     return (
       <Box flexDirection="column" alignItems="center" paddingY={1}>
@@ -192,7 +208,7 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
         <Box flexDirection="column" flexGrow={1} minWidth={0}>
           <Header url={handle.url} />
           {live && <LiveMessage message={live} maxLines={liveMax} />}
-          <StatusLine busy={chat.busy} frame={frame} />
+          <StatusLine busy={chat.busy} frame={frame} seconds={elapsed} label={phase} />
 
           {chat.permission ? (
             <PermissionModal title={chat.permission.title} onRespond={respondPermission} />
