@@ -6,6 +6,7 @@ on:
   pull_request:
   push:
     branches: [ main ]
+  workflow_call:   # reutilizável: publish.yml/image.yml chamam como gate antes de release
 
 jobs:
   test:

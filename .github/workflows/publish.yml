@@ -7,7 +7,11 @@ on:
   workflow_dispatch:
 
 jobs:
+  gate:
+    uses: ./.github/workflows/ci.yml   # roda o gate (typecheck+build+testes) antes de publicar
+
   publish:
+    needs: gate                        # só publica no npm se o gate passar
     runs-on: ubuntu-latest
     permissions:
       contents: read

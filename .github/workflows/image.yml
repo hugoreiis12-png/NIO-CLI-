@@ -12,7 +12,11 @@ env:
   IMAGE: ghcr.io/hugoreiis12-png/nio-gateway
 
 jobs:
+  gate:
+    uses: ./.github/workflows/ci.yml   # roda o gate (typecheck+build+testes) antes de buildar
+
   image:
+    needs: gate                        # só builda/empurra se o gate passar
     runs-on: ubuntu-latest
     permissions:
       contents: write   # commitar o bump do tag no compose de deploy
