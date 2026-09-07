@@ -105,6 +105,22 @@ describe('login', () => {
     expect(out.ok).toBe(true);
     expect(out.ok && out.step).toBe('2fa_required');
     expect(out.ok && out.step === '2fa_required' && out.phoneHint).toBe('+55•••••••7777');
+    // fix do 2º fator: informa o backend de SMS (sem SMS_* no teste → unconfigured)
+    expect(out.ok && out.step === '2fa_required' && out.smsMode).toBe('unconfigured');
+  });
+
+  test('endpoint de SMS em loopback → 2fa_required com smsMode=echo + devCode', async () => {
+    process.env.SMS_ENDPOINT_URL = 'http://127.0.0.1:4545/send';
+    process.env.SMS_BODY_TEMPLATE = '{"to":"{to}","text":"{text}"}';
+    try {
+      const out = await login('hugo', 'pw', deps({ u: user({ auth2: true, phone: '+5511988887777' }) }));
+      if (!out.ok || out.step !== '2fa_required') throw new Error('esperava 2fa_required');
+      expect(out.smsMode).toBe('echo');
+      expect(out.devCode).toMatch(/^\d{6}$/);
+    } finally {
+      delete process.env.SMS_ENDPOINT_URL;
+      delete process.env.SMS_BODY_TEMPLATE;
+    }
   });
 
   test('SMS não configurado → server_error, challenge consumido', async () => {

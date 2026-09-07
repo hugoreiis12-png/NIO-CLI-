@@ -28,8 +28,16 @@ import { authCopy } from "../copy.js";
 async function resolveSecondFactor(
   challengeId: string,
   phoneHint: string,
+  sms?: { smsMode?: string; devCode?: string },
 ): Promise<GatewaySession | null> {
-  console.log(`  ${c.dim(`código enviado por SMS para ${phoneHint}`)}`);
+  if (sms?.smsMode === "echo") {
+    console.log(
+      `  ${c.yellow(sym.warn)} modo echo (dev) — nenhum SMS real foi enviado` +
+        (sms.devCode ? `. Código: ${c.bold(sms.devCode)}` : " (veja ~/.nio/sms-echo-last.json)"),
+    );
+  } else {
+    console.log(`  ${c.dim(`código enviado por SMS para ${phoneHint}`)}`);
+  }
   let type: "otp" | "backup" = "otp";
   for (let attempt = 0; attempt < 4; attempt++) {
     const code = (
@@ -87,7 +95,10 @@ export async function runLogin(): Promise<void> {
     if (result.step === "done") {
       session = result;
     } else {
-      const s = await resolveSecondFactor(result.challengeId, result.phoneHint);
+      const s = await resolveSecondFactor(result.challengeId, result.phoneHint, {
+        smsMode: result.smsMode,
+        devCode: result.devCode,
+      });
       if (!s) {
         console.error(`${c.red(sym.err)} 2º fator não concluído.`);
         process.exit(1);

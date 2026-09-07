@@ -40,6 +40,35 @@ function readEnv(): SmsEnv {
   };
 }
 
+/**
+ * `echo` — endpoint em loopback (o mock `scripts/sms-echo.ts`): NENHUM SMS real
+ * sai; o código só aparece no terminal do mock / `~/.nio/sms-echo-last.json`.
+ * `provider` — endpoint externo. `unconfigured` — sem `SMS_*` (2FA indisponível).
+ */
+export type SmsMode = 'echo' | 'provider' | 'unconfigured';
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
+
+/** Classifica o backend de SMS ativo — a CLI usa pra avisar que está em modo echo. */
+export function smsMode(env: SmsEnv = readEnv()): SmsMode {
+  if (!env.url || !env.bodyTemplate) return 'unconfigured';
+  try {
+    return LOOPBACK_HOSTS.has(new URL(env.url).hostname) ? 'echo' : 'provider';
+  } catch {
+    return 'provider'; // URL malformada → deixa o send() reportar a falha
+  }
+}
+
+/** Host do provedor de SMS (sem esquema/porta/caminho), pra exibir no `status`. `null` se não configurado/inválido. */
+export function smsProviderHost(env: SmsEnv = readEnv()): string | null {
+  if (!env.url) return null;
+  try {
+    return new URL(env.url).hostname;
+  } catch {
+    return null;
+  }
+}
+
 /** SMS via HTTP genérico. `env` é seam opcional (default = `process.env`). */
 export function createHttpSmsSender(env: SmsEnv = readEnv()): SmsSender {
   return {

@@ -16,6 +16,7 @@ import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repo
 import { createLoginChallengeRepository } from '../../adapters/pg/login-challenge-repository.js';
 import { createHttpSmsSender } from '../../adapters/sms/http-generic.js';
 import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
+import { smsMode, type SmsMode } from '../../adapters/sms/http-generic.js';
 import { verifyBackupCode, markUsed, countRemaining } from '../../lib/auth/backup-codes.js';
 import { JWT_EXPIRES_IN, JWT_ISSUER, JWT_AUDIENCE } from '../config.js';
 import { jwtSigningKey } from '../../lib/auth/secrets.js';
@@ -54,7 +55,16 @@ export type LoginOutcome =
   | { ok: false; reason: 'bad_credentials' }
   | { ok: false; reason: 'server_error'; error: string }
   | { ok: true; step: 'done'; session: SessionPayload }
-  | { ok: true; step: '2fa_required'; challengeId: string; phoneHint: string };
+  | {
+      ok: true;
+      step: '2fa_required';
+      challengeId: string;
+      phoneHint: string;
+      /** Backend de SMS — a CLI avisa se `echo` (dev, nenhum SMS real). */
+      smsMode: SmsMode;
+      /** Só em `smsMode === 'echo'`: o OTP, já que nenhum SMS saiu. */
+      devCode?: string;
+    };
 
 export type VerifyOutcome =
   | { ok: true; session: SessionPayload; backupCodesRemaining?: number }
@@ -183,11 +193,14 @@ export async function login(
     return { ok: false, reason: 'server_error', error: `falha ao enviar o SMS: ${sent.error ?? ''}`.trim() };
   }
 
+  const mode = smsMode();
   return {
     ok: true,
     step: '2fa_required',
     challengeId: challenge.id,
     phoneHint: maskPhone(user.phone),
+    smsMode: mode,
+    ...(mode === 'echo' ? { devCode: code } : {}),
   };
 }
 

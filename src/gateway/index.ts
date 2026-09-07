@@ -163,7 +163,13 @@ async function handleLogin(req: IncomingMessage, res: ServerResponse, ctx: Reque
     return;
   }
   auditAuth(req, ctx, '2fa_sent', { name: body.name });
-  sendJson(res, 200, { step: '2fa_required', challengeId: out.challengeId, phoneHint: out.phoneHint });
+  sendJson(res, 200, {
+    step: '2fa_required',
+    challengeId: out.challengeId,
+    phoneHint: out.phoneHint,
+    smsMode: out.smsMode,
+    devCode: out.devCode,
+  });
 }
 
 async function handleVerify2fa(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
@@ -258,7 +264,8 @@ async function handleSecurity(
     // envia o OTP pro número NOVO (o usuário ainda não tem phone registrado)
     if (!body.phone) return sendJson(res, 400, { error: 'phone é obrigatório' });
     const r = await security.startSecurityChallenge(userId, body.phone);
-    return sendJson(res, r.ok ? 200 : 400, r.ok ? { challengeId: r.challengeId } : { error: r.error });
+    if (!r.ok) return sendJson(res, 400, { error: r.error });
+    return sendJson(res, 200, { challengeId: r.challengeId, smsMode: r.smsMode, devCode: r.devCode });
   }
 
   if (path === '/security/challenge') {
@@ -266,7 +273,8 @@ async function handleSecurity(
     const user = await createUserRepository().findById(userId);
     if (!user?.phone) return sendJson(res, 400, { error: '2FA não está ativo' });
     const r = await security.startSecurityChallenge(userId, user.phone);
-    return sendJson(res, r.ok ? 200 : 400, r.ok ? { challengeId: r.challengeId } : { error: r.error });
+    if (!r.ok) return sendJson(res, 400, { error: r.error });
+    return sendJson(res, 200, { challengeId: r.challengeId, smsMode: r.smsMode, devCode: r.devCode });
   }
 
   if (!body.challengeId || !body.code) {

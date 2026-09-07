@@ -20,7 +20,13 @@ export interface GatewaySession {
 /** Resultado do `POST /login`: sessão pronta, ou 2º fator pendente. */
 export type GatewayLoginResult =
   | ({ step: 'done' } & GatewaySession)
-  | { step: '2fa_required'; challengeId: string; phoneHint: string };
+  | {
+      step: '2fa_required';
+      challengeId: string;
+      phoneHint: string;
+      smsMode?: SmsMode;
+      devCode?: string;
+    };
 
 export type Verify2faResult =
   | ({ ok: true; backupCodesRemaining?: number } & GatewaySession)
@@ -130,6 +136,16 @@ export async function gatewayLogoutAll(token: string): Promise<void> {
   if (!res.ok) throw await errorFromResponse(res);
 }
 
+/** `echo` = SMS foi pro mock loopback (dev) — nenhuma mensagem real saiu. */
+export type SmsMode = 'echo' | 'provider' | 'unconfigured';
+
+/** Resposta de `enable-2fa` / `challenge`: em modo `echo` vem o `devCode`. */
+export interface ChallengeStarted {
+  challengeId: string;
+  smsMode: SmsMode;
+  devCode?: string;
+}
+
 /** Rotas `nio security …` (exigem Bearer + o token do gateway). */
 export const gatewaySecurity = {
   status: async (token: string) => {
@@ -142,11 +158,12 @@ export const gatewaySecurity = {
       regenerateBackupCodesRecommended?: boolean;
       recentIps?: { ip: string; lastSeen: string; count: number }[];
       recentFailedAttempts?: { at: string; event: string; ip: string | null }[];
+      sms?: { mode: SmsMode; host: string | null };
     };
   },
 
   enable: async (token: string, phone: string) =>
-    post<{ challengeId: string }>('/security/enable-2fa', { phone }, await authedHeaders(token)),
+    post<ChallengeStarted>('/security/enable-2fa', { phone }, await authedHeaders(token)),
 
   confirmEnable: async (token: string, challengeId: string, code: string, phone: string) =>
     post<{ backupCodes: string[] }>(
@@ -156,7 +173,7 @@ export const gatewaySecurity = {
     ),
 
   challenge: async (token: string) =>
-    post<{ challengeId: string }>('/security/challenge', {}, await authedHeaders(token)),
+    post<ChallengeStarted>('/security/challenge', {}, await authedHeaders(token)),
 
   disable: async (token: string, challengeId: string, code: string, type: 'otp' | 'backup') =>
     post<{ ok: true }>('/security/disable-2fa', { challengeId, code, type }, await authedHeaders(token)),

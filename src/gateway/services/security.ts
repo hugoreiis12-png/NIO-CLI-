@@ -16,7 +16,7 @@ import { createLoginChallengeRepository } from '../../adapters/pg/login-challeng
 import { createLoginIpRepository } from '../../adapters/pg/login-ip-repository.js';
 import { createAuthEventRepository } from '../../adapters/pg/auth-event-repository.js';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
-import { createHttpSmsSender } from '../../adapters/sms/http-generic.js';
+import { createHttpSmsSender, smsMode, smsProviderHost, type SmsMode } from '../../adapters/sms/http-generic.js';
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../../lib/auth/password.js';
 import { checkPasswordBreach } from '../../lib/auth/breach-check.js';
 import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
@@ -76,7 +76,16 @@ export function isE164(phone: string): boolean {
   return /^\+\d{8,15}$/.test(phone.trim());
 }
 
-type StartResult = { ok: true; challengeId: string } | { ok: false; error: string };
+type StartResult =
+  | {
+      ok: true;
+      challengeId: string;
+      /** Backend de SMS que atendeu — a CLI avisa se for `echo` (dev). */
+      smsMode: SmsMode;
+      /** Só em `smsMode === 'echo'`: o código, já que nenhum SMS real saiu. */
+      devCode?: string;
+    }
+  | { ok: false; error: string };
 
 /** Gera um OTP `enable_2fa` e manda o SMS pro número dado. */
 export async function startSecurityChallenge(
@@ -109,7 +118,13 @@ export async function startSecurityChallenge(
     await challenges.consume(challenge.id).catch(() => {});
     return { ok: false, error: `falha ao enviar o SMS: ${sent.error ?? ''}`.trim() };
   }
-  return { ok: true, challengeId: challenge.id };
+  const mode = smsMode();
+  return {
+    ok: true,
+    challengeId: challenge.id,
+    smsMode: mode,
+    ...(mode === 'echo' ? { devCode: code } : {}),
+  };
 }
 
 /** Confere o código de um desafio `enable_2fa` do próprio usuário. Consome se OK. */
@@ -200,6 +215,8 @@ export interface SecurityStatus {
   recentIps: { ip: string; lastSeen: string; count: number }[];
   /** Últimas tentativas de auth falhas do usuário (trilha — ADR 0012). */
   recentFailedAttempts: { at: string; event: string; ip: string | null }[];
+  /** Backend de SMS ativo — `echo` (dev, nenhum SMS real) / `provider` / `unconfigured`. */
+  sms: { mode: SmsMode; host: string | null };
 }
 
 export async function status(userId: number, deps: SecurityDeps = {}): Promise<SecurityStatus> {
@@ -216,9 +233,11 @@ export async function status(userId: number, deps: SecurityDeps = {}): Promise<S
     await authEvents.recentFailures({ userId, limit: 5 }).catch(() => [])
   ).map((f) => ({ at: f.at.toISOString(), event: f.event, ip: f.ip }));
 
+  const sms = { mode: smsMode(), host: smsProviderHost() };
+
   const user = await users.findById(userId);
   if (!user || !user.auth2) {
-    return { enabled: false, phoneHint: null, backupCodesRemaining: 0, recentIps, recentFailedAttempts };
+    return { enabled: false, phoneHint: null, backupCodesRemaining: 0, recentIps, recentFailedAttempts, sms };
   }
   const stored = await users.getBackupCodes(userId);
   return {
@@ -229,5 +248,6 @@ export async function status(userId: number, deps: SecurityDeps = {}): Promise<S
       stored.codes != null && stored.pepperId !== currentPepperId() ? true : undefined,
     recentIps,
     recentFailedAttempts,
+    sms,
   };
 }

@@ -1,21 +1,61 @@
-import { test, expect } from 'bun:test';
+import { afterEach, test, expect } from 'bun:test';
 process.env.NIO_HIBP_DISABLE = '1'; // SP-7: sem rede nos testes
-import { isE164, status, changePassword } from './security.js';
+import { isE164, status, changePassword, startSecurityChallenge } from './security.js';
+import { __clear as clearThrottle } from '../throttle.js';
 import type {
   UserRepository,
+  LoginChallengeRepository,
   LoginIpRepository,
   LoginIpEvent,
   AuthEventRepository,
   AuthFailure,
   AuthSessionRepository,
 } from '../../core/repositories.js';
+import type { SmsSender } from '../../core/messaging.js';
 import type { UserCli } from '../../core/types.js';
+
+const SMS_TMPL = '{"to":"{to}","text":"{text}"}';
+afterEach(() => {
+  clearThrottle();
+  delete process.env.SMS_ENDPOINT_URL;
+  delete process.env.SMS_BODY_TEMPLATE;
+});
 
 test('isE164', () => {
   expect(isE164('+5511999998888')).toBe(true);
   expect(isE164(' +551234567 ')).toBe(true);
   expect(isE164('5511999998888')).toBe(false); // sem +
   expect(isE164('+55')).toBe(false); // curto
+});
+
+// ─── startSecurityChallenge: modo echo (fix do 2º fator) ─────────────
+function challengeDeps() {
+  const challenges = {
+    create: async () => ({ id: 'ch-1' }),
+    consume: async () => {},
+  } as unknown as LoginChallengeRepository;
+  const sms = { send: async () => ({ status: 'sent' as const }) } as unknown as SmsSender;
+  return { challenges, sms };
+}
+
+test('startSecurityChallenge: endpoint loopback → smsMode=echo + devCode', async () => {
+  process.env.SMS_ENDPOINT_URL = 'http://127.0.0.1:4545/send';
+  process.env.SMS_BODY_TEMPLATE = SMS_TMPL;
+  const r = await startSecurityChallenge(1, '+5511999998888', challengeDeps());
+  expect(r.ok).toBe(true);
+  if (!r.ok) throw new Error();
+  expect(r.smsMode).toBe('echo');
+  expect(r.devCode).toMatch(/^\d{6}$/);
+});
+
+test('startSecurityChallenge: provedor externo → smsMode=provider, sem devCode', async () => {
+  process.env.SMS_ENDPOINT_URL = 'https://api.provedor.com/sms';
+  process.env.SMS_BODY_TEMPLATE = SMS_TMPL;
+  const r = await startSecurityChallenge(1, '+5511999998888', challengeDeps());
+  expect(r.ok).toBe(true);
+  if (!r.ok) throw new Error();
+  expect(r.smsMode).toBe('provider');
+  expect(r.devCode).toBeUndefined();
 });
 
 function fakeUser(over: Partial<UserCli> = {}): UserCli {
@@ -59,6 +99,16 @@ test('status: 2FA inativo → enabled false, mas recentIps/recentFailedAttempts 
   expect(st.enabled).toBe(false);
   expect(st.recentIps).toEqual([]);
   expect(st.recentFailedAttempts).toEqual([]);
+});
+
+test('status: reporta o backend de SMS (fix do 2º fator — B)', async () => {
+  process.env.SMS_ENDPOINT_URL = 'http://127.0.0.1:4545/send';
+  process.env.SMS_BODY_TEMPLATE = SMS_TMPL;
+  expect((await status(1, deps())).sms).toEqual({ mode: 'echo', host: '127.0.0.1' });
+
+  delete process.env.SMS_ENDPOINT_URL;
+  delete process.env.SMS_BODY_TEMPLATE;
+  expect((await status(1, deps())).sms).toEqual({ mode: 'unconfigured', host: null });
 });
 
 function cpDeps(over: { verified?: boolean; user?: UserCli | null } = {}) {

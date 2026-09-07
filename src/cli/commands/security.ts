@@ -58,15 +58,18 @@ async function runEnable(): Promise<void> {
   ).trim();
 
   let challengeId: string;
+  let smsMode: string | undefined;
+  let devCode: string | undefined;
   try {
-    ({ challengeId } = await gatewaySecurity.enable(token, phone));
+    ({ challengeId, smsMode, devCode } = await gatewaySecurity.enable(token, phone));
   } catch (err) {
     console.error(`${c.red(sym.err)} ${(err as Error).message}`);
     process.exit(1);
   }
   console.log(`  ${c.dim(`SMS enviado para ${phone}`)}`);
+  noteSmsMode({ smsMode, devCode });
 
-  const code = (await input({ message: "Código recebido por SMS", validate: (v) => v.trim().length > 0 || "obrigatório" })).trim();
+  const code = (await input({ message: "Código de confirmação", validate: (v) => v.trim().length > 0 || "obrigatório" })).trim();
   try {
     const { backupCodes } = await gatewaySecurity.confirmEnable(token, challengeId, code, phone);
     console.log(`${c.green(sym.ok)} 2º fator ativado.`);
@@ -77,17 +80,41 @@ async function runEnable(): Promise<void> {
   }
 }
 
+/**
+ * Modo echo (dev): nenhum SMS real foi enviado — o código só existe no mock
+ * (`scripts/sms-echo.ts` / `~/.nio/sms-echo-last.json`). Mostra ele direto pra
+ * não deixar o usuário esperando um SMS que nunca chega.
+ */
+function noteSmsMode(r: { smsMode?: string; devCode?: string }): void {
+  if (r.smsMode === "echo") {
+    console.log(
+      box(
+        `${c.yellow(sym.warn)} ${c.bold("modo echo (dev) — nenhum SMS real foi enviado.")}\n` +
+          `O gateway está apontado pra um mock local (SMS_ENDPOINT_URL em loopback).\n\n` +
+          (r.devCode ? `Código: ${c.bold(r.devCode)}\n` : "") +
+          `${c.dim("Pra receber SMS de verdade: configure um SMS_ENDPOINT_URL real em ~/.nio/config.env")}`,
+        { borderColor: "yellow", title: "SMS" },
+      ),
+    );
+  } else if (r.smsMode === "unconfigured") {
+    console.log(`  ${c.yellow(sym.warn)} SMS não configurado no gateway — use um código de backup.`);
+  }
+}
+
 /** Dispara o SMS pro número registrado e devolve o challengeId + código digitado. */
 async function challengeAndCode(token: string): Promise<{ challengeId: string; code: string; type: "otp" | "backup" }> {
   let challengeId: string;
+  let smsMode: string | undefined;
+  let devCode: string | undefined;
   try {
-    ({ challengeId } = await gatewaySecurity.challenge(token));
+    ({ challengeId, smsMode, devCode } = await gatewaySecurity.challenge(token));
   } catch (err) {
     console.error(`${c.red(sym.err)} ${(err as Error).message}`);
     process.exit(1);
   }
   console.log(`  ${c.dim("SMS enviado para o número registrado.")}`);
-  const useBackup = !(await confirm({ message: "Recebeu o SMS?", default: true }));
+  noteSmsMode({ smsMode, devCode });
+  const useBackup = !(await confirm({ message: "Recebeu o SMS (ou tem o código)?", default: true }));
   const code = (
     await input({
       message: useBackup ? "Código de backup" : "Código recebido por SMS",
@@ -167,6 +194,15 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
     return;
   }
   console.log(`2º fator: ${st.enabled ? c.green("ativo") : c.dim("inativo")}`);
+  if (st.sms) {
+    const label =
+      st.sms.mode === "echo"
+        ? `${c.yellow("echo (dev)")} — ${c.dim("nenhum SMS real é enviado")}`
+        : st.sms.mode === "provider"
+          ? `${c.green("provedor")} ${c.dim(st.sms.host ?? "")}`.trimEnd()
+          : `${c.red("não configurado")} — ${c.dim("2FA por SMS indisponível")}`;
+    console.log(`SMS:      ${label}`);
+  }
   if (st.enabled) {
     console.log(`número:   ${st.phoneHint}`);
     console.log(`backup:   ${st.backupCodesRemaining} código(s) restante(s)`);

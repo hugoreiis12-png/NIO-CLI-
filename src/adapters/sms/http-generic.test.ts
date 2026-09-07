@@ -1,5 +1,31 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { createHttpSmsSender, parseAuthHeader, renderBody } from './http-generic.js';
+import {
+  createHttpSmsSender,
+  parseAuthHeader,
+  renderBody,
+  smsMode,
+  smsProviderHost,
+} from './http-generic.js';
+
+describe('smsMode / smsProviderHost', () => {
+  const T = '{"to":"{to}","text":"{text}"}';
+  test('sem url/template → unconfigured', () => {
+    expect(smsMode({})).toBe('unconfigured');
+    expect(smsMode({ url: 'https://api.x/sms' })).toBe('unconfigured'); // falta template
+    expect(smsProviderHost({})).toBeNull();
+  });
+  test('loopback → echo', () => {
+    expect(smsMode({ url: 'http://127.0.0.1:4545/send', bodyTemplate: T })).toBe('echo');
+    expect(smsMode({ url: 'http://localhost:4545/send', bodyTemplate: T })).toBe('echo');
+  });
+  test('host externo → provider + host', () => {
+    expect(smsMode({ url: 'https://api.provedor.com/v2/sms', bodyTemplate: T })).toBe('provider');
+    expect(smsProviderHost({ url: 'https://api.provedor.com/v2/sms' })).toBe('api.provedor.com');
+  });
+  test('url malformada → provider (o send() reporta a falha)', () => {
+    expect(smsMode({ url: 'nao-e-url', bodyTemplate: T })).toBe('provider');
+  });
+});
 
 describe('parseAuthHeader', () => {
   test('"Nome: valor" → objeto', () => {
