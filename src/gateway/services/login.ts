@@ -5,7 +5,11 @@
  */
 import jwt from 'jsonwebtoken';
 import type { UserCli, LoginChallenge } from '../../core/types.js';
-import type { UserRepository, LoginChallengeRepository } from '../../core/repositories.js';
+import type {
+  UserRepository,
+  LoginChallengeRepository,
+  AuthSessionRepository,
+} from '../../core/repositories.js';
 import type { SmsSender } from '../../core/messaging.js';
 import { createUserRepository } from '../../adapters/pg/user-repository.js';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
@@ -35,6 +39,16 @@ export const OTP_MAX_ATTEMPTS = 3;
  * código de backup à vontade dentro do TTL (auditoria L-2).
  */
 export const CHALLENGE_MAX_ATTEMPTS = OTP_MAX_ATTEMPTS * 2;
+
+/**
+ * Teto de sessões (dispositivos) ativas por usuário (SP-5). Ao passar disso, o
+ * login novo revoga as mais antigas — limita o estrago de um token vazado que
+ * ninguém percebeu. `NIO_MAX_SESSIONS_PER_USER` ajusta; piso 1.
+ */
+export const MAX_SESSIONS_PER_USER = Math.max(
+  1,
+  Number(process.env.NIO_MAX_SESSIONS_PER_USER) || 5,
+);
 
 export type LoginOutcome =
   | { ok: false; reason: 'bad_credentials' }
@@ -86,12 +100,28 @@ export function challengeUsable(
   return { ok: true, ch };
 }
 
+/**
+ * SP-5: mantém no máximo `MAX_SESSIONS_PER_USER` sessões ativas — revoga as mais
+ * antigas. `listActiveByUser` já vem `created_at DESC`. Best-effort: o teto é
+ * higiene, não pode derrubar um login que já passou pela auth.
+ */
+async function pruneExcessSessions(sessions: AuthSessionRepository, userId: number): Promise<void> {
+  try {
+    const active = await sessions.listActiveByUser(userId);
+    await Promise.all(active.slice(MAX_SESSIONS_PER_USER).map((s) => sessions.revoke(s.id)));
+  } catch {
+    /* segue com o login */
+  }
+}
+
 /** Cria a auth_session e assina o JWT pro usuário já autenticado. */
 export async function issueSession(user: UserCli): Promise<SessionPayload> {
   await createUserRepository().touchLastSession(user.id);
   const ms = expiresInMs(JWT_EXPIRES_IN);
   const expiresAt = new Date(Date.now() + ms);
-  const session = await createAuthSessionRepository().create({ userId: user.id, expiresAt });
+  const sessions = createAuthSessionRepository();
+  const session = await sessions.create({ userId: user.id, expiresAt });
+  await pruneExcessSessions(sessions, user.id);
   // `expiresIn` como number (segundos) — `@types/jsonwebtoken` tipa a forma string
   // via `StringValue`, que não aceita `string` genérico de env var.
   const { kid, secret } = jwtSigningKey();
@@ -213,4 +243,9 @@ export async function verifyLogin(
 /** Revoga a auth_session (logout). Idempotente. */
 export async function logout(sessionId: string): Promise<void> {
   await createAuthSessionRepository().revoke(sessionId);
+}
+
+/** Revoga TODAS as sessões ativas do usuário (`nio logout --all`, SP-5). Idempotente. */
+export async function logoutAll(userId: number): Promise<void> {
+  await createAuthSessionRepository().revokeAllByUser(userId);
 }

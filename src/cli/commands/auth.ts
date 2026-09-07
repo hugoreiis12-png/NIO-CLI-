@@ -8,6 +8,7 @@ import { MIN_PASSWORD_LENGTH } from "../../lib/auth/password.js";
 import {
   gatewayLogin,
   gatewayLogout,
+  gatewayLogoutAll,
   gatewayRegister,
   gatewayVerify2fa,
   type GatewaySession,
@@ -164,17 +165,19 @@ function registerLogoutCommand(program: Command): void {
   program
     .command("logout")
     .description("Encerra a sessão local e revoga a auth_session no banco")
-    .action(async () => {
+    .option("--all", "Revoga TODAS as sessões do usuário (todos os dispositivos)")
+    .action(async (opts: { all?: boolean }) => {
       const session = await loadSession();
       if (session) {
         try {
-          await gatewayLogout(session.sessionId, session.token);
+          if (opts.all) await gatewayLogoutAll(session.token);
+          else await gatewayLogout(session.sessionId, session.token);
         } catch {
           // gateway fora do ar — ainda assim limpamos a sessão local.
         }
       }
       await clearSession();
-      console.log("Sessão removida.");
+      console.log(opts.all ? "Todas as sessões foram encerradas." : "Sessão removida.");
     });
 }
 

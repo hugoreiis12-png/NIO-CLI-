@@ -14,8 +14,9 @@ import { createLoginChallengeRepository } from '../../adapters/pg/login-challeng
 import { query, closePool } from '../../adapters/pg/client.js';
 import { generateBackupCodes } from '../../lib/auth/backup-codes.js';
 import type { SmsResult, SmsSender } from '../../core/messaging.js';
-import { login, verifyLogin } from './login.js';
+import { login, verifyLogin, logoutAll, MAX_SESSIONS_PER_USER } from './login.js';
 import { authenticate } from '../middleware/auth.js';
+import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
 import { __clear as clearThrottle } from '../throttle.js';
 import { __resetJwtSecrets } from '../../lib/auth/secrets.js';
 
@@ -119,6 +120,46 @@ dbTest('login 1FA: usuário sem auth_2 → step done + auth_session', async () =
     expect((await query('SELECT 1 FROM auth_sessions WHERE id = $1', [out.session.sessionId])).rowCount).toBe(1);
 
     expect((await login(user.name, 'senha-errada')).ok).toBe(false);
+  } finally {
+    await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
+  }
+}, 20_000);
+
+dbTest('SP-5: teto de sessões — login além do limite revoga as mais antigas', async () => {
+  const users = createUserRepository();
+  const sessions = createAuthSessionRepository();
+  const password = `pw-${randomUUID()}`;
+  const user = await users.create({ name: `nio-cap-${randomUUID()}`, password });
+  try {
+    const N = MAX_SESSIONS_PER_USER;
+    const ids: string[] = [];
+    for (let i = 0; i < N + 2; i++) {
+      const out = await login(user.name, password);
+      if (!out.ok || out.step !== 'done') throw new Error('esperava done');
+      ids.push(out.session.sessionId);
+    }
+    const active = await sessions.listActiveByUser(user.id);
+    expect(active).toHaveLength(N);
+    // as 2 primeiras (mais antigas) foram revogadas; as N últimas seguem ativas
+    const activeIds = new Set(active.map((s) => s.id));
+    expect(activeIds.has(ids[0]!)).toBe(false);
+    expect(activeIds.has(ids.at(-1)!)).toBe(true);
+  } finally {
+    await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
+  }
+}, 30_000);
+
+dbTest('SP-5: logout --all revoga todas as sessões do usuário', async () => {
+  const users = createUserRepository();
+  const sessions = createAuthSessionRepository();
+  const password = `pw-${randomUUID()}`;
+  const user = await users.create({ name: `nio-logoutall-${randomUUID()}`, password });
+  try {
+    await login(user.name, password);
+    await login(user.name, password);
+    expect((await sessions.listActiveByUser(user.id)).length).toBeGreaterThan(0);
+    await logoutAll(user.id);
+    expect(await sessions.listActiveByUser(user.id)).toHaveLength(0);
   } finally {
     await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
   }

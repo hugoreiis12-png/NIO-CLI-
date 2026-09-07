@@ -18,6 +18,7 @@ import { createAuthEventRepository } from '../../adapters/pg/auth-event-reposito
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
 import { createHttpSmsSender } from '../../adapters/sms/http-generic.js';
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../../lib/auth/password.js';
+import { checkPasswordBreach } from '../../lib/auth/breach-check.js';
 import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
 import {
   generateBackupCodes,
@@ -54,6 +55,9 @@ export async function changePassword(
   }
   if (newPassword === currentPassword) {
     return { ok: false, error: 'a senha nova é igual à atual' };
+  }
+  if ((await checkPasswordBreach(newPassword)).breached) {
+    return { ok: false, error: 'senha nova apareceu em vazamento de dados conhecido — escolha outra' };
   }
   const users = deps.users ?? createUserRepository();
   const user = await users.findById(userId);

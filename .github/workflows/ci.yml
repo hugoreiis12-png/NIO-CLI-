@@ -32,6 +32,8 @@ jobs:
       # ≥ 32 chars + variedade — o gateway rejeita segredo fraco (auditoria H-1).
       # Valor de teste efêmero, não é segredo real.
       JWT_SECRET: ci-only-4f9c2ka7Qh1Zpx8Rbn3Vdw6Tty0Lms5Ej
+      # SP-7: o CI não fala com api.pwnedpasswords.com — só a checagem local roda.
+      NIO_HIBP_DISABLE: "1"
 
     steps:
       - uses: actions/checkout@v4

@@ -6,10 +6,11 @@
 import type { UserRepository } from '../../core/repositories.js';
 import { createUserRepository } from '../../adapters/pg/user-repository.js';
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../../lib/auth/password.js';
+import { checkPasswordBreach } from '../../lib/auth/breach-check.js';
 
 export type RegisterOutcome =
   | { ok: true; userId: number; name: string }
-  | { ok: false; reason: 'invalid_name' | 'weak_password' | 'name_taken' };
+  | { ok: false; reason: 'invalid_name' | 'weak_password' | 'breached_password' | 'name_taken' };
 
 export async function register(
   name: string,
@@ -20,6 +21,9 @@ export async function register(
   const clean = name.trim();
   if (!clean || clean.length > 64) return { ok: false, reason: 'invalid_name' };
   if (password.length < MIN_PASSWORD_LENGTH) return { ok: false, reason: 'weak_password' };
+  // SP-7: roda pra todo mundo antes do check de nome — não vaza enumeração (é
+  // sobre a senha, não o nome).
+  if ((await checkPasswordBreach(password)).breached) return { ok: false, reason: 'breached_password' };
   if (await users.findByName(clean)) {
     // TP-3: o nome-tomado retorna 409 (necessário pra UX de unicidade), mas sem
     // isto o caminho "criar" gastaria ~250 ms de argon2 a mais → enumeração por

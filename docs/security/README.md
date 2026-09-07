@@ -21,7 +21,15 @@ Pasta de rastreio da auditoria de segurança e do trabalho que ela gerou.
 | [`lote5-cripto-arquitetura.md`](lote5-cripto-arquitetura.md) | Doc de trabalho que originou a ADR 0011 (o raciocínio). |
 | [`db-tls.md`](db-tls.md) | Runbook da CA interna do Postgres (fecha o H-2 na infra self-hosted). |
 
-## Status geral (2026-09-06)
+## Status geral (2026-09-07)
+
+> **Backlog dev-doable = zero.** Todo código (Altos, Médios, Baixos, §4, Lote 5
+> A–F, ADR 0012, SP-1..7, TP-1..6) está commitado e verde no CI. O que resta é só
+> infra/conta de prod: rotação do `JWT_SECRET` (H-1), CA do Postgres (H-2), org
+> GitHub + branch protection (H-3/I-1), `db:migrate --baseline` em prod (I-3),
+> LOGIN users `nio_cli_user`/`nio_gw_user` em prod (TP-1), `nio-skills.json` no
+> repo de skills (§4.1). §4.4 adiado (YAGNI).
+
 
 | ID | Sev | Título | Código | Ação do time | Estado |
 |----|-----|--------|:------:|:------------:|--------|
@@ -52,6 +60,19 @@ Pasta de rastreio da auditoria de segurança e do trabalho que ela gerou.
 | §4.3 | Vers. | `JWT_SECRET` 3 papéis, sem rotação | ✅ feito | — | Lote 5: `OTP_HMAC_SECRET` (F1 D) + `JWT_SECRETS`/`kid` (F2 E) |
 | §4.4 | Vers. | gateway ↔ CLI sem header de protocolo | ⏸️ adiado | — | YAGNI — reabre se a API crescer |
 | §4.5 | Vers. | migrations sem runner | ✅ feito | — | = I-3 (`scripts/migrate.ts`) |
+| SP-1 | 2ª pass | Trilha de auth só em stderr (sem histórico) | ✅ feito | — | `auth_events` (ADR 0012) |
+| SP-2 | 2ª pass | `sub` do token não conferido vs dono da sessão | ✅ feito | — | `middleware/auth.ts` |
+| SP-3 | 2ª pass | `MIN_PASSWORD_LENGTH` só no CLI | ✅ feito | — | enforçado no gateway |
+| SP-4 | 2ª pass | Transitivas vulneráveis (`fast-uri`/`hono`/`qs`) | ✅ feito | — | `overrides` — `bun audit` limpo |
+| SP-5 | 2ª pass | Sem teto de sessões / sem `logout --all` | ✅ feito | — | `MAX_SESSIONS_PER_USER` + `POST /logout-all` + `nio logout --all` |
+| SP-7 | 2ª pass | Senha só validada por tamanho | ✅ feito | — | `breach-check.ts` — lista local + HIBP (fail-open) |
+| SP-6 | 2ª pass | Update-notifier proativo | ✅ já existia | — | `notifyCliIfUpdate` (`cli.ts`) |
+| TP-1 | 3ª pass | CLI com credencial de escrita nas tabelas de auth | ✅ feito | ⏳ criar LOGIN users em prod | migration `0008` (roles) + `register` no gateway |
+| TP-2 | 3ª pass | Sem fluxo de troca de senha | ✅ feito | — | `nio security change-password` (revoga sessões) |
+| TP-3 | 3ª pass | Enumeração de usuário no `register` | ✅ feito | — | decoy de timing |
+| TP-4 | 3ª pass | Zip com symlink na extração | ✅ feito | — | `rejectSymlinks()` |
+| TP-5 | 3ª pass | Retenção negativa apaga a tabela | ✅ feito | — | clamp `Math.max(1,…)` |
+| TP-6 | 3ª pass | `trace_id` do cliente sem cap | ✅ feito | — | `.slice(0, 64)` |
 
 Legenda: ✅ feito · ⏳ pendente · ⏸️ adiado · ⬜ não iniciado.
 

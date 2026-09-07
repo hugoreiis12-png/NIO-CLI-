@@ -1,4 +1,5 @@
 import { test, expect } from 'bun:test';
+process.env.NIO_HIBP_DISABLE = '1'; // SP-7: sem rede nos testes
 import { isE164, status, changePassword } from './security.js';
 import type {
   UserRepository,
@@ -94,6 +95,14 @@ test('changePassword: senha atual errada → recusa, não revoga sessões', asyn
   const { deps, calls } = cpDeps({ verified: false });
   const r = await changePassword(1, 'errada', 'senha-nova-123', deps);
   expect(r).toEqual({ ok: false, error: 'senha atual incorreta' });
+  expect(calls.revokeAllByUser).toBe(0);
+});
+
+test('changePassword: senha nova comprometida (lista local) → recusa sem tocar no banco', async () => {
+  const { deps, calls } = cpDeps();
+  const r = await changePassword(1, 'senha-atual-ok', 'qwerty123', deps);
+  expect(r.ok).toBe(false);
+  expect(calls.updatePasswordHash).toBe(0);
   expect(calls.revokeAllByUser).toBe(0);
 });
 

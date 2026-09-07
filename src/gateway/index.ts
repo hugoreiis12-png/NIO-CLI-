@@ -2,12 +2,13 @@
 /**
  * `nio-gateway` — entrypoint HTTP do Gateway. Node nativo (`http.createServer`,
  * sem framework nem deps externas), loopback only. Rotas: `/register`, `/login`
- * (1º fator), `/verify-2fa` (2º fator → JWT), `/logout`, `/health`, `/security/*`.
+ * (1º fator), `/verify-2fa` (2º fator → JWT), `/logout`, `/logout-all`,
+ * `/health`, `/security/*`.
  */
 import '../lib/load-env.js';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { login, logout, verifyLogin } from './services/login.js';
+import { login, logout, logoutAll, verifyLogin } from './services/login.js';
 import { register } from './services/register.js';
 import { loginDelayMs, recordLoginFail, recordLoginOk, sweep } from './throttle.js';
 import * as security from './services/security.js';
@@ -46,6 +47,7 @@ const TOKEN_REQUIRED = (path: string): boolean =>
   path === '/register' ||
   path === '/login' ||
   path === '/logout' ||
+  path === '/logout-all' ||
   path === '/verify-2fa' ||
   path.startsWith('/security/');
 
@@ -119,6 +121,7 @@ async function handleRegister(req: IncomingMessage, res: ServerResponse, ctx: Re
     const msg = {
       invalid_name: 'nome inválido (1–64 chars)',
       weak_password: 'senha muito curta',
+      breached_password: 'senha comprometida (aparece em vazamentos conhecidos) — escolha outra',
       name_taken: 'nome já em uso',
     }[out.reason];
     sendJson(res, out.reason === 'name_taken' ? 409 : 400, { error: msg, reason: out.reason });
@@ -201,6 +204,17 @@ async function handleLogout(req: IncomingMessage, res: ServerResponse, ctx: Requ
   }
   await logout(auth.sessionId);
   auditAuth(req, ctx, 'logout', { userId: auth.userId });
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleLogoutAll(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
+  const auth = await authenticate(req.headers.authorization);
+  if (!auth.ok) {
+    sendJson(res, 200, { ok: true }); // nada ativo pra revogar; cliente limpa local
+    return;
+  }
+  await logoutAll(auth.userId);
+  auditAuth(req, ctx, 'logout_all', { userId: auth.userId });
   sendJson(res, 200, { ok: true });
 }
 
@@ -310,6 +324,7 @@ async function main(): Promise<void> {
         if (ctx.method === 'POST' && ctx.path === '/login') return await handleLogin(req, res, ctx);
         if (ctx.method === 'POST' && ctx.path === '/verify-2fa') return await handleVerify2fa(req, res, ctx);
         if (ctx.method === 'POST' && ctx.path === '/logout') return await handleLogout(req, res, ctx);
+        if (ctx.method === 'POST' && ctx.path === '/logout-all') return await handleLogoutAll(req, res, ctx);
         if (ctx.path.startsWith('/security/')) return await handleSecurity(req, res, ctx, ctx.path);
         if (ctx.method === 'GET' && ctx.path === '/health') return sendJson(res, 200, { ok: true });
         sendJson(res, 404, { error: 'rota desconhecida' });

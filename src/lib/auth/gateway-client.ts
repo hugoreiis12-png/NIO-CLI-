@@ -124,6 +124,12 @@ export async function gatewayLogout(sessionId: string, token: string): Promise<v
   if (!res.ok) throw await errorFromResponse(res);
 }
 
+/** `POST /logout-all` — revoga todas as sessões do usuário (SP-5). */
+export async function gatewayLogoutAll(token: string): Promise<void> {
+  const res = await gwFetch('POST', '/logout-all', { headers: await authedHeaders(token) });
+  if (!res.ok) throw await errorFromResponse(res);
+}
+
 /** Rotas `nio security …` (exigem Bearer + o token do gateway). */
 export const gatewaySecurity = {
   status: async (token: string) => {

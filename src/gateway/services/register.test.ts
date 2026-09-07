@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+// SP-7: sem rede nos testes — só a checagem local (lista de senhas comuns) roda.
+process.env.NIO_HIBP_DISABLE = '1';
 import { register } from './register.js';
 import type { UserRepository } from '../../core/repositories.js';
 import type { UserCli } from '../../core/types.js';
@@ -47,5 +49,11 @@ describe('register', () => {
   test('nome já em uso → name_taken', async () => {
     const { users } = fakeUsers(['Ana']);
     expect(await register('Ana', 'senha-forte-1', { users })).toEqual({ ok: false, reason: 'name_taken' });
+  });
+
+  test('senha comum (lista local) → breached_password, não cria', async () => {
+    const { users, created } = fakeUsers();
+    expect(await register('Ana', 'password', { users })).toEqual({ ok: false, reason: 'breached_password' });
+    expect(created).toEqual([]);
   });
 });
