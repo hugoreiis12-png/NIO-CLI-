@@ -10,7 +10,8 @@
  */
 import jwt from 'jsonwebtoken';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
-import { getJwtSecret } from '../config.js';
+import { JWT_ISSUER, JWT_AUDIENCE } from '../config.js';
+import { jwtVerifyKey } from '../../lib/auth/secrets.js';
 
 export type AuthResult =
     | { ok: true; userId: number; sessionId: string }
@@ -29,7 +30,15 @@ export async function authenticate(authHeader: string | undefined | null): Promi
 
       let decoded: unknown;
       try{
-        decoded = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256']})
+        // resolve a chave pelo `kid` do header (ADR 0011 §E) — rotação de JWT.
+        const header = jwt.decode(token, { complete: true })?.header;
+        const secret = jwtVerifyKey(header?.kid);
+        if (!secret) return { ok: false, reason: 'token_invalido' };
+        decoded = jwt.verify(token, secret, {
+          algorithms: ['HS256'],
+          issuer: JWT_ISSUER,
+          audience: JWT_AUDIENCE,
+        })
       } catch {
         return { ok: false, reason: 'token_invalido' };
       }
@@ -37,12 +46,18 @@ export async function authenticate(authHeader: string | undefined | null): Promi
       if (!decoded || typeof decoded !== 'object'|| typeof (decoded as Record<string, unknown>).jti !== 'string') {
         return { ok: false, reason: 'token_invalido'};
       }
-      const jti = (decoded as {jti: string}).jti;
+      const { jti, sub } = decoded as { jti: string; sub?: unknown };
 
       const session = await createAuthSessionRepository().findById(jti);
       if (!session) return { ok: false, reason: 'token_invalido' };
       if (session.revokedAt) return { ok: false,  reason: 'sessao_revogada' };
       if (session.expiresAt.getTime() <= Date.now()) return { ok: false, reason: 'sessao_expirada' };
+      // defesa em profundidade: o `sub` do token tem que bater com o dono da
+      // auth_session (a fonte da verdade). Um token com jti válido mas sub trocado
+      // não passa.
+      if (typeof sub === 'string' && sub !== String(session.userId)) {
+        return { ok: false, reason: 'token_invalido' };
+      }
 
       return { ok: true , userId: session.userId, sessionId: session.id };
 

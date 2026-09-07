@@ -7,6 +7,7 @@ import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from 'n
 import { dirname } from 'node:path';
 import { brand, homePath } from '../../brand.js';
 import { closePool, ping } from '../../adapters/pg/client.js';
+import { generateJwtSecret, jwtSecretWeakness } from '../../gateway/config.js';
 import { input, password, confirm } from '../prompts.js';
 import { c, sym, box, cmd } from '../colors.js';
 import { dlog } from '../debug.js';
@@ -52,8 +53,10 @@ export function writeConfigFile(updates: Record<string, string>, path = CONFIG_F
       .map(([k, v]) => `${k}=${v}`)
       .join('\n') +
     '\n';
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, body, 'utf8');
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  // `mode` fecha a janela do arquivo novo em 0644 (auditoria L-4); o chmod cobre
+  // um arquivo pré-existente com permissão frouxa.
+  writeFileSync(path, body, { encoding: 'utf8', mode: 0o600 });
   try {
     chmodSync(path, 0o600);
   } catch {
@@ -72,8 +75,14 @@ export function validateConfigShape(env: NodeJS.ProcessEnv): ConfigProblem[] {
   } else if (!PG_URL.test(url)) {
     problems.push({ key: 'NIO_DATABASE_URL', issue: 'invalid', hint: 'precisa começar com postgres://' });
   }
-  if (!jwt) {
-    problems.push({ key: 'JWT_SECRET', issue: 'missing', hint: 'segredo compartilhado do time (assina o login)' });
+  // `JWT_SECRETS` (rotação por kid, ADR 0011) supre o `JWT_SECRET` — o gateway
+  // lança no boot se a lista estiver malformada, então aqui só checamos presença.
+  const hasJwtSecrets = Boolean(env.JWT_SECRETS?.trim());
+  if (!jwt && !hasJwtSecrets) {
+    problems.push({ key: 'JWT_SECRET', issue: 'missing', hint: 'segredo compartilhado do time (assina o login) — ou use JWT_SECRETS' });
+  } else if (jwt) {
+    const weak = jwtSecretWeakness(jwt);
+    if (weak) problems.push({ key: 'JWT_SECRET', issue: 'invalid', hint: weak });
   }
   return problems;
 }
@@ -121,14 +130,39 @@ async function promptWizard(): Promise<WizardValues> {
     })
   ).trim();
   const ssl = await confirm({ message: 'O banco exige TLS/SSL? (gerenciado/nuvem)', default: false });
-  const jwt = (
+  const jwt = await promptJwtSecret(file.JWT_SECRET ?? process.env.JWT_SECRET);
+  return { url, ssl, jwt };
+}
+
+/**
+ * `JWT_SECRET`: se o time ainda não tem um, gera um forte aqui e o usuário
+ * distribui; senão, cola o valor do time (validado por `jwtSecretWeakness`).
+ */
+async function promptJwtSecret(current: string | undefined): Promise<string> {
+  if (!current || jwtSecretWeakness(current)) {
+    const gen = await confirm({
+      message: 'Gerar um JWT_SECRET novo? (só se o time ainda não tem um — invalida sessões atuais)',
+      default: !current,
+    });
+    if (gen) {
+      const secret = generateJwtSecret();
+      console.log(
+        box(
+          `${c.bold('JWT_SECRET gerado')} — distribua ${c.bold('este mesmo valor')} pra toda\n` +
+            `máquina que roda o \`nio-gateway\` (ele assina/verifica o login):\n\n  ${c.green(secret)}`,
+          { borderColor: 'green', title: 'guarde agora' },
+        ),
+      );
+      return secret;
+    }
+  }
+  return (
     await password({
       message: 'JWT_SECRET  (segredo compartilhado do time)',
       mask: '*',
-      validate: (v) => v.trim().length >= 8 || 'muito curto — use o valor real do time',
+      validate: (v) => jwtSecretWeakness(v.trim()) ?? true,
     })
   ).trim();
-  return { url, ssl, jwt };
 }
 
 /** Wizard: cola `NIO_DATABASE_URL` + `JWT_SECRET`, testa a conexão, grava o arquivo. */

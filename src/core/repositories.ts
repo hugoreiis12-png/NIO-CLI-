@@ -46,17 +46,23 @@ export interface UserRepository {
   /** Marca `timestamp_last_session = now()`. */
   touchLastSession(userId: number): Promise<void>;
 
-  /** Liga o 2º fator: `auth_2 = true`, grava `phone` (E.164) e os hashes dos códigos de backup. */
-  enable2fa(userId: number, phone: string, backupCodeHashes: string): Promise<void>;
+  /**
+   * Re-grava o hash da senha (re-hash on login — ADR 0011 §B). `pepperId` = o
+   * pepper usado no novo hash. Best-effort no caller (não bloqueia o login).
+   */
+  updatePasswordHash(userId: number, phc: string, pepperId: number): Promise<void>;
+
+  /** Liga o 2º fator: `auth_2 = true`, grava `phone` (E.164), os hashes dos códigos de backup e o pepper usado. */
+  enable2fa(userId: number, phone: string, backupCodeHashes: string, backupPepperId: number): Promise<void>;
 
   /** Desliga o 2º fator: `auth_2 = false`, limpa `phone` e `backup_codes`. */
   disable2fa(userId: number): Promise<void>;
 
-  /** Substitui `backup_codes` (após usar um, ou regenerar). */
-  updateBackupCodes(userId: number, joined: string): Promise<void>;
+  /** Substitui `backup_codes` (após usar um, ou regenerar) + o pepper usado. */
+  updateBackupCodes(userId: number, joined: string, pepperId: number): Promise<void>;
 
-  /** Hashes dos códigos de backup (string crua `hash|hash|[USED]|…`), ou `null`. Só o gateway usa. */
-  getBackupCodes(userId: number): Promise<string | null>;
+  /** Hashes dos códigos de backup (`hash|hash|[USED]|…`) + o pepper usado. Só o gateway usa. */
+  getBackupCodes(userId: number): Promise<{ codes: string | null; pepperId: number }>;
 }
 
 /** Dados para criar um desafio de OTP. `codeHash` é HMAC — nunca o código puro. */
@@ -165,6 +171,53 @@ export interface NewDependencyEventInput {
  * as mesmas deps — só a PRIMEIRA vez vira evento novo (por session+file+name),
  * senão a tabela encheria de duplicatas.
  */
+/** Uma linha de `login_ip_events` (auditoria de IP — ADR 0011 §F). */
+export interface LoginIpEvent {
+  ip: string;
+  firstSeen: Date;
+  lastSeen: Date;
+  count: number;
+}
+
+export interface LoginIpRepository {
+  /** Upsert: registra (ou incrementa) um login de `userId` a partir de `ip`. Best-effort — nunca deve bloquear o login. */
+  record(userId: number, ip: string): Promise<void>;
+
+  /** IPs mais recentes de `userId` (default 10), `lastSeen` desc. */
+  recent(userId: number, limit?: number): Promise<LoginIpEvent[]>;
+
+  /** Apaga eventos com `last_seen` mais velho que `days` (retenção). Devolve quantos. */
+  pruneOlderThan(days: number): Promise<number>;
+}
+
+/** Entrada da trilha de auth (`auth_events` — ADR 0012). */
+export interface AuthEventInput {
+  event: string;
+  name?: string | null;
+  userId?: number | null;
+  ip?: string | null;
+  traceId?: string | null;
+  detail?: Record<string, unknown> | null;
+}
+
+/** Uma falha da trilha, pro `nio security status`. */
+export interface AuthFailure {
+  at: Date;
+  event: string;
+  ip: string | null;
+}
+
+export interface AuthEventRepository {
+  /** Grava um evento. Best-effort no caller — nunca bloqueia a resposta HTTP. */
+  record(input: AuthEventInput): Promise<void>;
+
+  /** Últimas falhas (`password_fail`/`2fa_fail`/`2fa_expired`) de um usuário — por `userId` OU `name`. */
+  recentFailures(opts: { userId?: number | null; name?: string | null; limit?: number }): Promise<AuthFailure[]>;
+
+  /** Retenção — apaga eventos com `at` mais velho que `days`. Devolve quantos. */
+  pruneOlderThan(days: number): Promise<number>;
+}
+
 export interface DependencyEventRepository {
   /**
    * Registra o evento se ainda não houver um pro trio (session, file, name).

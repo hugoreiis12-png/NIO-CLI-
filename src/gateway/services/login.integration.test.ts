@@ -15,6 +15,9 @@ import { query, closePool } from '../../adapters/pg/client.js';
 import { generateBackupCodes } from '../../lib/auth/backup-codes.js';
 import type { SmsResult, SmsSender } from '../../core/messaging.js';
 import { login, verifyLogin } from './login.js';
+import { authenticate } from '../middleware/auth.js';
+import { __clear as clearThrottle } from '../throttle.js';
+import { __resetJwtSecrets } from '../../lib/auth/secrets.js';
 
 const hasEnv = Boolean(process.env.NIO_DATABASE_URL && process.env.JWT_SECRET);
 const dbTest = hasEnv ? test : test.skip;
@@ -42,8 +45,8 @@ dbTest(
     const challenges = createLoginChallengeRepository();
     const password = `pw-${randomUUID()}`;
     const user = await users.create({ name: `nio-2fa-${randomUUID()}`, password });
-    const { codes: backupCodes, hashes } = await generateBackupCodes();
-    await users.enable2fa(user.id, '+5511999998888', hashes);
+    const { codes: backupCodes, hashes, pepperId } = await generateBackupCodes();
+    await users.enable2fa(user.id, '+5511999998888', hashes, pepperId);
 
     try {
       // ── caminho feliz: OTP ────────────────────────────────────────────
@@ -71,6 +74,7 @@ dbTest(
       expect((await verifyLogin(started.challengeId, sms.code!, 'otp')).ok).toBe(false);
 
       // ── OTP errado ×3 → attempts_exhausted + requiresBackupCode ───────
+      clearThrottle(); // zera o cap de SMS (M-4) entre os sub-cenários
       const sms2 = captureSms();
       const s2 = await login(user.name, password, { sms: sms2 });
       if (!s2.ok || s2.step !== '2fa_required') throw new Error('esperava 2fa_required');
@@ -85,6 +89,7 @@ dbTest(
       expect(viaBackup.ok).toBe(true);
 
       // ── challenge expirado ───────────────────────────────────────────
+      clearThrottle();
       const sms3 = captureSms();
       const s3 = await login(user.name, password, { sms: sms3 });
       if (!s3.ok || s3.step !== '2fa_required') throw new Error();
@@ -115,6 +120,37 @@ dbTest('login 1FA: usuário sem auth_2 → step done + auth_session', async () =
 
     expect((await login(user.name, 'senha-errada')).ok).toBe(false);
   } finally {
+    await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
+  }
+}, 20_000);
+
+dbTest('JWT rotação (§E): token com kid é aceito por authenticate; kid removido → recusa', async () => {
+  const users = createUserRepository();
+  const password = `pw-${randomUUID()}`;
+  const user = await users.create({ name: `nio-kid-${randomUUID()}`, password });
+  const oldJwtSecrets = process.env.JWT_SECRETS;
+  const A = 'segredo-jwt-antigo-com-mais-de-32-caracteres';
+  const B = 'segredo-jwt-novo-com-mais-de-32-caracteres!!';
+  try {
+    process.env.JWT_SECRETS = `k1:${A},k2:${B}`;
+    __resetJwtSecrets();
+    const out = await login(user.name, password);
+    if (!out.ok || out.step !== 'done') throw new Error('esperava done');
+
+    // token foi assinado com o kid mais novo (k2) e authenticate resolve a chave
+    expect(jwt.decode(out.session.token, { complete: true })?.header.kid).toBe('k2');
+    expect((await authenticate(`Bearer ${out.session.token}`)).ok).toBe(true);
+
+    // aposenta o k2 → o token vira inválido (chave não reconhecida)
+    process.env.JWT_SECRETS = `k1:${A}`;
+    __resetJwtSecrets();
+    const after = await authenticate(`Bearer ${out.session.token}`);
+    expect(after.ok).toBe(false);
+    if (!after.ok) expect(after.reason).toBe('token_invalido');
+  } finally {
+    if (oldJwtSecrets === undefined) delete process.env.JWT_SECRETS;
+    else process.env.JWT_SECRETS = oldJwtSecrets;
+    __resetJwtSecrets();
     await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
   }
 }, 20_000);

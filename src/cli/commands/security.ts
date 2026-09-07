@@ -130,6 +130,29 @@ async function runRegenerate(): Promise<void> {
   }
 }
 
+async function runChangePassword(): Promise<void> {
+  const token = await requireToken();
+  section("senha", "trocar");
+  const current = await password({ message: "Senha atual", mask: "*" });
+  const next = await password({
+    message: "Senha nova (mínimo 8 caracteres)",
+    mask: "*",
+    validate: (v) => v.length >= 8 || "mínimo 8 caracteres",
+  });
+  const confirmed = await password({ message: "Repita a senha nova", mask: "*" });
+  if (next !== confirmed) {
+    console.error(`${c.red(sym.err)} as senhas não conferem.`);
+    process.exit(1);
+  }
+  try {
+    await gatewaySecurity.changePassword(token, current, next);
+    console.log(`${c.green(sym.ok)} senha trocada. Todas as sessões foram encerradas — rode \`${brand.name} login\`.`);
+  } catch (err) {
+    console.error(`${c.red(sym.err)} ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+
 async function runStatus(opts: { json?: boolean }): Promise<void> {
   const token = await requireToken();
   let st;
@@ -147,14 +170,39 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
   if (st.enabled) {
     console.log(`número:   ${st.phoneHint}`);
     console.log(`backup:   ${st.backupCodesRemaining} código(s) restante(s)`);
+    if (st.regenerateBackupCodesRecommended) {
+      console.log(
+        `${c.yellow(sym.warn)} os códigos de backup usam um pepper antigo — ` +
+          `rode \`${brand.name} security regenerate-backup-codes\`.`,
+      );
+    }
+  }
+  if (st.recentIps && st.recentIps.length > 0) {
+    console.log(`\nIPs de login recentes:`);
+    for (const e of st.recentIps) {
+      const when = new Date(e.lastSeen).toISOString().slice(0, 16).replace("T", " ");
+      console.log(`  ${e.ip.padEnd(24)} ${c.dim(`${when} · ${e.count}×`)}`);
+    }
+    console.log(c.dim(`  (só auditoria — o login não é bloqueado por IP)`));
+  }
+  if (st.recentFailedAttempts && st.recentFailedAttempts.length > 0) {
+    console.log(`\n${c.yellow(sym.warn)} tentativas de auth falhas recentes:`);
+    for (const f of st.recentFailedAttempts) {
+      const when = new Date(f.at).toISOString().slice(0, 16).replace("T", " ");
+      console.log(`  ${(f.ip ?? "?").padEnd(24)} ${c.dim(`${when} · ${f.event}`)}`);
+    }
   }
 }
 
 export function registerSecurityCommands(program: Command): void {
-  const cmd = program.command("security").description("2º fator do login (SMS OTP + códigos de backup)");
+  const cmd = program.command("security").description("Senha e 2º fator do login (SMS OTP + códigos de backup)");
 
   cmd.command("enable-2fa").description("Ativa o 2º fator via SMS").action(runEnable);
   cmd.command("disable-2fa").description("Desativa o 2º fator").action(runDisable);
+  cmd
+    .command("change-password")
+    .description("Troca a senha (exige a senha atual) e encerra todas as sessões")
+    .action(runChangePassword);
   cmd
     .command("regenerate-backup-codes")
     .description("Invalida os códigos de backup e gera 10 novos")

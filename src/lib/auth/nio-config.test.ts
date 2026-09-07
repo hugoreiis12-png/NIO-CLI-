@@ -37,7 +37,15 @@ test('validateConfigShape: pega faltando e formato inválido, sem tocar rede', (
     { key: 'NIO_DATABASE_URL', issue: 'missing', hint: expect.any(String) },
     { key: 'JWT_SECRET', issue: 'missing', hint: expect.any(String) },
   ]);
-  const bad = validateConfigShape({ NIO_DATABASE_URL: 'mysql://x', JWT_SECRET: 's' });
+  const strong = 'x7K2p9Qw3mZ1aB5nR8tL4vE6cH0jY2sD';
+  const bad = validateConfigShape({ NIO_DATABASE_URL: 'mysql://x', JWT_SECRET: strong });
   expect(bad).toEqual([{ key: 'NIO_DATABASE_URL', issue: 'invalid', hint: expect.any(String) }]);
-  expect(validateConfigShape({ NIO_DATABASE_URL: 'postgres://u@h:5432/d', JWT_SECRET: 's' })).toEqual([]);
+  expect(validateConfigShape({ NIO_DATABASE_URL: 'postgres://u@h:5432/d', JWT_SECRET: strong })).toEqual([]);
+
+  // JWT_SECRET fraco (H-1): curto ou sem variedade → 'invalid'
+  const weak = validateConfigShape({ NIO_DATABASE_URL: 'postgres://u@h:5432/d', JWT_SECRET: 's' });
+  expect(weak).toEqual([{ key: 'JWT_SECRET', issue: 'invalid', hint: expect.any(String) }]);
+  expect(
+    validateConfigShape({ NIO_DATABASE_URL: 'postgres://u@h:5432/d', JWT_SECRET: 'a'.repeat(40) }),
+  ).toEqual([{ key: 'JWT_SECRET', issue: 'invalid', hint: expect.any(String) }]);
 });

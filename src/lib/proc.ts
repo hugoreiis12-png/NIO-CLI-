@@ -23,8 +23,40 @@ import {
   type SpawnSyncOptions,
   type SpawnSyncReturns,
 } from 'node:child_process';
+import { accessSync, constants, statSync } from 'node:fs';
+import { delimiter, isAbsolute, join } from 'node:path';
 
 const isWin = process.platform === 'win32';
+
+function isExecutableFile(p: string): boolean {
+  try {
+    if (!statSync(p).isFile()) return false;
+    if (!isWin) accessSync(p, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `<binary>` está resolvível no PATH? Só olha o filesystem — **não executa**.
+ * Detectar presença via `<bin> --version` trava 5 s quando o binário não trata
+ * `--version` e faz trabalho de verdade (ex.: o próprio `nio-gateway`, que sobe
+ * o servidor). No Windows cobre os shims `.cmd`/`.bat`/`.exe` (PATHEXT), como o
+ * `spawnSyncPortable` faz via `shell: true`.
+ */
+export function binaryOnPath(binary: string): boolean {
+  const exts = isWin
+    ? ['', ...(process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)]
+    : [''];
+  if (isAbsolute(binary) || binary.includes('/') || (isWin && binary.includes('\\'))) {
+    return exts.some((ext) => isExecutableFile(binary + ext));
+  }
+  for (const dir of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
+    if (exts.some((ext) => isExecutableFile(join(dir, binary + ext)))) return true;
+  }
+  return false;
+}
 
 /** Quota um argumento pro `cmd.exe` (aspas se tiver espaço/metacaractere; `"`→`""`). */
 function winQuote(arg: string): string {

@@ -1,15 +1,18 @@
 import { test, expect } from 'bun:test';
-import { mapUserRow } from './user-repository.js';
+import { mapUserRow, createUserRepository } from './user-repository.js';
+import { MIN_PASSWORD_LENGTH } from '../../lib/auth/password.js';
 
 const baseRow = {
   id: '42',
   name: 'hugo',
   password: '$argon2id$v=19$m=19456,t=2,p=1$abc$def',
+  password_pepper_id: 0,
   timestamp_creation: new Date('2026-08-21T10:00:00Z'),
   timestamp_password_change: null,
   auth_2: false,
   phone: null,
   backup_codes: null,
+  backup_pepper_id: 0,
   timestamp_last_session: null,
   ips_using: '["10.0.0.1","10.0.0.2"]',
 };
@@ -35,6 +38,13 @@ test('mapUserRow tolera ips_using nulo ou inválido → []', () => {
 test('mapUserRow preserva flags', () => {
   const user = mapUserRow({ ...baseRow, auth_2: true });
   expect(user.auth2).toBe(true);
+});
+
+test('create: rejeita senha curta antes de tocar o banco (enforce server-side)', async () => {
+  const repo = createUserRepository();
+  await expect(repo.create({ name: 'x', password: 'a'.repeat(MIN_PASSWORD_LENGTH - 1) })).rejects.toThrow(
+    /curta/,
+  );
 });
 
 test('mapUserRow expõe phone mas nunca backup_codes', () => {

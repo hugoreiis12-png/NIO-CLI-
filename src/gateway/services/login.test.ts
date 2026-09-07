@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import {
   expiresInMs,
   maskPhone,
@@ -8,13 +8,18 @@ import {
   type LoginDeps,
 } from './login.js';
 import { hashOtp } from '../../lib/auth/otp.js';
+import { __clear as clearThrottle } from '../throttle.js';
 import type { UserCli, LoginChallenge } from '../../core/types.js';
 import type { UserRepository, LoginChallengeRepository } from '../../core/repositories.js';
 import type { SmsSender } from '../../core/messaging.js';
 
 beforeAll(() => {
-  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-login';
+  // ≥ 32 chars + variedade — `getJwtSecret()` rejeita segredo fraco (H-1).
+  process.env.JWT_SECRET ||= 'test-secret-login-3xK9pQ2mZ7bR4nT8vW1s';
 });
+
+// o rate limiting de SMS (M-4) é estado global do processo — zera entre testes
+beforeEach(clearThrottle);
 
 // ─── expiresInMs (inalterado) ───────────────────────────────────────
 describe('expiresInMs', () => {
@@ -72,7 +77,7 @@ function deps(over: Partial<{ u: UserCli | null; challenge: LoginChallenge | nul
   const users: Partial<UserRepository> = {
     verifyCredentials: async () => over.u ?? null,
     findById: async () => over.u ?? null,
-    getBackupCodes: async () => null,
+    getBackupCodes: async () => ({ codes: null, pepperId: 0 }),
     updateBackupCodes: async () => {},
   };
   const challenges: Partial<LoginChallengeRepository> = {
@@ -144,8 +149,19 @@ describe('verifyLogin', () => {
     expect(await verifyLogin('ch1', '000003', 'otp', d)).toMatchObject({ ok: false, reason: 'attempts_exhausted', requiresBackupCode: true });
   });
 
-  test('backup code inválido → invalid', async () => {
-    const out = await verifyLogin('ch1', 'AAAAAAAA', 'backup', deps({ challenge: ch(), u: user() }));
-    expect(out).toEqual({ ok: false, reason: 'invalid' });
+  test('backup code inválido → invalid com remaining; teto absoluto → attempts_exhausted (L-2)', async () => {
+    const d = deps({ challenge: ch(), u: user() });
+    // O contador é compartilhado com o OTP; teto absoluto = CHALLENGE_MAX_ATTEMPTS (6).
+    for (let i = 1; i < 6; i++) {
+      expect(await verifyLogin('ch1', 'AAAAAAAA', 'backup', d)).toMatchObject({
+        ok: false,
+        reason: 'invalid',
+        remaining: 6 - i,
+      });
+    }
+    expect(await verifyLogin('ch1', 'AAAAAAAA', 'backup', d)).toMatchObject({
+      ok: false,
+      reason: 'attempts_exhausted',
+    });
   });
 });

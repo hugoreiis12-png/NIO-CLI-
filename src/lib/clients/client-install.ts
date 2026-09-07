@@ -1,4 +1,5 @@
-import { spawnSyncPortable } from '../proc.js';
+import { binaryOnPath, spawnSyncPortable } from '../proc.js';
+import { OPENCODE_SDK_VERSION } from '../../version.js';
 
 /**
  * Metadados dos clientes de IA suportados — pra checar se estão instalados e
@@ -28,14 +29,41 @@ export const CLIENTS: Record<string, ClientInfo> = {
   },
 };
 
-/** Detecta se um binário existe no PATH (roda `<bin> --version`). */
+/**
+ * Detecta se um binário existe no PATH. Só resolve o caminho — não executa (ver
+ * `binaryOnPath`: rodar `<bin> --version` trava com binários que não tratam a
+ * flag, como o `nio-gateway`).
+ */
 export function isBinaryInstalled(binary: string): boolean {
+  return binaryOnPath(binary);
+}
+
+/** `major.minor` de uma string de versão (`"1.18.26"` → `"1.18"`). */
+function majorMinor(v: string): string {
+  return v.split('.').slice(0, 2).join('.');
+}
+
+/** Versão `x.y.z` do binário `opencode` no PATH, ou `null` se não deu pra ler. */
+export function opencodeBinaryVersion(): string | null {
   try {
-    // `spawnSyncPortable` acha shims `.cmd`/`.bat` no Windows (ver src/lib/proc.ts).
-    const res = spawnSyncPortable(binary, ['--version'], { stdio: 'ignore', timeout: 5000 });
-    // ENOENT → não está no PATH. Qualquer exit code (mesmo != 0) = existe.
-    return !res.error;
+    const res = spawnSyncPortable('opencode', ['--version'], { encoding: 'utf8', timeout: 5000 });
+    if (res.error) return null;
+    const m = /(\d+)\.(\d+)\.(\d+)/.exec(`${res.stdout ?? ''}${res.stderr ?? ''}`);
+    return m ? m[0] : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/**
+ * O `opencode` no PATH está numa minor compatível com o SDK que a CLI embute?
+ * `null` = alinhado (ou não deu pra checar). Só compara `major.minor` — patch
+ * pode divergir (auditoria §4.2). Warn-only: o caller avisa, não bloqueia.
+ */
+export function opencodeVersionSkew(): { binary: string; sdk: string } | null {
+  const binary = opencodeBinaryVersion();
+  if (!binary || !OPENCODE_SDK_VERSION) return null;
+  return majorMinor(binary) === majorMinor(OPENCODE_SDK_VERSION)
+    ? null
+    : { binary, sdk: OPENCODE_SDK_VERSION };
 }

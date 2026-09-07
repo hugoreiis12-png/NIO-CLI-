@@ -1,5 +1,8 @@
 import { test, expect } from "bun:test";
-import { parseStoredSession } from "./session-store.js";
+import { mkdtempSync, statSync } from "node:fs";
+import { tmpdir, platform } from "node:os";
+import { join } from "node:path";
+import { parseStoredSession, saveSession } from "./session-store.js";
 
 const VALID = {
   userId: 1,
@@ -36,4 +39,10 @@ test("parseStoredSession: null para o shape antigo do v1 (pat/user/fetched_at)",
 test("parseStoredSession: null para o shape v2 anterior (sem sessionId/expiresAt — token_session)", () => {
   const { sessionId, expiresAt, ...semJwt } = VALID;
   expect(parseStoredSession(semJwt)).toBeNull();
+});
+
+test.skipIf(platform() === "win32")("saveSession: arquivo nasce 0600, não 0644 (L-4)", async () => {
+  const file = join(mkdtempSync(join(tmpdir(), "nio-sess-")), "session.json");
+  await saveSession(VALID, file);
+  expect(statSync(file).mode & 0o777).toBe(0o600);
 });

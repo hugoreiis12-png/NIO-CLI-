@@ -4,10 +4,11 @@ import { brand } from "../../brand.js";
 import { animateMatrixLogo } from "../../matrix-logo.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { c, sym } from "../../lib/colors.js";
-import { createUserRepository } from "../../adapters/pg/user-repository.js";
+import { MIN_PASSWORD_LENGTH } from "../../lib/auth/password.js";
 import {
   gatewayLogin,
   gatewayLogout,
+  gatewayRegister,
   gatewayVerify2fa,
   type GatewaySession,
 } from "../../lib/auth/gateway-client.js";
@@ -49,7 +50,6 @@ async function resolveSecondFactor(
   return null;
 }
 
-const MIN_PASSWORD_LENGTH = 8;
 
 /** Gateway no ar antes do login: sobe sozinho, ou orienta e sai. */
 async function requireGateway(): Promise<void> {
@@ -112,9 +112,10 @@ export async function runLogin(): Promise<void> {
   console.log(`ID:      ${session.userId}`);
 }
 
-/** Cria o usuário em `user_cli` (Postgres direto, argon2id) e cai no login. */
+/** Cria o usuário via `nio-gateway` (`POST /register`, argon2id) e cai no login. */
 export async function runRegister(): Promise<void> {
   await ensureConfig({ interactive: true });
+  await requireGateway();
   const name = await input({
     message: authCopy.register.namePrompt,
     validate: (v) => v.trim().length > 0 || authCopy.register.nameInvalid,
@@ -125,17 +126,11 @@ export async function runRegister(): Promise<void> {
     validate: (v) => v.length >= MIN_PASSWORD_LENGTH || authCopy.register.passwordInvalid,
   });
 
-  const repo = createUserRepository();
   const spinner = startSpinner("Criando usuário...");
   try {
-    const existing = await repo.findByName(name.trim());
-    if (existing) {
-      spinner.fail(`Usuário "${name.trim()}" já existe.`);
-      process.exit(1);
-    }
-    const user = await repo.create({ name: name.trim(), password: pass });
+    const user = await gatewayRegister(name.trim(), pass);
     spinner.stop();
-    console.log(`${c.green(sym.ok)} Usuário criado: ${user.name} (id ${user.id})`);
+    console.log(`${c.green(sym.ok)} Usuário criado: ${user.name} (id ${user.userId})`);
   } catch (err) {
     spinner.fail(`Falha ao criar usuário: ${(err as Error).message}`);
     process.exit(1);
@@ -148,7 +143,7 @@ export async function runRegister(): Promise<void> {
 function registerRegisterCommand(program: Command): void {
   program
     .command("register")
-    .description("Cria um novo usuário no banco (user_cli) e já entra (login)")
+    .description("Cria um novo usuário via nio-gateway e já entra (login)")
     .action(async () => {
       await runRegister();
       await continueChain({ from: "command" });
@@ -173,7 +168,7 @@ function registerLogoutCommand(program: Command): void {
       const session = await loadSession();
       if (session) {
         try {
-          await gatewayLogout(session.sessionId);
+          await gatewayLogout(session.sessionId, session.token);
         } catch {
           // gateway fora do ar — ainda assim limpamos a sessão local.
         }

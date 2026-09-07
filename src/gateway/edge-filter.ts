@@ -21,7 +21,9 @@ export interface RequestContext {
 /** Monta o contexto da request reaproveita `x-nio-trace-id` se já veio de um hop anterior (ex.: Kong/Edge Filter externo). */
 export function buildContext(req: FilterableRequest): RequestContext {
   const traceHeader = req.headers['x-nio-trace-id'];
-  const traceId = (Array.isArray(traceHeader) ? traceHeader[0] : traceHeader) || randomUUID();
+  // TP-6: o header vem do cliente (até `maxHeaderSize`, ~16 KB) e é gravado
+  // verbatim em `auth_events.trace_id` — cap em 64 chars.
+  const traceId = (Array.isArray(traceHeader) ? traceHeader[0] : traceHeader)?.slice(0, 64) || randomUUID();
   return {
     traceId,
     method: req.method ?? 'UNKNOWN',
@@ -64,6 +66,23 @@ export function extractGatewayToken(req: FilterableRequest): string | null {
   return firstHeaderValue(req.headers['x-nio-gateway-token']);
 }
 
+/**
+ * IP do cliente (auditoria de login — ADR 0011 §F). Default: o peer da conexão
+ * (`socket.remoteAddress`). Com `NIO_TRUST_PROXY=1`: o 1º valor de
+ * `X-Forwarded-For` — **só ligue isso quando o Kong for a ÚNICA entrada do
+ * gateway** (senão qualquer um forja o header). Normaliza IPv4-mapeado.
+ */
+export function clientIp(req: FilterableRequest & { socket?: { remoteAddress?: string } }): string | null {
+  let ip: string | null = null;
+  const trust = /^(1|true|yes|on)$/i.test((process.env.NIO_TRUST_PROXY ?? '').trim());
+  if (trust) {
+    const xff = firstHeaderValue(req.headers['x-forwarded-for']);
+    if (xff) ip = xff.split(',')[0]!.trim() || null;
+  }
+  ip ??= req.socket?.remoteAddress ?? null;
+  return ip ? ip.replace(/^::ffff:/, '') : null;
+}
+
 /** Compara em tempo constante — evita vazar o token por diferença de latência. */
 export function tokensMatch(provided: string | null, expected: string): boolean {
   if (!provided) return false;
@@ -73,13 +92,24 @@ export function tokensMatch(provided: string | null, expected: string): boolean 
   return timingSafeEqual(a, b);
 }
 
+/**
+ * Erro cuja mensagem PODE voltar pro cliente (input inválido). Qualquer outra
+ * exceção no handler é interna e vira uma resposta genérica (auditoria L-3).
+ */
+export class BadRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BadRequestError';
+  }
+}
+
 /** Lê o corpo da request como JSON. Throw com mensagem acionável se exceder o limite ou não for JSON válido. */
 export async function readJsonBody<T>(req: IncomingMessage, maxBytes = 1_000_000): Promise<T> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req as AsyncIterable<Buffer>) {
     size += chunk.length;
-    if (size > maxBytes) throw new Error('corpo da request excede o limite permitido');
+    if (size > maxBytes) throw new BadRequestError('corpo da request excede o limite permitido');
     chunks.push(chunk);
   }
   const raw = Buffer.concat(chunks).toString('utf8').trim();
@@ -87,6 +117,6 @@ export async function readJsonBody<T>(req: IncomingMessage, maxBytes = 1_000_000
   try {
     return JSON.parse(raw) as T;
   } catch {
-    throw new Error('corpo da request não é JSON válido');
+    throw new BadRequestError('corpo da request não é JSON válido');
   }
 }

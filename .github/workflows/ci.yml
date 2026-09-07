@@ -29,7 +29,9 @@ jobs:
 
     env:
       NIO_DATABASE_URL: postgres://postgres:postgres@localhost:5432/nio_cli
-      JWT_SECRET: ci-test-secret
+      # ≥ 32 chars + variedade — o gateway rejeita segredo fraco (auditoria H-1).
+      # Valor de teste efêmero, não é segredo real.
+      JWT_SECRET: ci-only-4f9c2ka7Qh1Zpx8Rbn3Vdw6Tty0Lms5Ej
 
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +57,13 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
           psql "$NIO_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/schema.sql
+
+      - name: Registrar baseline de migrações
+        # schema.sql já inclui 0001..000N — marca como aplicadas e depois roda o
+        # que sobrar (migração nova ainda não incorporada ao schema.sql).
+        run: |
+          bun run db:migrate --baseline
+          bun run db:migrate
 
       - name: Test
         run: bun test

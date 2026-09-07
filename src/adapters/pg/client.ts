@@ -6,12 +6,15 @@
  * por conta própria. Node-first via driver `pg` (ver CLAUDE.md — não usar Bun.sql).
  *
  * Config exclusivamente por ambiente:
- *  - `NIO_DATABASE_URL`  (obrigatória) — `postgres://user:pass@host:5432/nio_cli`
- *  - `NIO_DATABASE_SSL`  (opcional)    — `true`/`1` liga TLS (bancos gerenciados)
+ *  - `NIO_DATABASE_URL`      (obrigatória) — `postgres://user:pass@host:5432/nio_cli`
+ *  - `NIO_DATABASE_SSL`      (opcional)    — `true`/`1` liga TLS **com verificação de cert**
+ *  - `NIO_DATABASE_CA`       (opcional)    — path pra um PEM de CA privada (provedores gerenciados)
+ *  - `NIO_DATABASE_SSL_INSECURE` (opcional)— `1` desliga a verificação de cert (MITM!) — só último recurso
  *
  * Nenhum segredo é lido de arquivo nem hardcoded. Se a URL faltar, falha explícito
  * na primeira necessidade de conexão — nunca cai num destino default silencioso.
  */
+import { readFileSync } from 'node:fs';
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
 
 /** Lê e valida `NIO_DATABASE_URL`. Throw com mensagem acionável se ausente/ inválida. */
@@ -31,11 +34,44 @@ function readDatabaseUrl(): string {
   return url;
 }
 
-/** TLS só quando explicitamente ligado — default é conexão simples (dev local). */
-function readSslOption(): { rejectUnauthorized: boolean } | undefined {
-  const flag = process.env.NIO_DATABASE_SSL?.trim().toLowerCase();
-  if (flag === 'true' || flag === '1') return { rejectUnauthorized: false };
-  return undefined;
+/** Um flag env vale `true`/`1` (case-insensitive). */
+function envFlag(name: string): boolean {
+  const v = process.env[name]?.trim().toLowerCase();
+  return v === 'true' || v === '1';
+}
+
+/** Opção `ssl` do `pg.Pool` a partir do ambiente. Pura o suficiente pra testar. */
+export type PgSslOption = boolean | { rejectUnauthorized: boolean; ca?: string };
+
+/**
+ * TLS só quando explicitamente ligado (`NIO_DATABASE_SSL`). Quando ligado, o
+ * certificado do servidor **é verificado** (`rejectUnauthorized: true`) — a versão
+ * antiga aceitava qualquer cert, o que permitia MITM justamente no cenário
+ * gerenciado/nuvem. `NIO_DATABASE_CA` aponta um PEM de CA privada; só
+ * `NIO_DATABASE_SSL_INSECURE=1` desliga a verificação, e isso grita no log.
+ */
+export function readSslOption(): PgSslOption | undefined {
+  if (!envFlag('NIO_DATABASE_SSL')) return undefined;
+
+  if (envFlag('NIO_DATABASE_SSL_INSECURE')) {
+    console.error(
+      '[pg] AVISO: NIO_DATABASE_SSL_INSECURE=1 — TLS sem verificação de certificado. ' +
+        'A conexão com o banco fica vulnerável a MITM. Use NIO_DATABASE_CA em vez disso.',
+    );
+    return { rejectUnauthorized: false };
+  }
+
+  const caPath = process.env.NIO_DATABASE_CA?.trim();
+  if (caPath) {
+    try {
+      return { rejectUnauthorized: true, ca: readFileSync(caPath, 'utf8') };
+    } catch (err) {
+      throw new Error(
+        `NIO_DATABASE_CA não pôde ser lido ("${caPath}"): ${(err as Error).message}`,
+      );
+    }
+  }
+  return { rejectUnauthorized: true };
 }
 
 let pool: Pool | null = null;

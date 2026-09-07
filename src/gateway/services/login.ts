@@ -13,7 +13,9 @@ import { createLoginChallengeRepository } from '../../adapters/pg/login-challeng
 import { createHttpSmsSender } from '../../adapters/sms/http-generic.js';
 import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
 import { verifyBackupCode, markUsed, countRemaining } from '../../lib/auth/backup-codes.js';
-import { getJwtSecret, JWT_EXPIRES_IN } from '../config.js';
+import { JWT_EXPIRES_IN, JWT_ISSUER, JWT_AUDIENCE } from '../config.js';
+import { jwtSigningKey } from '../../lib/auth/secrets.js';
+import { smsAllowed } from '../throttle.js';
 
 export interface SessionPayload {
   token: string;
@@ -27,6 +29,12 @@ export interface SessionPayload {
 export const OTP_TTL_MS = 5 * 60 * 1000;
 /** Tentativas de OTP antes de cair pro código de backup. */
 export const OTP_MAX_ATTEMPTS = 3;
+/**
+ * Teto absoluto de tentativas por desafio (OTP + backup somados no mesmo
+ * contador `attempts`). Depois disso o desafio trava — não dá pra brute-forçar
+ * código de backup à vontade dentro do TTL (auditoria L-2).
+ */
+export const CHALLENGE_MAX_ATTEMPTS = OTP_MAX_ATTEMPTS * 2;
 
 export type LoginOutcome =
   | { ok: false; reason: 'bad_credentials' }
@@ -41,6 +49,8 @@ export type VerifyOutcome =
       reason: 'not_found' | 'expired' | 'consumed' | 'invalid' | 'attempts_exhausted';
       remaining?: number;
       requiresBackupCode?: boolean;
+      /** dono do desafio, quando conhecido — pra atribuir o `2fa_fail` na trilha (ADR 0012). */
+      userId?: number;
     };
 
 export interface LoginDeps {
@@ -84,10 +94,17 @@ export async function issueSession(user: UserCli): Promise<SessionPayload> {
   const session = await createAuthSessionRepository().create({ userId: user.id, expiresAt });
   // `expiresIn` como number (segundos) — `@types/jsonwebtoken` tipa a forma string
   // via `StringValue`, que não aceita `string` genérico de env var.
+  const { kid, secret } = jwtSigningKey();
   const token = jwt.sign(
     { sub: String(user.id), jti: session.id },
-    getJwtSecret(),
-    { algorithm: 'HS256', expiresIn: Math.floor(ms / 1000) },
+    secret,
+    {
+      algorithm: 'HS256',
+      expiresIn: Math.floor(ms / 1000),
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+      ...(kid ? { keyid: kid } : {}),
+    },
   );
   return { token, userId: user.id, name: user.name, sessionId: session.id, expiresAt };
 }
@@ -107,6 +124,12 @@ export async function login(
 
   if (!user.auth2 || !user.phone) {
     return { ok: true, step: 'done', session: await issueSession(user) };
+  }
+
+  // M-4: cap de SMS por usuário/número — mesmo com a senha certa, não dá pra
+  // torrar SMS repetindo o login.
+  if (!smsAllowed(user.id, user.phone)) {
+    return { ok: false, reason: 'server_error', error: 'muitos códigos solicitados — aguarde alguns minutos.' };
   }
 
   const challenges = deps.challenges ?? createLoginChallengeRepository();
@@ -153,18 +176,25 @@ export async function verifyLogin(
   const ch = usable.ch;
 
   const user = await users.findById(ch.userId);
-  if (!user) return { ok: false, reason: 'not_found' };
+  if (!user) return { ok: false, reason: 'not_found', userId: ch.userId };
 
   if (type === 'backup') {
     const stored = await users.getBackupCodes(ch.userId);
-    const idx = await verifyBackupCode(code, stored);
-    if (idx < 0) return { ok: false, reason: 'invalid' };
-    await users.updateBackupCodes(ch.userId, markUsed(stored!, idx));
+    const idx = await verifyBackupCode(code, stored.codes, stored.pepperId);
+    if (idx < 0) {
+      // O contador `attempts` é compartilhado com a fase OTP (que já pode ter
+      // gastado 3), então o teto aqui é o absoluto do desafio, não o do OTP.
+      const attempts = await challenges.incrementAttempts(ch.id);
+      if (attempts >= CHALLENGE_MAX_ATTEMPTS) return { ok: false, reason: 'attempts_exhausted', userId: ch.userId };
+      return { ok: false, reason: 'invalid', remaining: CHALLENGE_MAX_ATTEMPTS - attempts, userId: ch.userId };
+    }
+    const used = markUsed(stored.codes!, idx);
+    await users.updateBackupCodes(ch.userId, used, stored.pepperId);
     await challenges.consume(ch.id);
     return {
       ok: true,
       session: await issueSession(user),
-      backupCodesRemaining: countRemaining(markUsed(stored!, idx)),
+      backupCodesRemaining: countRemaining(used),
     };
   }
 
@@ -175,9 +205,9 @@ export async function verifyLogin(
 
   const attempts = await challenges.incrementAttempts(ch.id);
   if (attempts >= OTP_MAX_ATTEMPTS) {
-    return { ok: false, reason: 'attempts_exhausted', requiresBackupCode: true };
+    return { ok: false, reason: 'attempts_exhausted', requiresBackupCode: true, userId: ch.userId };
   }
-  return { ok: false, reason: 'invalid', remaining: OTP_MAX_ATTEMPTS - attempts };
+  return { ok: false, reason: 'invalid', remaining: OTP_MAX_ATTEMPTS - attempts, userId: ch.userId };
 }
 
 /** Revoga a auth_session (logout). Idempotente. */

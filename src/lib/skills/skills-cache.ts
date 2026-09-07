@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import AdmZip from 'adm-zip';
 import { brand, env, homePath } from '../../brand.js';
+import { codeloadZipUrl, fetchZipball, isPinnedRef, rejectSymlinks } from '../fetch-zipball.js';
+import { VERSION, semverGt } from '../../version.js';
 
 /**
  * Skills como repo aberto (não pacote npm): o CLI baixa o zipball do GitHub pro
@@ -116,15 +118,20 @@ export async function fetchSkills(
     return { status: 'cached', dir, repo, ref };
   }
 
-  const url = `https://codeload.github.com/${repo}/zip/refs/heads/${ref}`;
+  // H-3: `ref` deve ser um commit SHA (imutável). Branch/tag = fonte não-pinada:
+  // o conteúdo vira hooks executados + planos de instalação, então avisamos alto.
+  if (!isPinnedRef(ref)) {
+    console.error(
+      `[${brand.mcpBinName}] AVISO: skills vêm de "${ref}" (não é um commit SHA). ` +
+        'Fonte não-pinada = execução de código sem revisão. Pine `brand.skillsRef` a um SHA.',
+    );
+  }
+
+  const url = codeloadZipUrl(repo, ref);
   const staging = join(tmpdir(), `${brand.name}-skills-${process.pid}-${Date.now()}`);
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { signal: ac.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ao baixar ${url}`);
-    const buf = Buffer.from(await res.arrayBuffer());
+    const buf = await fetchZipball(url, { timeoutMs });
 
     // O zipball tem um único dir raiz (`<repo>-<ref>/`); extrai e mira nele.
     rmSync(staging, { recursive: true, force: true });
@@ -132,6 +139,7 @@ export async function fetchSkills(
     new AdmZip(buf).extractAllTo(staging, true);
     const dirs = readdirSync(staging, { withFileTypes: true }).filter((e) => e.isDirectory());
     const root = dirs.length === 1 ? join(staging, dirs[0].name) : staging;
+    rejectSymlinks(root); // TP-4 — nada de `x -> ~/.ssh/id_rsa` no bundle
 
     // Substitui o cache pelo conteúdo baixado.
     rmSync(dir, { recursive: true, force: true });
@@ -143,27 +151,46 @@ export async function fetchSkills(
 
     return { status: 'fetched', dir, repo, ref };
   } catch (err) {
-    const msg = ac.signal.aborted
-      ? `timeout após ${timeoutMs}ms baixando ${url}`
-      : (err as Error).message;
+    const msg = (err as Error).message;
     if (skillsCached()) {
       return { status: 'cached', dir, repo, ref, error: msg };
     }
     return { status: 'failed', dir, repo, ref, error: msg };
   } finally {
-    clearTimeout(timer);
     rmSync(staging, { recursive: true, force: true });
   }
 }
 
 /**
- * Garante o cache pro runtime do MCP: baixa se ausente **ou velho** (TTL). Cache
- * fresco → retorno `cached` sem tocar a rede. Best-effort — fetch que falha com
+ * Garante o cache pro runtime do MCP: baixa se ausente, **velho** (TTL), ou se o
+ * `ref` pinado mudou (upgrade da CLI que bumpou `brand.skillsRef`). Cache fresco e
+ * no ref certo → `cached` sem tocar a rede. Best-effort — fetch que falha com
  * cache presente segue com o cache (`fetchSkills`).
  */
 export async function ensureSkillsCache(): Promise<FetchResult> {
-  if (skillsCached() && !skillsCacheStale()) {
+  const refMatches = cacheMeta()?.ref === skillsRef();
+  if (skillsCached() && refMatches && !skillsCacheStale()) {
     return fetchSkills({ force: false });
   }
   return fetchSkills({ force: true });
+}
+
+/**
+ * O bundle de skills no cache exige uma CLI mais nova que esta? (§4.1 da
+ * auditoria). Lê `nio-skills.json` na raiz do cache — `{ "min_cli_version":
+ * "x.y.z" }`. Ausente / ilegível → `null` (bundle antigo, sem contrato). Warn,
+ * não bloqueio: o caller avisa e segue.
+ */
+export function skillsMinCliWarning(dir: string = skillsCacheDir(), cliVersion: string = VERSION): string | null {
+  try {
+    const raw = readFileSync(join(dir, 'nio-skills.json'), 'utf8');
+    const min = (JSON.parse(raw) as { min_cli_version?: unknown }).min_cli_version;
+    if (typeof min !== 'string' || !semverGt(min, cliVersion)) return null;
+    return (
+      `o bundle de skills pede a CLI >= ${min}, mas esta é ${cliVersion}. ` +
+      `Atualize: npm i -g ${brand.packageName}. Skills podem se comportar de forma inesperada.`
+    );
+  } catch {
+    return null;
+  }
 }

@@ -57,7 +57,17 @@ export const brand = {
   // --- Repo de skills ---
   /** Refatorado por outro time (`noclaf-skills` → `nio-skills`). */
   skillsRepo: 'hugoreiis12-png/NIO-SKILLS-',
-  skillsRef: 'main',
+  /**
+   * **Pin de integridade** (auditoria de segurança H-3): commit SHA, não `main`.
+   * O conteúdo desse repo vira hooks executados + planos de `spawnSync`, então
+   * um branch móvel = execução de código sem revisão. Um SHA é imutável (é o
+   * hash do conteúdo), então isto é o controle de integridade — não precisa de
+   * checksum do zip (que o GitHub nem garante byte-estável).
+   *
+   * Bump: a cada release da CLI, apontar pro HEAD revisado do `NIO-SKILLS-`.
+   * `NIO_SKILLS_REF` sobrescreve (dev / bump manual); a CLI avisa se não for SHA.
+   */
+  skillsRef: '11980256cff5c261740e0abd0c549da9b1da3d95',
   /** Pacote npm das skills — citado em mensagens de erro de "pacote não encontrado". ASSUME mesma org (`nio-cli`) do pacote da CLI — confirmar se as skills publicam em outro escopo. */
   skillsPackage: '@nio-cli/skills',
 

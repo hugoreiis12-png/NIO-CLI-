@@ -1,12 +1,20 @@
-FROM node:20-slim
-# curl p/ o healthcheck do compose
+# Build reprodutível (auditoria M-2 + I-3a): um lockfile só (`bun.lock`), imagens
+# pinadas por digest. Multi-stage — o Bun resolve as deps com o lockfile
+# congelado; o runtime continua sendo Node (o alvo do projeto).
+
+# --- deps: instala node_modules de runtime a partir do bun.lock ---
+FROM oven/bun:1-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS deps
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
+
+# --- runtime: Node + curl (healthcheck do compose) ---
+FROM node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-# dist já buildado (tsc) + manifesto; instala só deps de runtime.
-# npm install (não 'ci') porque o repo usa bun.lock, sem package-lock.json.
+COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY dist ./dist
-RUN npm install --omit=dev --no-audit --no-fund
 EXPOSE 3000
 CMD ["node", "dist/gateway/index.js"]

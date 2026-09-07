@@ -55,8 +55,10 @@ export async function loadSession(file: string = SESSION_FILE): Promise<StoredSe
 }
 
 export async function saveSession(session: StoredSession, file: string = SESSION_FILE): Promise<void> {
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, JSON.stringify(session, null, 2) + '\n', 'utf8');
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+  // `mode` no writeFile fecha a janela em que o arquivo NOVO fica 0644 (auditoria
+  // L-4); o chmod cobre o caso de o arquivo já existir com permissão frouxa.
+  await writeFile(file, JSON.stringify(session, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
   try {
     await chmod(file, 0o600);
   } catch {

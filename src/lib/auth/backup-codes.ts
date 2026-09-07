@@ -1,7 +1,9 @@
 /**
  * Códigos de backup do 2º fator — 10 de uso único, mostrados 1× no `enable-2fa`,
  * a alternativa ao SMS exigida por NIST SP 800-63B. Hash argon2id (reusa
- * `lib/password`), juntos por `|` em `user_cli.backup_codes`; usado → `[USED]`.
+ * `lib/password`, incl. o pepper — ADR 0011), juntos por `|` em
+ * `user_cli.backup_codes`; usado → `[USED]`. O pepper usado vai pra
+ * `user_cli.backup_pepper_id`.
  */
 import { randomInt } from 'node:crypto';
 import { hashPassword, verifyPassword } from './password.js';
@@ -18,25 +20,30 @@ function randomCode(): string {
   return out;
 }
 
-/** 10 códigos novos + a string de hashes pronta pro banco (`hash|hash|…`). */
-export async function generateBackupCodes(): Promise<{ codes: string[]; hashes: string }> {
+/** 10 códigos novos + a string de hashes pronta pro banco + o pepper usado. */
+export async function generateBackupCodes(): Promise<{ codes: string[]; hashes: string; pepperId: number }> {
   const codes = Array.from({ length: COUNT }, randomCode);
-  const hashes = await Promise.all(codes.map((c) => hashPassword(c)));
-  return { codes, hashes: hashes.join('|') };
+  const hashed = await Promise.all(codes.map((c) => hashPassword(c)));
+  return { codes, hashes: hashed.map((h) => h.phc).join('|'), pepperId: hashed[0]!.pepperId };
 }
 
 /**
- * Confere um código digitado contra os hashes armazenados. Retorna o índice
- * (0-based) do código usado, ou `-1` se inválido / já usado. Case-insensitive.
+ * Confere um código digitado contra os hashes armazenados. `pepperId` = o gravado
+ * junto (`user_cli.backup_pepper_id`). Retorna o índice (0-based) do código
+ * usado, ou `-1` se inválido / já usado. Case-insensitive.
  */
-export async function verifyBackupCode(input: string, joined: string | null): Promise<number> {
+export async function verifyBackupCode(
+  input: string,
+  joined: string | null,
+  pepperId: number,
+): Promise<number> {
   if (!joined) return -1;
   const normalized = input.trim().toUpperCase();
   const parts = joined.split('|');
   for (let i = 0; i < parts.length; i++) {
     const h = parts[i];
     if (!h || h === USED) continue;
-    if (await verifyPassword(h, normalized)) return i;
+    if (await verifyPassword(h, normalized, pepperId)) return i;
   }
   return -1;
 }

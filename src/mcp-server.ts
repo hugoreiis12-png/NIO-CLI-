@@ -26,7 +26,7 @@ import {
 import { provision } from './lib/provision/provision.js';
 import { provisionHooks } from './lib/clients/hooks.js';
 import { claudeTarget, type ProvisionTarget } from './lib/clients/targets.js';
-import { ensureSkillsCache } from './lib/skills/skills-cache.js';
+import { ensureSkillsCache, skillsMinCliWarning } from './lib/skills/skills-cache.js';
 import { shouldRunAutoPull, pickProvisionTarget } from './lib/clients/autopull.js';
 import { brand, env } from './brand.js';
 import { loadSession } from './lib/auth/session-store.js';
@@ -54,6 +54,8 @@ async function initSkillsCache(): Promise<void> {
     } else if (r.status === 'failed') {
       console.error(`[${brand.mcpBinName}] aviso: skills indisponíveis: ${r.error}`);
     }
+    const w = skillsMinCliWarning();
+    if (w) console.error(`[${brand.mcpBinName}] AVISO: ${w}`);
   } catch (err) {
     console.error(`[${brand.mcpBinName}] aviso: cache de skills pulado: ${(err as Error).message}`);
   }
@@ -66,6 +68,10 @@ async function initSkillsCache(): Promise<void> {
  * JWT sozinho não sabe). Sem arquivo local, token inválido/revogado/expirado,
  * ou banco inacessível → sessão nula (servidor sobe degradado; toda tool
  * devolve o gate "Não autenticado").
+ *
+ * A identidade vem do `userId` do token (via `auth_session`), **nunca** do campo
+ * `name` do session.json — esse arquivo é local e editável, então confiar nele
+ * deixaria trocar de usuário sem trocar o token (auditoria M-1).
  */
 async function authenticateSession(): Promise<UserCli | null> {
   const stored = await loadSession();
@@ -79,7 +85,7 @@ async function authenticateSession(): Promise<UserCli | null> {
       console.error(`[${brand.mcpBinName}] aviso: sessão inválida (${result.reason}). Rode \`${brand.name} login\` de novo.`);
       return null;
     }
-    const user = await createUserRepository().findByName(stored.name);
+    const user = await createUserRepository().findById(result.userId);
     if (!user) {
       console.error(`[${brand.mcpBinName}] aviso: usuário da sessão não existe mais. Rode \`${brand.name} login\` de novo.`);
       return null;

@@ -4,9 +4,10 @@
  * mandar o usuário abrir outra janela. Deixa o processo rodando (é serviço).
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, openSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { GATEWAY_URL } from '../../gateway/config.js';
+import { homePath } from '../../brand.js';
 import { isBinaryInstalled } from '../clients/client-install.js';
 import { dockerAvailable, infraComposePath } from '../docker.js';
 import { c, sym } from '../colors.js';
@@ -93,7 +94,13 @@ export async function ensureGatewayRunning(): Promise<GatewayEnsureResult> {
   if (!command) return { ok: false, started: false };
 
   dlog(`subindo o gateway (host): ${command.cmd} ${command.args.join(' ')}`);
-  const child = spawn(command.cmd, command.args, { detached: true, stdio: 'ignore' });
+  // SP-1a (ADR 0012): stdout/stderr do gateway vão pra `~/.nio/gateway.log`, não
+  // pro /dev/null — senão a trilha de auth (stderr) some no modo host.
+  const logChild = openGatewayLog();
+  const child = spawn(command.cmd, command.args, {
+    detached: true,
+    stdio: logChild ? ['ignore', logChild, logChild] : 'ignore',
+  });
   child.unref();
 
   for (let i = 0; i < 40; i++) {
@@ -108,4 +115,15 @@ export async function ensureGatewayRunning(): Promise<GatewayEnsureResult> {
   }
   child.kill();
   return { ok: false, started: false };
+}
+
+/** fd de append pra `~/.nio/gateway.log` (chmod 600), ou `null` se não deu. */
+function openGatewayLog(): number | null {
+  try {
+    const file = homePath('gateway.log');
+    mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+    return openSync(file, 'a', 0o600);
+  } catch {
+    return null;
+  }
 }

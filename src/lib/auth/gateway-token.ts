@@ -26,8 +26,9 @@ export async function getOrCreateGatewayToken(file: string = GATEWAY_TOKEN_FILE)
   }
 
   const token = randomBytes(32).toString('hex');
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, token + '\n', 'utf8');
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+  // `mode` fecha a janela do arquivo novo em 0644 (auditoria L-4).
+  await writeFile(file, token + '\n', { encoding: 'utf8', mode: 0o600 });
   try {
     await chmod(file, 0o600);
   } catch {

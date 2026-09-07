@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import AdmZip from 'adm-zip';
 import { homePath } from '../../brand.js';
+import { codeloadZipUrl, fetchZipball, rejectSymlinks } from '../../lib/fetch-zipball.js';
 import { LANG_REPOS, type LangRepo } from './repos.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -34,15 +35,11 @@ async function downloadRepo(
     return { ...base, status: 'cached' };
   }
 
-  const url = `https://codeload.github.com/${spec.repo}/zip/refs/heads/${spec.ref}`;
+  const url = codeloadZipUrl(spec.repo, spec.ref);
   const staging = join(tmpdir(), `nio-lang-${spec.dir}-${process.pid}-${Date.now()}`);
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { signal: ac.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ao baixar ${url}`);
-    const buf = Buffer.from(await res.arrayBuffer());
+    const buf = await fetchZipball(url, { timeoutMs });
 
     // O zipball tem um único dir raiz (`<repo>-<ref>/`); extrai e mira nele.
     rmSync(staging, { recursive: true, force: true });
@@ -50,6 +47,7 @@ async function downloadRepo(
     new AdmZip(buf).extractAllTo(staging, true);
     const dirs = readdirSync(staging, { withFileTypes: true }).filter((e) => e.isDirectory());
     const root = dirs.length === 1 ? join(staging, dirs[0].name) : staging;
+    rejectSymlinks(root); // TP-4
 
     rmSync(dest, { recursive: true, force: true });
     mkdirSync(dest, { recursive: true });
@@ -57,10 +55,8 @@ async function downloadRepo(
 
     return { ...base, status: 'fetched' };
   } catch (err) {
-    const msg = ac.signal.aborted ? `timeout após ${timeoutMs}ms` : (err as Error).message;
-    return { ...base, status: existsSync(dest) ? 'cached' : 'failed', error: msg };
+    return { ...base, status: existsSync(dest) ? 'cached' : 'failed', error: (err as Error).message };
   } finally {
-    clearTimeout(timer);
     rmSync(staging, { recursive: true, force: true });
   }
 }

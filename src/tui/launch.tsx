@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import React from 'react';
 import { render } from 'ink';
 import { ensureHeadroomAndWire } from '../app/ai-client.js';
-import { isBinaryInstalled } from '../lib/clients/client-install.js';
+import { isBinaryInstalled, opencodeVersionSkew } from '../lib/clients/client-install.js';
 import { loadSession } from '../lib/auth/session-store.js';
 import { createSessionRepository } from '../adapters/pg/session-repository.js';
 import { buildProgram } from '../cli/program.js';
@@ -45,6 +45,13 @@ export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
   if (!isBinaryInstalled('opencode')) {
     console.log(`  ${c.yellow(sym.warn)} OpenCode não está no PATH. Instale com \`npm i -g opencode-ai\`.`);
     return 127;
+  }
+  const skew = opencodeVersionSkew();
+  if (skew) {
+    console.log(
+      `  ${c.yellow(sym.warn)} opencode ${skew.binary} no PATH, mas a NIO fala com o SDK ${skew.sdk}. ` +
+        `Se o chat travar ou os eventos sumirem, alinhe: \`npm i -g opencode-ai@${skew.sdk}\`.`,
+    );
   }
 
   let handle;

@@ -134,8 +134,9 @@ async function toolkitUp(): Promise<void> {
   requireDocker();
   section("Docker toolkit", "subindo MCP Gateway + Portainer");
 
-  // Escopo explícito: o compose é único (5 serviços); sem os nomes subiria tudo.
-  if (infraCompose(["up", "-d", "mcp-gateway", "portainer"]) !== 0) {
+  // Escopo explícito: o compose é único; sem os nomes subiria o stack todo.
+  // `docker-socket-proxy` entra junto (o Portainer depende dele).
+  if (infraCompose(["up", "-d", "mcp-gateway", "portainer", "docker-socket-proxy"]) !== 0) {
     console.error(`${c.red(sym.err)} Falha ao subir a infra (\`docker compose\` saiu != 0).`);
     process.exit(1);
   }
@@ -162,9 +163,9 @@ async function toolkitUp(): Promise<void> {
 async function toolkitDown(): Promise<void> {
   requireDocker();
   section("Docker toolkit", "derrubando MCP Gateway + Portainer");
-  // Só os 2 serviços — `down` derrubaria o stack inteiro.
-  infraCompose(["stop", "mcp-gateway", "portainer"]);
-  infraCompose(["rm", "-f", "mcp-gateway", "portainer"]);
+  // Só os serviços do toolkit — `down` derrubaria o stack inteiro.
+  infraCompose(["stop", "mcp-gateway", "portainer", "docker-socket-proxy"]);
+  infraCompose(["rm", "-f", "mcp-gateway", "portainer", "docker-socket-proxy"]);
   try {
     const r = upsertOpencodeMcp(dockerGatewayMcp, { remove: true });
     if (r.status !== "already_configured") {
@@ -178,7 +179,7 @@ async function toolkitDown(): Promise<void> {
 async function toolkitStatus(): Promise<void> {
   requireDocker();
   section("Docker toolkit", "status");
-  infraCompose(["ps", "mcp-gateway", "portainer"]);
+  infraCompose(["ps", "mcp-gateway", "portainer", "docker-socket-proxy"]);
   const [gw, pt] = await Promise.all([mcpGatewayHealthy(), portainerHealthy()]);
   console.log("");
   console.log(`  ${gw ? c.green(sym.ok) : c.red(sym.err)} MCP Gateway  ${c.dim(DOCKER_MCP_URL)}`);

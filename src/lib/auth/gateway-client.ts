@@ -70,6 +70,19 @@ async function post<T>(path: string, body: unknown, headers: Record<string, stri
   return (await res.json()) as T;
 }
 
+/**
+ * `POST /register` — cria o usuário no gateway (role `nio_gateway`). O CLI não
+ * escreve mais em `user_cli` (migration 0008). Lança em qualquer não-2xx.
+ */
+export async function gatewayRegister(name: string, password: string): Promise<{ userId: number; name: string }> {
+  const res = await gwFetch('POST', '/register', {
+    headers: await baseHeaders(),
+    body: JSON.stringify({ name, password }),
+  });
+  if (!res.ok) throw await errorFromResponse(res);
+  return (await res.json()) as { userId: number; name: string };
+}
+
 export async function gatewayLogin(name: string, password: string): Promise<GatewayLoginResult | null> {
   const res = await gwFetch('POST', '/login', {
     headers: await baseHeaders(),
@@ -103,9 +116,9 @@ export async function gatewayVerify2fa(
   return { ok: true, ...(body as unknown as GatewaySession), backupCodesRemaining: body.backupCodesRemaining as number };
 }
 
-export async function gatewayLogout(sessionId: string): Promise<void> {
+export async function gatewayLogout(sessionId: string, token: string): Promise<void> {
   const res = await gwFetch('POST', '/logout', {
-    headers: await baseHeaders(),
+    headers: await authedHeaders(token),
     body: JSON.stringify({ sessionId }),
   });
   if (!res.ok) throw await errorFromResponse(res);
@@ -116,7 +129,14 @@ export const gatewaySecurity = {
   status: async (token: string) => {
     const res = await gwFetch('GET', '/security/status', { headers: await authedHeaders(token) });
     if (!res.ok) throw await errorFromResponse(res);
-    return (await res.json()) as { enabled: boolean; phoneHint: string | null; backupCodesRemaining: number };
+    return (await res.json()) as {
+      enabled: boolean;
+      phoneHint: string | null;
+      backupCodesRemaining: number;
+      regenerateBackupCodesRecommended?: boolean;
+      recentIps?: { ip: string; lastSeen: string; count: number }[];
+      recentFailedAttempts?: { at: string; event: string; ip: string | null }[];
+    };
   },
 
   enable: async (token: string, phone: string) =>
@@ -139,6 +159,14 @@ export const gatewaySecurity = {
     post<{ backupCodes: string[] }>(
       '/security/regenerate-backup-codes',
       { challengeId, code, type },
+      await authedHeaders(token),
+    ),
+
+  /** `POST /security/change-password` — prova = a senha atual. Revoga todas as sessões. */
+  changePassword: async (token: string, currentPassword: string, newPassword: string) =>
+    post<{ ok: true }>(
+      '/security/change-password',
+      { currentPassword, newPassword },
       await authedHeaders(token),
     ),
 };

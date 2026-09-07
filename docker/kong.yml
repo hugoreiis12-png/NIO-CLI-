@@ -5,6 +5,16 @@ services:
   - name: nio-gateway
     url: http://nio-gateway:3000
     routes:
+      # /register (TP-1) — cria usuário; rate-limit apertado.
+      - name: nio-gateway-register
+        paths:
+          - /register
+        strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 5
+              policy: local
       # /login — alvo de brute-force; rate-limit apertado.
       - name: nio-gateway-login
         paths:

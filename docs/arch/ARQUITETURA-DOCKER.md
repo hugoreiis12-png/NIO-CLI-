@@ -38,9 +38,18 @@ Engine — não exige Docker Desktop.**
 
 - **`mcp-gateway`** (`docker/mcp-gateway`) — o [Docker MCP Gateway](https://github.com/docker/mcp-gateway),
   transport `streaming` em `127.0.0.1:8811/mcp`, habilitando o server `docker` do
-  catálogo (docker/compose/swarm como tools MCP). Monta `/var/run/docker.sock`.
-- **`portainer`** (`portainer/portainer-ce:lts`) — UI de gerência. 1º acesso pede
-  setup de admin (feito à mão no navegador).
+  catálogo (docker/compose/swarm como tools MCP). Monta `/var/run/docker.sock`
+  **direto** — `--servers=docker` precisa criar container (é o ponto). Contenção:
+  rede `nio-infra` isolada + opt-in (`toolkit up/down`). Ver [auditoria M-8](../security/backlog.md).
+- **`docker-socket-proxy`** (`tecnativa/docker-socket-proxy`) — proxy **GET-only**
+  na frente do socket; o Portainer fala com o daemon só por ele (`-H
+  tcp://docker-socket-proxy:2375`), sem montar o socket. Efeito: Portainer
+  read-mostly. Ligar `POST: 1` reabre create/exec (= root no host).
+- **`portainer`** (`portainer/portainer-ce:lts`) — UI de gerência (read-mostly via
+  o proxy). 1º acesso pede setup de admin (feito à mão no navegador).
+
+**Redes:** `nio-net` (nio-gateway, headroom, kong) e `nio-infra` (mcp-gateway,
+portainer, docker-socket-proxy — quem toca o daemon, isolado do gateway de auth).
 
 Sobe com `nio docker toolkit up` (ou `bun run dev:docker`).
 

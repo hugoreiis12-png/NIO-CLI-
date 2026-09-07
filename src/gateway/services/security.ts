@@ -3,11 +3,21 @@
  * já autenticado (Bearer). Cada mudança sensível confirma com um código (OTP por
  * SMS ou backup). Ver `docs/specs/auth/0004-login-2fa-sms-otp.md`.
  */
-import type { UserRepository, LoginChallengeRepository } from '../../core/repositories.js';
+import type {
+  UserRepository,
+  LoginChallengeRepository,
+  LoginIpRepository,
+  AuthEventRepository,
+  AuthSessionRepository,
+} from '../../core/repositories.js';
 import type { SmsSender } from '../../core/messaging.js';
 import { createUserRepository } from '../../adapters/pg/user-repository.js';
 import { createLoginChallengeRepository } from '../../adapters/pg/login-challenge-repository.js';
+import { createLoginIpRepository } from '../../adapters/pg/login-ip-repository.js';
+import { createAuthEventRepository } from '../../adapters/pg/auth-event-repository.js';
+import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
 import { createHttpSmsSender } from '../../adapters/sms/http-generic.js';
+import { hashPassword, MIN_PASSWORD_LENGTH } from '../../lib/auth/password.js';
 import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
 import {
   generateBackupCodes,
@@ -16,11 +26,45 @@ import {
   countRemaining,
 } from '../../lib/auth/backup-codes.js';
 import { challengeUsable, maskPhone, OTP_TTL_MS, OTP_MAX_ATTEMPTS } from './login.js';
+import { smsAllowed } from '../throttle.js';
+import { currentPepperId } from '../../lib/auth/secrets.js';
 
 export interface SecurityDeps {
   users?: UserRepository;
   challenges?: LoginChallengeRepository;
   sms?: SmsSender;
+  loginIps?: LoginIpRepository;
+  authEvents?: AuthEventRepository;
+  authSessions?: AuthSessionRepository;
+}
+
+/**
+ * Troca de senha do próprio usuário (TP-2). Prova = a senha atual (não OTP). Ao
+ * trocar, **revoga todas as sessões** do usuário — o ponto de rotacionar é uma
+ * senha comprometida, então os JWTs antigos têm que morrer.
+ */
+export async function changePassword(
+  userId: number,
+  currentPassword: string,
+  newPassword: string,
+  deps: SecurityDeps = {},
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    return { ok: false, error: `senha nova muito curta (mínimo ${MIN_PASSWORD_LENGTH} caracteres)` };
+  }
+  if (newPassword === currentPassword) {
+    return { ok: false, error: 'a senha nova é igual à atual' };
+  }
+  const users = deps.users ?? createUserRepository();
+  const user = await users.findById(userId);
+  if (!user) return { ok: false, error: 'usuário não encontrado' };
+  if (!(await users.verifyCredentials(user.name, currentPassword))) {
+    return { ok: false, error: 'senha atual incorreta' };
+  }
+  const { phc, pepperId } = await hashPassword(newPassword);
+  await users.updatePasswordHash(userId, phc, pepperId);
+  await (deps.authSessions ?? createAuthSessionRepository()).revokeAllByUser(userId);
+  return { ok: true };
 }
 
 /** E.164: `+` seguido de 8–15 dígitos. */
@@ -37,6 +81,11 @@ export async function startSecurityChallenge(
   deps: SecurityDeps = {},
 ): Promise<StartResult> {
   if (!isE164(toPhone)) return { ok: false, error: 'número inválido (use E.164, ex.: +5511999998888)' };
+  // M-4: `enable-2fa` aceita telefone arbitrário — sem cap, um Bearer válido
+  // torrava SMS pra qualquer número (toll fraud).
+  if (!smsAllowed(userId, toPhone)) {
+    return { ok: false, error: 'muitos códigos solicitados — aguarde alguns minutos.' };
+  }
   const challenges = deps.challenges ?? createLoginChallengeRepository();
   const sms = deps.sms ?? createHttpSmsSender();
   const code = generateOtp();
@@ -78,9 +127,9 @@ async function consumeSecurityCode(
 
   if (type === 'backup') {
     const stored = await users.getBackupCodes(userId);
-    const idx = await verifyBackupCode(code, stored);
+    const idx = await verifyBackupCode(code, stored.codes, stored.pepperId);
     if (idx < 0) return { ok: false, error: 'código de backup inválido' };
-    await users.updateBackupCodes(userId, markUsed(stored!, idx));
+    await users.updateBackupCodes(userId, markUsed(stored.codes!, idx), stored.pepperId);
   } else {
     if (!verifyOtp(code, ch.codeHash)) {
       const n = await challenges.incrementAttempts(ch.id);
@@ -104,8 +153,8 @@ export async function confirmEnable2fa(
   const res = await consumeSecurityCode(userId, challengeId, code, 'otp', deps);
   if (!res.ok) return res;
   const users = deps.users ?? createUserRepository();
-  const { codes, hashes } = await generateBackupCodes();
-  await users.enable2fa(userId, phone.trim(), hashes);
+  const { codes, hashes, pepperId } = await generateBackupCodes();
+  await users.enable2fa(userId, phone.trim(), hashes, pepperId);
   return { ok: true, backupCodes: codes };
 }
 
@@ -132,21 +181,49 @@ export async function regenerateBackupCodes(
   const res = await consumeSecurityCode(userId, challengeId, code, type, deps);
   if (!res.ok) return res;
   const users = deps.users ?? createUserRepository();
-  const { codes, hashes } = await generateBackupCodes();
-  await users.updateBackupCodes(userId, hashes);
+  const { codes, hashes, pepperId } = await generateBackupCodes();
+  await users.updateBackupCodes(userId, hashes, pepperId);
   return { ok: true, backupCodes: codes };
 }
 
-export async function status(
-  userId: number,
-  deps: SecurityDeps = {},
-): Promise<{ enabled: boolean; phoneHint: string | null; backupCodesRemaining: number }> {
+export interface SecurityStatus {
+  enabled: boolean;
+  phoneHint: string | null;
+  backupCodesRemaining: number;
+  /** Códigos de backup usam um pepper antigo — regenerar (ADR 0011 §A). */
+  regenerateBackupCodesRecommended?: boolean;
+  /** IPs de login recentes (auditoria — ADR 0011 §F). */
+  recentIps: { ip: string; lastSeen: string; count: number }[];
+  /** Últimas tentativas de auth falhas do usuário (trilha — ADR 0012). */
+  recentFailedAttempts: { at: string; event: string; ip: string | null }[];
+}
+
+export async function status(userId: number, deps: SecurityDeps = {}): Promise<SecurityStatus> {
   const users = deps.users ?? createUserRepository();
+  const loginIps = deps.loginIps ?? createLoginIpRepository();
+  const authEvents = deps.authEvents ?? createAuthEventRepository();
+
+  const recentIps = (await loginIps.recent(userId, 10).catch(() => [])).map((e) => ({
+    ip: e.ip,
+    lastSeen: e.lastSeen.toISOString(),
+    count: e.count,
+  }));
+  const recentFailedAttempts = (
+    await authEvents.recentFailures({ userId, limit: 5 }).catch(() => [])
+  ).map((f) => ({ at: f.at.toISOString(), event: f.event, ip: f.ip }));
+
   const user = await users.findById(userId);
-  if (!user || !user.auth2) return { enabled: false, phoneHint: null, backupCodesRemaining: 0 };
+  if (!user || !user.auth2) {
+    return { enabled: false, phoneHint: null, backupCodesRemaining: 0, recentIps, recentFailedAttempts };
+  }
+  const stored = await users.getBackupCodes(userId);
   return {
     enabled: true,
     phoneHint: user.phone ? maskPhone(user.phone) : null,
-    backupCodesRemaining: countRemaining(await users.getBackupCodes(userId)),
+    backupCodesRemaining: countRemaining(stored.codes),
+    regenerateBackupCodesRecommended:
+      stored.codes != null && stored.pepperId !== currentPepperId() ? true : undefined,
+    recentIps,
+    recentFailedAttempts,
   };
 }

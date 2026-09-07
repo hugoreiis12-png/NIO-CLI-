@@ -1,12 +1,12 @@
-# Stack NIO unificado — 1 compose, 1 rede (`nio-net`), 1 stack no Portainer.
-# Substitui os 3 composes antigos (docker/ + kong/ + headroom/). O gateway agora
-# é container (Dockerfile.gateway) e o Kong o alcança por NOME na rede, sem
-# host.docker.internal. Ver docs/container-architecture.md.
+# Compose file for NIO CLI (dockerized) - T3
 name: nio
 
 networks:
   nio-net:
     name: nio-net
+    driver: bridge
+  nio-infra:
+    name: nio-infra
     driver: bridge
 
 volumes:
@@ -16,8 +16,8 @@ volumes:
 services:
   nio-gateway:
     build:
-      context: ..                       # raiz do repo (onde estão dist/ e package.json)
-      dockerfile: Dockerfile.gateway    # relativo ao context (raiz)
+      context: ..
+      dockerfile: Dockerfile.gateway
     image: nio-gateway:local
     container_name: nio-gateway
     restart: unless-stopped
@@ -47,25 +47,6 @@ services:
     volumes: [ "nio_headroom_cache:/root/.headroom" ]
     networks: [ nio-net ]
 
-  mcp-gateway:
-    image: docker/mcp-gateway@sha256:f5a679a05fc39022a046167bef92aeeb01bcd59485ad27843ae5227db7950688  # docker/mcp-gateway:latest, pinado 2026-09-03
-    container_name: nio-mcp-gateway
-    restart: unless-stopped
-    command: ["--transport=streaming", "--port=8811", "--servers=docker"]
-    ports: [ "127.0.0.1:8811:8811" ]
-    volumes: [ "/var/run/docker.sock:/var/run/docker.sock" ]
-    networks: [ nio-net ]
-
-  portainer:
-    image: portainer/portainer-ce@sha256:511f3f06c96fe3b993ebeaafde311c1959cae73a7ef825dba6397d51b450dffa  # portainer-ce:lts, pinado 2026-09-03
-    container_name: nio-portainer
-    restart: unless-stopped
-    ports: [ "127.0.0.1:9443:9443" ]    # UI (edge :8000 REMOVIDO — libera p/ Kong)
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - "nio_portainer_data:/data"
-    networks: [ nio-net ]
-
   kong:
     image: kong@sha256:2a8cf3b110cdaba1cb00adc665b8635ed1fc75c907f7a4298613c68e4976de0a  # kong:3.9, pinado 2026-09-03
     container_name: nio-kong
@@ -74,11 +55,60 @@ services:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /kong/kong.yml
       KONG_PROXY_LISTEN: "0.0.0.0:8000"
-      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+      # Admin API desligada (auditoria M-7) — config é declarativa (kong.yml),
+      # nada chama o admin em runtime.
+      KONG_ADMIN_LISTEN: "off"
     volumes: [ "./kong.yml:/kong/kong.yml:ro" ]          # docker/kong.yml (T3)
     ports:
       - "127.0.0.1:${NIO_KONG_PROXY_PORT:-8000}:8000"    # sem colisão: Portainer largou :8000
-      - "127.0.0.1:${NIO_KONG_ADMIN_PORT:-8001}:8001"
     depends_on:
       nio-gateway: { condition: service_healthy }
     networks: [ nio-net ]
+
+  # ── plano de infra (toca o docker.sock) — rede nio-infra ─────────────
+
+  mcp-gateway:
+    image: docker/mcp-gateway@sha256:f5a679a05fc39022a046167bef92aeeb01bcd59485ad27843ae5227db7950688  # docker/mcp-gateway:latest, pinado 2026-09-03
+    container_name: nio-mcp-gateway
+    restart: unless-stopped
+    command: ["--transport=streaming", "--port=8811", "--servers=docker"]
+    ports: [ "127.0.0.1:8811:8811" ]
+    # Mount DIRETO de propósito: o `--servers=docker` existe pra CRIAR containers
+    # (tools de Docker pro operador de IA). Um proxy que permita isso é a própria
+    # fuga — então a contenção aqui é: rede isolada + rodar opt-in
+    # (`nio docker toolkit up/down`). Contenção real = daemon dedicado (backlog).
+    volumes: [ "/var/run/docker.sock:/var/run/docker.sock" ]
+    networks: [ nio-infra ]
+
+  docker-socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:0.3.0@sha256:9e4b9e7517a6b660f2cc903a19b257b1852d5b3344794e3ea334ff00ae677ac2
+    container_name: nio-docker-proxy
+    restart: unless-stopped
+    environment:
+      # GET-only: sem POST → ninguém cria/inicia/exec container através dele.
+      CONTAINERS: 1
+      IMAGES: 1
+      NETWORKS: 1
+      VOLUMES: 1
+      INFO: 1
+      VERSION: 1
+      PING: 1
+      # POST/EXEC/AUTH/SECRETS/CONFIGS/SWARM/SERVICES/SYSTEM/PLUGINS: 0 (default).
+    volumes: [ "/var/run/docker.sock:/var/run/docker.sock:ro" ]
+    networks: [ nio-infra ]
+
+  portainer:
+    image: portainer/portainer-ce@sha256:511f3f06c96fe3b993ebeaafde311c1959cae73a7ef825dba6397d51b450dffa  # portainer-ce:lts, pinado 2026-09-03
+    container_name: nio-portainer
+    restart: unless-stopped
+    # Fala com o daemon SÓ pelo proxy GET-only (auditoria M-8) — não monta o
+    # docker.sock. Efeito: dashboard read-mostly (vê containers/logs/stats/redes;
+    # não sobe/derruba pela UI). Se o time precisar gerenciar pela UI, ligue
+    # `POST: 1` no docker-socket-proxy — mas aí Portainer volta a poder criar
+    # container = root no host.
+    command: -H tcp://docker-socket-proxy:2375
+    ports: [ "127.0.0.1:9443:9443" ]    # UI (edge :8000 REMOVIDO — libera p/ Kong)
+    volumes:
+      - "nio_portainer_data:/data"
+    depends_on: [ docker-socket-proxy ]
+    networks: [ nio-infra ]

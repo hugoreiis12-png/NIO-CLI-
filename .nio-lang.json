@@ -1,0 +1,12 @@
+{
+  "language": "typescript",
+  "packageManager": "npm",
+  "framework": "Next.js",
+  "orm": null,
+  "greenfield": false,
+  "ecosystemFits": true,
+  "installed": [
+    "next"
+  ],
+  "skipped": []
+}

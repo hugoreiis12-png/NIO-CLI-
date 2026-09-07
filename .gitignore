@@ -7,7 +7,18 @@ dist/
 *.mcpb
 nio-docs.html
 
+# gerenciador = bun; o lockfile é o bun.lock. Um package-lock.json solto
+# divergiria (auditoria M-2) — regenere com `npm i --package-lock-only` só se
+# alguma ferramenta pontual exigir, sem commitar.
+package-lock.json
+
+# CA/certs do Postgres (scripts/db-tls-setup.sh) — a ca.key é segredo
+/db-tls/
+
 # artefatos de `nio init` rodado no próprio repo (dev testando)
 /nio.json
 /nio.user.json
 /AGENTS.md
+
+# nio (config local do usuário)
+nio.user.json

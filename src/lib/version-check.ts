@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { brand } from '../brand.js';
+import { semverGt } from '../version.js';
 
 function loadPkg(): { name: string; version: string } {
   // Este módulo compila pra `dist/lib/version-check.js`, então o package.json fica
@@ -39,17 +40,6 @@ export interface UpdateStatus {
   current: string;
   latest: string;
   hasUpdate: boolean;
-}
-
-/** `a > b` em semver simples (major.minor.patch; ignora pré-release). */
-function semverGt(a: string, b: string): boolean {
-  const pa = a.split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = b.split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] ?? 0) > (pb[i] ?? 0)) return true;
-    if ((pa[i] ?? 0) < (pb[i] ?? 0)) return false;
-  }
-  return false;
 }
 
 /**

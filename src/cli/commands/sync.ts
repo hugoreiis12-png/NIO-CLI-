@@ -9,7 +9,7 @@ import { checkForUpdate } from "../../lib/version-check.js";
 import { uninstallProvision, provision } from "../../lib/provision/provision.js";
 import { provisionHooks, uninstallHooks } from "../../lib/clients/hooks.js";
 import { readDependencies, skillIdMap } from "../../lib/skills/skills.js";
-import { fetchSkills } from "../../lib/skills/skills-cache.js";
+import { fetchSkills, skillsMinCliWarning } from "../../lib/skills/skills-cache.js";
 import { concatenateRules, collectRuleSkills } from "../../lib/skills/rules.js";
 import { writeRepoHarness } from "../../lib/clients/harness.js";
 import { patternsExist, runPatternsAnalysis } from "../../lib/skills/patterns.js";
@@ -152,6 +152,10 @@ export function registerSyncCommand(program: Command): void {
             const sp = startSpinner("Atualizando skills do repo…");
             const fetched = await fetchSkills({ force: true });
             sp.stop();
+            const minCliWarn = skillsMinCliWarning();
+            if (minCliWarn) {
+              report.add({ id: "min-cli", title: "Versão da CLI", status: "warn", summary: minCliWarn, lines: [] });
+            }
             if (fetched.status === "fetched") {
               report.add({
                 id: "fetch",
