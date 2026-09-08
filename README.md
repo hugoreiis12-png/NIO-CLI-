@@ -5,7 +5,8 @@ responde um wizard, e a CLI — com auxílio de IA via MCP — materializa o amb
 toolchains, linguagens, frameworks, dotfiles, aliases e IDE. A entidade central é
 a **Sessão**: um ambiente isolado, com UUID, persistido no Postgres.
 
-> Documentação completa no terminal ou como página: `nio docs` · `nio docs --html --open`.
+> **Guia rápido de uso:** `nio --help` (primeiros passos + como usar a interface do `nio ai`).
+> **Manual completo:** `nio docs` no terminal · `nio docs --html --open` como página.
 
 ---
 
@@ -27,11 +28,14 @@ você → nio (CLI) ──► nio-gateway ──► Postgres        (login: senh
    `EnvironmentBuilder` garante os toolchains, resolve os MCPs e grava o `config`
    materializado na linha `sessions` do Postgres. A sessão é isolada, tem UUID e
    pode ser reativada depois (`nio sessions`).
-3. **`nio ai` abre a interface NIO** — o Headroom (proxy de compressão, container
-   Docker, obrigatório), o `opencode serve` headless (`opencode/big-pickle`, MCP
-   `nio` + MCPs do perfil), e a UI do NIO em Ink (chat, sidebar, paleta `/`). Com
-   IDE, roda num terminal integrado dela. A partir daí o agente tem as tools
-   `nio_*` — criar/ativar sessão, re-materializar ambiente, delegar execução.
+3. **`nio ai` abre a interface NIO** — o `opencode serve` headless
+   (`opencode/big-pickle`, MCP `nio` + MCPs do perfil) e o chat do NIO em Ink
+   (fluxo em linha estilo Claude Code, paleta `/`, `Tab` troca de modo). O
+   Headroom foi desativado ([ADR 0010](docs/adr/0010-headroom-desativado.md)) — o
+   client fala direto no LLM, **não precisa de Docker**. Com IDE, roda num
+   terminal integrado dela. A partir daí o agente tem as tools `nio_*` —
+   criar/ativar sessão, re-materializar ambiente, delegar execução. Detalhe de
+   uso: **[Interface do `nio ai`](#interface-do-nio-ai-tui)**.
 
 O **Postgres é a fonte da verdade** do domínio (usuários, sessões, trilha de
 auth). A CLI e o gateway só falam com o banco que **você** configurar — não há
@@ -132,7 +136,7 @@ nio-gateway          # gateway de auth (a esteira sobe sozinha se faltar)
 nio register         # cria seu usuário na base compartilhada → cai no login
 nio login            # autentica (salva o JWT em ~/.nio/session.json)
 nio security enable-2fa   # (opcional) 2º fator
-nio init             # monta o ambiente da sessão → `nio ai` (Headroom + OpenCode, num terminal da IDE)
+nio init             # monta o ambiente da sessão → `nio ai` (opencode serve + chat NIO, num terminal da IDE)
 ```
 
 O `nio-gateway` só é necessário pros comandos de auth (`login`/`logout`/
@@ -219,19 +223,77 @@ No fim do `nio init` a CLI sobe o **client de IA** da sessão — e o mesmo `nio
 retoma a qualquer momento. Ele:
 
 1. **Prepara o `opencode.json`** — grava o provider `opencode` **direto no OpenCode Zen**
-   (sem `baseURL` de proxy), junto do `model: opencode/big-pickle`, do MCP `nio` e dos MCPs
-   do perfil. O **Headroom foi desativado** ([ADR 0010](docs/adr/0010-headroom-desativado.md)):
+   (sem `baseURL` de proxy), junto do `model: opencode/big-pickle`, do MCP `nio`, dos MCPs
+   do perfil e de um bloco `permission` semeado (allowlist só-leitura → `allow`, resto →
+   `ask`). O **Headroom foi desativado** ([ADR 0010](docs/adr/0010-headroom-desativado.md)):
    o client fala direto no LLM, sem compressão — **não precisa de Docker** pro `nio ai`.
    (O `nio docker headroom` continua existindo, dormente, pra quem quiser subir manualmente.)
-2. **Sobe o `opencode serve` headless e abre a interface NIO** (Ink — chat
-   streamado, sidebar verde, paleta `/` com os comandos e capacidades do NIO). O
-   motor é o `opencode/big-pickle`; a casca é nossa. Se a sessão tem IDE (VS Code /
-   Cursor), o `nio init` grava um `.vscode/tasks.json` (task `NIO`, `runOn: folderOpen`)
-   e o `nio ai` sobe num **terminal integrado da IDE** — uma superfície, não duas.
-   Sem IDE, roda no terminal atual. Sem TTY / sem `opencode` → cai na TUI do OpenCode.
+2. **Sobe o `opencode serve` headless e abre a interface NIO** (Ink). O motor é o
+   `opencode/big-pickle`; a casca é nossa. Se a sessão tem IDE (VS Code / Cursor), o
+   `nio init` grava um `.vscode/tasks.json` (task `NIO`, `runOn: folderOpen`) e o
+   `nio ai` sobe num **terminal integrado da IDE** — uma superfície, não duas. Sem
+   IDE, roda no terminal atual. Sem TTY → recusa com mensagem; sem `opencode` no
+   PATH → cai na TUI do OpenCode.
 
-Ver [`docs/arch/ARQUITETURA-CLIENTE-IA.md`](docs/arch/ARQUITETURA-CLIENTE-IA.md) e
-[`docs/arch/ARQUITETURA-CLIENTE-TUI.md`](docs/arch/ARQUITETURA-CLIENTE-TUI.md).
+Ver [`docs/arch/ARQUITETURA-CLIENTE-IA.md`](docs/arch/ARQUITETURA-CLIENTE-IA.md),
+[`docs/arch/ARQUITETURA-TUI-UX-SPRINTS.md`](docs/arch/ARQUITETURA-TUI-UX-SPRINTS.md) e
+[`docs/arch/ARQUITETURA-TUI-INTERACOES-MOTOR.md`](docs/arch/ARQUITETURA-TUI-INTERACOES-MOTOR.md).
+
+### Interface do `nio ai` (TUI)
+
+Chat no terminal (Ink) sobre o `opencode/big-pickle`, **em uma superfície só** — no
+estilo do Claude Code. O que o motor faz aparece **em linha**, conforme acontece:
+o raciocínio (`✻`), cada ferramenta (`● nome(args)` + `⎿` a saída), o checklist
+(`☑ ◐ ☐`), os arquivos tocados, o diff da rodada (`✎ N arquivo(s) +x −y`) e os
+tokens/custo no rodapé de cada resposta. Sem sidebar, sem janela extra.
+
+**Digitar & enviar**
+
+| Tecla | Faz |
+|---|---|
+| `Enter` | envia o prompt |
+| `\` + `Enter`  ·  `Ctrl-J` | quebra linha — o prompt é multi-linha e cresce sozinho |
+| `←` `→` `↑` `↓` | move o cursor dentro do texto |
+| `Ctrl-A` / `Ctrl-E` | início / fim da linha |
+| `Ctrl-W` / `Ctrl-U` / `Ctrl-K` | apaga a palavra anterior / até o início / até o fim |
+| colar um bloco | entra literal (várias linhas **não** enviam sozinhas) |
+
+**Modos** — o modo troca o comportamento do agente
+
+| Tecla | Faz |
+|---|---|
+| `Tab` | alterna entre os agentes primários do `opencode.json` (`build` → `plan` → …) |
+| `build` | o agente **executa** (edita, roda comando) |
+| `plan` | o agente **só propõe** — não toca nada |
+
+O modo atual fica no rodapé: `[build]`.
+
+**Paleta de comandos**
+
+| Tecla | Faz |
+|---|---|
+| `/` | abre a lista inline — comandos do `nio` + capacidades do operador |
+| `↑` `↓` + `Enter` | roda o comando / manda a capacidade pro agente / abre o painel |
+| `Esc` | fecha a lista — o texto que você já digitou **continua lá** |
+
+**Quando o agente te interrompe**
+
+- **Permissão** (rodar shell, editar arquivo, chamar MCP…) → modal:
+  `a`/`Enter` permite uma vez · `s` permite **sempre** (salva a regra no `opencode.json`) · `d`/`Esc` nega.
+  Pedidos em paralelo entram numa **fila** (`+N na fila`); um sub-agente travado é
+  reconciliado sozinho em ~4s — não trava mais em "processando".
+- **Pergunta aberta** — o agente termina com "?" → o cue `↳ o nio perguntou` aparece acima do input.
+- **Lista de opções** — o agente listou `1./2./3.` → menu `↑`/`↓`+`Enter` pra escolher; ou ignore e escreva livre.
+
+**Acompanhar & controlar**
+
+| Tecla | Faz |
+|---|---|
+| `Ctrl-R` | expande / colapsa o raciocínio (`✻`) — ver o agente "pensar" ao vivo |
+| `Esc` | durante o processamento: **aborta o turno** |
+
+`NIO_DEBUG=1 nio ai` grava cada evento cru do motor em `~/.nio/tui.log` (nunca no
+terminal — corromperia o render).
 
 > A interface NIO (Ink) está na **fatia 2a** ([ADR 0008](docs/adr/0008-interface-nio-ink.md)).
 > A paridade completa com o OpenCode (diff viewer, file tree, seletor de modelo…) é a 2b.
@@ -248,19 +310,25 @@ Operações do CLI, **sem o binário na frente** (declarado no cabeçalho da tab
 Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --help`.
 
 <!-- COMMANDS:START -->
-<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 42 comandos. -->
+<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 61 comandos. -->
 
 | Comando | Descrição |
 | --- | --- |
-| `ai` | Abre a interface NIO da sessão ativa (Headroom + opencode serve + Ink) |
-| `ai status` | Estado do Headroom (proxy obrigatório do client de IA) |
+| `agents` | Lista os agentes disponíveis |
+| `ai` | Abre a interface NIO da sessão ativa (opencode serve headless + chat Ink) |
+| `ai status` | Estado do Headroom (proxy de compressão — desativado por ADR 0010, dormente) |
 | `clean-legacy` | Remove commands/skills legados (substituídos) de ~/.claude e ~/.codex |
+| `command [name]` | Cria um comando personalizado pro operador de IA |
 | `completion [shell]` | Imprime o script de autocomplete (bash\|zsh\|fish). |
 | `config` | Config compartilhada da equipe (~/.nio/config.env) |
 | `config check` | Confere se a config está completa e o Postgres responde |
 | `config path` | Imprime o caminho do arquivo de config |
 | `config setup` | Wizard: cola os valores do time, testa a conexão e salva |
-| `docker` | Camada Docker: MCP Gateway + Portainer, compose, debug e cluster (Swarm) |
+| `debug` | Diagnostica o ambiente e aponta onde está o problema |
+| `deps` | Detecta e (opt-in) instala dependências da sessão ativa |
+| `deps scan` | Escaneia os manifests uma vez e registra o que falta |
+| `deps watch` | Escaneia a cada 10s até Ctrl+C |
+| `docker` | Camada Docker: stack NIO, compose, debug e cluster (Swarm) |
 | `docker cluster <action> [arg]` | Docker Swarm — stack `nio-cluster` (up\|down\|status\|scale) |
 | `docker compose <action> [service]` | Wrapper sobre `docker compose` do projeto (up\|down\|restart\|ps\|logs) |
 | `docker create` | Cria e sobe um container (wizard ou flags) |
@@ -271,6 +339,10 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | `docker headroom up` | Sobe o container do Headroom |
 | `docker orquest [instruction]` | Orquestra os serviços do projeto via compose, dirigido pelo operador (linguagem natural) |
 | `docker portainer` | Abre o Portainer no navegador |
+| `docker stack` | Stack NIO unificado (gateway · kong · headroom · mcp · portainer) — docker/docker-compose.yml |
+| `docker stack down` | Derruba o stack inteiro |
+| `docker stack status` | ps + health dos 5 serviços |
+| `docker stack up` | Sobe o stack inteiro (build do gateway) + registra o MCP |
 | `docker toolkit` | Infra NIO: Docker MCP Gateway + Portainer (docker/docker-compose.yml) |
 | `docker toolkit down` | Derruba a infra e desabilita o MCP no opencode.json |
 | `docker toolkit status` | Estado dos containers + health dos endpoints |
@@ -279,15 +351,24 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | `exec` | Delega a implementação a um agente headless num worktree e aguarda. |
 | `exec-status <jobId>` | Estado de um job de execução (`nio exec`), em JSON |
 | `init` | Cria nio.json no diretório atual e materializa o ambiente da sessão |
+| `lang` | Conhecimento/config das linguagens (nio-lang) |
+| `lang sync` | Baixa/atualiza o cache de conhecimento das linguagens em ~/.nio/lang |
 | `login` | Autentica via nio-gateway (túnel HTTP) e salva a sessão localmente (JWT) |
 | `logout` | Encerra a sessão local e revoga a auth_session no banco |
+| `open` | Abre a IDE da sessão ativa na pasta do projeto |
 | `plan` | Roda o engine pensante sobre o projeto e escreve/refina o plan.md da raiz. |
-| `register` | Cria um novo usuário no banco (user_cli) e já entra (login) |
-| `security` | 2º fator do login (SMS OTP + códigos de backup) |
+| `register` | Cria um novo usuário via nio-gateway e já entra (login) |
+| `security` | Senha e 2º fator do login (SMS OTP + códigos de backup) |
+| `security change-password` | Troca a senha (exige a senha atual) e encerra todas as sessões |
 | `security disable-2fa` | Desativa o 2º fator |
 | `security enable-2fa` | Ativa o 2º fator via SMS |
 | `security regenerate-backup-codes` | Invalida os códigos de backup e gera 10 novos |
 | `security status` | Mostra o estado do 2º fator |
+| `sessions` | Gerencia as sessões de ambiente (list/activate/pause/delete) |
+| `sessions activate <id>` | Ativa uma sessão (arquiva as demais ativas) |
+| `sessions delete <id>` | Remove uma sessão (irreversível) |
+| `sessions list` | Lista as suas sessões |
+| `sessions pause <id>` | Pausa uma sessão |
 | `skills` | Skills, commands e agents do nio (lidos do repo aberto via cache) |
 | `skills status` | Lista os docs do repo de skills (cache local ~/.nio/skills) |
 | `start` | Conduz a esteira: config → gateway → login → sessão → OpenCode |
@@ -479,6 +560,9 @@ background em qualquer comando (`update-notifier`).
 | `Não autenticado` | `nio register` (1ª vez) e depois `nio login` |
 | Erro de conexão com o banco | `ECONNREFUSED` = Postgres fora do ar / host errado; `password authentication failed` = credencial; erro de SSL = `NIO_DATABASE_SSL=true` |
 | `2FA não configurado no servidor` (503) | faltam as `SMS_*` no ambiente do `nio-gateway` |
+| `nio ai` diz `precisa de um terminal interativo` | você está num pipe/CI — rode num terminal de verdade |
+| `nio ai` travado em "processando" | `Esc` aborta o turno; o motor recupera permissão perdida sozinho em ~4s. Persistiu? `NIO_DEBUG=1 nio ai` e veja `~/.nio/tui.log` |
+| `nio ai` cai na TUI do OpenCode | falta o binário `opencode` no PATH — `npm i -g opencode-ai` |
 | Tools não aparecem no Claude Code | reinicie o cliente depois do `nio init`; cheque com `/mcp` |
 | Skills não aparecem no Cowork | chegam como **prompts MCP** (slash-commands), não skills autônomas. Cmd+Q e reabra; confirme o conector |
 | `Conteúdo de skills não encontrado` | cache `~/.nio/skills` vazio — rode `nio sync` com rede, ou `NIO_SKILLS_DIR` pra um checkout local |
@@ -507,7 +591,15 @@ O logo Matrix anima (chuva caindo) toda vez que aparece em terminal interativo.
 
 ## Versão
 
-**0.2.0** — v1 da CLI fechada: auth (senha + 2º fator SMS), backend de sessões,
-wizard de ambiente, tools MCP de ambiente, camada Docker e o gateway com Kong.
-Nasceu de um cliente NOS/Supabase (v1), já removido. Histórico cronológico:
-[`docs/PROGRESSO.md`](docs/PROGRESSO.md).
+**0.5.0** — a interface do `nio ai` (TUI) fechada: editor multi-linha, fluxo em
+linha estilo Claude Code (raciocínio, ferramentas, checklist, diff, tokens),
+`Tab` troca de modo, paleta `/` executável, fila de permissões (com recuperação
+de pedido perdido de sub-agente), perguntas e menus de opção. Mais o fix da cauda
+de 30s no shutdown que tocava o Postgres.
+
+Base (0.2.0–0.4.0): auth (senha + 2º fator SMS OTP), backend de sessões no
+Postgres, wizard de ambiente, tools MCP, camada Docker, gateway com Kong e a
+auditoria de segurança (argon2id + pepper, HIBP k-anonymity, roles de menor
+privilégio). Nasceu de um cliente NOS/Supabase (v1), já removido.
+
+Histórico cronológico: [`docs/PROGRESSO.md`](docs/PROGRESSO.md).

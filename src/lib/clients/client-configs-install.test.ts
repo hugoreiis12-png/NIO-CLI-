@@ -145,10 +145,35 @@ test('planOpencodeUpdate: sem mcp existente → não configurado, monta a entrad
   expect(next.model).toBe(NIO_OPERATOR_MODEL);
 });
 
-test('planOpencodeUpdate: entrada já idêntica (command + environment + enabled + model) → já configurado', () => {
-  const existing = { model: NIO_OPERATOR_MODEL, mcp: { nio: { type: 'local', ...opencodeEntry, enabled: true } } };
+test('planOpencodeUpdate: entrada já idêntica (command + environment + enabled + model + permission) → já configurado', () => {
+  const existing = {
+    model: NIO_OPERATOR_MODEL,
+    mcp: { nio: { type: 'local', ...opencodeEntry, enabled: true } },
+    permission: { bash: { '*': 'ask' } },
+  };
   const { alreadyConfigured } = planOpencodeUpdate(existing, opencodeEntry);
   expect(alreadyConfigured).toBe(true);
+});
+
+test('planOpencodeUpdate (Sprint 7.5): semeia `permission` quando ausente, preserva o do usuário', () => {
+  // ausente → semeia os defaults + força a re-escrita
+  const seeded = planOpencodeUpdate(
+    { model: NIO_OPERATOR_MODEL, mcp: { nio: { type: 'local', ...opencodeEntry, enabled: true } } },
+    opencodeEntry,
+  );
+  expect(seeded.alreadyConfigured).toBe(false);
+  expect((seeded.next.permission as any).bash['ls *']).toBe('allow');
+  expect((seeded.next.permission as any).bash['*']).toBe('ask');
+  expect((seeded.next.permission as any).edit).toBe('ask');
+
+  // já presente → NÃO sobrescreve
+  const mine = { bash: { 'rm *': 'deny', '*': 'allow' } };
+  const kept = planOpencodeUpdate(
+    { model: NIO_OPERATOR_MODEL, mcp: { nio: { type: 'local', ...opencodeEntry, enabled: true } }, permission: mine },
+    opencodeEntry,
+  );
+  expect(kept.next.permission).toEqual(mine);
+  expect(kept.alreadyConfigured).toBe(true);
 });
 
 test('planOpencodeUpdate: model ausente → não configurado, next seta o default', () => {

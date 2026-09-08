@@ -83,6 +83,12 @@ let pool: Pool | null = null;
 export function getPool(): Pool {
   if (pool) return pool;
 
+  // Marca (sem custo de import) pra que o shutdown do CLI saiba que precisa
+  // fechar o pool — senão o socket ocioso segura o event loop por
+  // `idleTimeoutMillis` (30s) e comandos como `nio ai`/`nio sessions` só
+  // devolvem o prompt 30s depois de terminar. Ver `closePoolIfOpen`.
+  (globalThis as Record<string, unknown>).__nioPgPoolOpen = true;
+
   pool = new Pool({
     connectionString: readDatabaseUrl(),
     ssl: readSslOption(),
@@ -160,5 +166,6 @@ export async function closePool(): Promise<void> {
   if (!pool) return;
   const p = pool;
   pool = null;
+  (globalThis as Record<string, unknown>).__nioPgPoolOpen = false;
   await p.end();
 }

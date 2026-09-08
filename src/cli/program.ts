@@ -7,6 +7,7 @@ import { Command } from "commander";
 import { VERSION } from "../version.js";
 import { brand } from "../brand.js";
 import { renderMatrixLogo } from "../matrix-logo.js";
+import { usageGuide } from "./help-guide.js";
 import { registerAuthCommands } from "./commands/auth.js";
 import { registerInitCommand } from "./commands/init/index.js";
 import { registerSyncCommand } from "./commands/sync.js";
@@ -37,7 +38,9 @@ export function buildProgram(logoShown: () => boolean = () => false): Command {
     .name(brand.name)
     .description(`CLI do ${brand.productName} (${brand.productFullName}) — rode \`nio\` sem argumentos pra esteira guiada`)
     .version(VERSION)
-    .addHelpText("beforeAll", () => (logoShown() ? "" : renderMatrixLogo()));
+    .addHelpText("beforeAll", () => (logoShown() ? "" : renderMatrixLogo()))
+    // só no help do topo (`nio --help`), não no de cada subcomando
+    .addHelpText("after", (ctx) => (ctx.command.name() === brand.name ? usageGuide() : ""));
 
   registerAuthCommands(program);
   registerInitCommand(program);

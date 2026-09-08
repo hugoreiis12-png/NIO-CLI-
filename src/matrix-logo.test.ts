@@ -33,10 +33,15 @@ test('renderMatrixLogo: seeds diferentes → chuvas diferentes', () => {
 });
 
 test('animateMatrixLogo: fora de TTY → escreve o estático uma vez, sem cursor-up', async () => {
-  // bun:test não roda em TTY, então isTTY já é falsy.
-  const out = await capture(() => animateMatrixLogo({ colored: false }));
-  expect(out).toBe(renderMatrixLogo({ colored: false }) + '\n');
-  expect(out).not.toContain('\x1b['); // nenhum ANSI (nem cor nem cursor)
+  // `bun test` herda o TTY do terminal — força falsy pra testar o caminho não-TTY.
+  Object.defineProperty(process.stdout, 'isTTY', { value: false, configurable: true });
+  try {
+    const out = await capture(() => animateMatrixLogo({ colored: false }));
+    expect(out).toBe(renderMatrixLogo({ colored: false }) + '\n');
+    expect(out).not.toContain('\x1b['); // nenhum ANSI (nem cor nem cursor)
+  } finally {
+    Object.defineProperty(process.stdout, 'isTTY', { value: undefined, configurable: true });
+  }
 });
 
 test('animateMatrixLogo: NIO_NO_ANIM força o estático mesmo com TTY', async () => {

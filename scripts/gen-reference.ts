@@ -11,24 +11,12 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { toolDefinitions } from '../src/tools/index.ts';
 import { brand } from '../src/brand.ts';
-import { registerAuthCommands } from '../src/cli/commands/auth.ts';
-import { registerInitCommand } from '../src/cli/commands/init/index.ts';
-import { registerSyncCommand } from '../src/cli/commands/sync.ts';
-import { registerSkillsCommands } from '../src/cli/commands/skills.ts';
-import { registerCleanCommand } from '../src/cli/commands/clean.ts';
-import { registerExecCommand } from '../src/cli/commands/exec.ts';
-import { registerPlanCommand } from '../src/cli/commands/plan.ts';
-import { registerValidatePlanCommand } from '../src/cli/commands/validate-plan.ts';
-import { registerCompletionCommand } from '../src/cli/commands/completion.ts';
-import { registerDockerCommand } from '../src/cli/commands/docker.ts';
-import { registerSecurityCommands } from '../src/cli/commands/security.ts';
-import { registerDocsCommand } from '../src/cli/commands/docs.ts';
-import { registerConfigCommand } from '../src/cli/commands/config.ts';
-import { registerStartCommand } from '../src/cli/commands/start.ts';
-import { registerAiCommand } from '../src/cli/commands/ai.ts';
+// A árvore de comandos vem do MESMO builder que o `nio` usa — nada de lista
+// duplicada aqui (era a causa de comandos faltando na tabela do README).
+import { buildProgram } from '../src/cli/program.ts';
 
 /** Primeira frase de um texto (resumo enxuto pra tabela), com `|` escapado. */
 function cell(text: string): string {
@@ -75,31 +63,6 @@ function genTools(): string {
 }
 
 // ---------- Comandos (CLI) ----------
-
-function buildProgram(): Command {
-  const program = new Command();
-  program.name(brand.name).description(`CLI do ${brand.productName}`);
-  for (const reg of [
-    registerAuthCommands,
-    registerInitCommand,
-    registerSyncCommand,
-    registerSkillsCommands,
-    registerCleanCommand,
-    registerExecCommand,
-    registerPlanCommand,
-    registerValidatePlanCommand,
-    registerCompletionCommand,
-    registerDockerCommand,
-    registerSecurityCommands,
-    registerDocsCommand,
-    registerConfigCommand,
-    registerStartCommand,
-    registerAiCommand,
-  ]) {
-    reg(program);
-  }
-  return program;
-}
 
 function walkCommands(cmd: Command, prefix = ''): { name: string; desc: string }[] {
   const out: { name: string; desc: string }[] = [];

@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { spawn } from 'node:child_process';
 import { theme, sym } from './theme.js';
+import { permGroupLabel, type PermissionReq } from './state.js';
 import type { PaletteItem } from './palette-source.js';
 
 export function InfoPanel({ item, onClose }: { item: PaletteItem; onClose: () => void }): React.ReactElement {
@@ -81,24 +82,55 @@ export function CommandRunner({
   );
 }
 
+const clip = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+/**
+ * Modal de permissão (Sprint 7.1). Genérico — funciona pra qualquer um dos ~40
+ * `kind` (bash/edit/read/webfetch/MCP…). Mostra o grupo, o comando/patterns, e o
+ * que a opção "sempre" vai salvar como regra. `total > 1` = há uma fila.
+ */
 export function PermissionModal({
-  title,
+  req,
+  queued,
   onRespond,
 }: {
-  title: string;
+  req: PermissionReq;
+  /** total de pedidos na fila (contando este) — `>1` mostra "+N na fila". */
+  queued: number;
   onRespond: (r: 'once' | 'always' | 'reject') => void;
 }): React.ReactElement {
-  useInput((input) => {
+  useInput((input, key) => {
     const k = input.toLowerCase();
-    if (k === 'a') onRespond('once');
+    if (k === 'a' || key.return) onRespond('once');
     else if (k === 's') onRespond('always');
-    else if (k === 'd') onRespond('reject');
+    else if (k === 'd' || key.escape) onRespond('reject');
   });
+
+  const detail = req.command
+    ? [`$ ${req.command}`]
+    : req.patterns.length
+      ? req.patterns.slice(0, 4)
+      : [permGroupLabel(req.kind)];
+
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={theme.warn} paddingX={1}>
-      <Text color={theme.warn}>{sym.warn} O operador pede permissão:</Text>
-      <Text>{title}</Text>
-      <Text color={theme.dim}>[a] permitir · [s] sempre · [d] negar</Text>
+      <Text color={theme.warn}>
+        {sym.warn} permissão — <Text bold>{permGroupLabel(req.kind)}</Text>
+        {queued > 1 ? <Text color={theme.dim}>{`  (+${queued - 1} na fila)`}</Text> : null}
+      </Text>
+      {detail.map((d, i) => (
+        <Text key={i} color={theme.text} wrap="truncate-end">
+          {'  '}
+          {clip(d, 78)}
+        </Text>
+      ))}
+      {req.always.length > 0 && (
+        <Text color={theme.dim} wrap="truncate-end">
+          {'  sempre = '}
+          {req.always.slice(0, 5).join(', ')}
+        </Text>
+      )}
+      <Text color={theme.dim}>[a]/↵ permitir · [s] sempre · [d]/Esc negar</Text>
     </Box>
   );
 }

@@ -59,7 +59,7 @@ export const SECTIONS: DocSection[] = [
         items: [
           'Autenticação — `nio register` / `nio login`. O nio-gateway (serviço HTTP loopback) verifica a senha (argon2id), dispara o 2º fator se ativo, e devolve um JWT salvo em ~/.nio/session.json.',
           'Sessão — `nio init`. O wizard pergunta perfil + recipe; o EnvironmentBuilder garante os toolchains, resolve os MCPs e grava o config materializado na linha `sessions` do Postgres.',
-          'Handoff — `nio ai` sobe o Headroom (proxy de compressão, container Docker, obrigatório — ADR 0007), aponta o provider pra ele, sobe o `opencode serve` headless (opencode/big-pickle, MCP nio + MCPs do perfil) e abre a interface NIO (Ink) — chat, sidebar e paleta `/`. Com IDE, roda num terminal integrado dela.',
+          'Handoff — `nio ai` prepara o opencode.json (provider direto no LLM — o Headroom foi desativado, ADR 0010, não precisa de Docker), sobe o `opencode serve` headless (opencode/big-pickle, MCP nio + MCPs do perfil) e abre a interface NIO (Ink): chat streamado + paleta `/`. Com IDE, roda num terminal integrado dela.',
         ],
       },
       {
@@ -83,8 +83,8 @@ export const SECTIONS: DocSection[] = [
         rows: [
           ['PostgreSQL alcançável', 'fonte da verdade — schema de db/schema.sql aplicado uma vez'],
           ['JWT_SECRET (segredo do time)', 'assinar/validar as sessões — mesmo valor em toda máquina'],
-          ['OpenCode', 'operador de IA — o `nio init` oferece instalar'],
-          ['Docker', 'obrigatório pro `nio ai` — roda o Headroom (proxy de compressão) em container'],
+          ['OpenCode', 'operador de IA — o `nio init` oferece instalar (`npm i -g opencode-ai`)'],
+          ['Docker (opcional)', 'NÃO é preciso pro `nio ai` (Headroom desativado, ADR 0010). Só pra `nio docker` e o gateway conteinerizado'],
           ['provedor de SMS (opcional)', '2º fator — SMS_ENDPOINT_URL + SMS_AUTH_HEADER + SMS_BODY_TEMPLATE'],
         ],
       },
@@ -148,6 +148,74 @@ export const SECTIONS: DocSection[] = [
         ].join('\n'),
       },
       { kind: 'p', text: 'A qualquer momento, `nio debug` mostra o que está ok e o que falta.' },
+    ],
+  },
+  {
+    id: 'interface-ai',
+    title: 'A interface do `nio ai`',
+    blurb: 'Chat no terminal (Ink) sobre o opencode/big-pickle. Uma superfície só — no estilo do Claude Code.',
+    blocks: [
+      {
+        kind: 'p',
+        text: 'O `nio ai` sobe o `opencode serve` headless e abre o chat. Tudo que o motor faz — raciocínio, ferramentas (com argumentos e saída), arquivos tocados, checklist, tokens/custo — aparece EM LINHA, conforme acontece. Sem sidebar, sem janela extra. Com IDE (VS Code/Cursor), roda num terminal integrado dela.',
+      },
+      { kind: 'p', text: 'Digitar & enviar' },
+      {
+        kind: 'code',
+        text: [
+          'Enter                    envia o prompt',
+          '\\ + Enter  /  Ctrl-J     quebra linha (o prompt é multi-linha e cresce sozinho)',
+          '←/→  ↑/↓                 move o cursor dentro do texto',
+          'Ctrl-A / Ctrl-E          início / fim da linha',
+          'Ctrl-W / Ctrl-U / Ctrl-K apaga a palavra / até o início / até o fim',
+          'colar um bloco           entra literal (várias linhas não enviam sozinhas)',
+        ].join('\n'),
+      },
+      { kind: 'p', text: 'Modos — o modo troca o comportamento do agente' },
+      {
+        kind: 'code',
+        text: [
+          'Tab             alterna os agentes primários do opencode.json (build → plan → …)',
+          'build           o agente executa (edita, roda comando)',
+          'plan            o agente só propõe — não toca nada',
+          'rodapé [build]  mostra o modo atual',
+        ].join('\n'),
+      },
+      { kind: 'p', text: 'Paleta de comandos' },
+      {
+        kind: 'code',
+        text: [
+          '/               abre a lista inline: comandos do nio + capacidades do operador',
+          '↑/↓ + Enter      roda o comando / manda a capacidade pro agente / abre o painel',
+          'Esc             fecha a lista — o texto que você já digitou continua lá',
+        ].join('\n'),
+      },
+      { kind: 'p', text: 'Quando o agente te interrompe' },
+      {
+        kind: 'list',
+        items: [
+          'Permissão (rodar shell, editar arquivo, chamar MCP…) → modal: `a`/`Enter` uma vez · `s` sempre (salva a regra no opencode.json) · `d`/`Esc` nega.',
+          'Pedidos em paralelo enfileiram (`+N na fila`); um sub-agente travado é reconciliado sozinho em ~4s — não trava mais em "processando".',
+          'Pergunta aberta — o agente termina com "?" → o cue `↳ o nio perguntou` aparece acima do input.',
+          'Lista de opções — listou `1./2./3.` → menu `↑/↓`+`Enter` pra escolher; ou ignore e escreva livre.',
+        ],
+      },
+      { kind: 'p', text: 'Acompanhar & controlar' },
+      {
+        kind: 'code',
+        text: [
+          'Ctrl-R                  expande/colapsa o raciocínio (✻) — ver o agente pensar ao vivo',
+          'Esc                    durante o processamento: aborta o turno',
+          '● tool(args) ⎿ saída   cada ferramenta, com entrada e 1ª linha da saída',
+          '☑ / ◐ / ☐              checklist do agente (todo)',
+          '✎ N arquivo(s) +x −y   resumo do diff da rodada',
+          '↑tok ↓tok · $custo     no rodapé de cada resposta',
+        ].join('\n'),
+      },
+      {
+        kind: 'p',
+        text: 'Sem TTY (pipe/CI) o `nio ai` recusa com uma mensagem. Sem o binário `opencode` no PATH, cai na TUI do próprio OpenCode. `NIO_DEBUG=1` grava cada evento cru do motor em ~/.nio/tui.log (nunca no terminal — corromperia o render).',
+      },
     ],
   },
   {
@@ -225,7 +293,8 @@ export const SECTIONS: DocSection[] = [
           '"Não consegui falar com o nio-gateway" → suba `nio-gateway &`.',
           '"Não autenticado" → `nio register` (1ª vez) e `nio login`.',
           '"2FA não configurado no servidor" (503) → faltam as SMS_* no ambiente do nio-gateway.',
-          '"Headroom é obrigatório pro client de IA" → suba o Docker; `nio docker headroom up` / `status`.',
+          '`nio ai` diz "precisa de um terminal interativo" → você está num pipe/CI; rode num terminal de verdade.',
+          '`nio ai` travado em "processando" → `Esc` aborta o turno. O motor recupera permissão perdida sozinho em ~4s; se persistir, `NIO_DEBUG=1 nio ai` e veja `~/.nio/tui.log`.',
           'A IDE não abriu o terminal do NIO sozinha → permita "tarefas automáticas", ou rode a task "NIO" (Cmd/Ctrl+Shift+P → Run Task), ou só `nio ai`.',
           'Tools não aparecem no cliente → reinicie o cliente depois do `nio init`; cheque com /mcp.',
         ],

@@ -27,6 +27,44 @@ export async function startOpencode(cwd: string): Promise<OpencodeHandle> {
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Nomes dos agentes **primários** (modos que dá pra alternar com Tab — Sprint 5).
+ * Fallback `['build', 'plan']` se o endpoint falhar / não existir.
+ */
+export async function listPrimaryAgents(client: OpencodeClient): Promise<string[]> {
+  try {
+    const res = await client.app.agents();
+    const list = ((res as { data?: Array<{ name?: string; mode?: string }> }).data ?? [])
+      .filter((a) => a.mode !== 'subagent' && a.name)
+      .map((a) => a.name as string);
+    return list.length > 0 ? list : ['build', 'plan'];
+  } catch {
+    return ['build', 'plan'];
+  }
+}
+
+/**
+ * Permissões pendentes AGORA (`GET /permission`) — a verdade do server, inclui
+ * as de sub-agentes (`task`). O SDK não tipa esse endpoint; vai de `fetch` cru.
+ * Nunca lança: erro/timeout → `[]`. O `resync` da TUI usa isto pra recuperar um
+ * `permission.asked` perdido (senão o motor trava pra sempre em "processando").
+ */
+export async function fetchPendingPermissions(
+  baseUrl: string,
+): Promise<Array<Record<string, unknown>>> {
+  try {
+    const res = await fetch(new URL('/permission', baseUrl), {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!res.ok) return [];
+    const body = (await res.json()) as unknown;
+    return Array.isArray(body) ? (body as Array<Record<string, unknown>>) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Stream de eventos do server. **Nunca para** enquanto `signal` não aborta — se o
  * SSE cai (fim de stream ou erro), reconecta com backoff. Emite `null` a cada
  * (re)conexão pra o caller re-sincronizar o estado.

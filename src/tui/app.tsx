@@ -9,11 +9,36 @@ import type { Command } from 'commander';
 import { renderMatrixLogo } from '../matrix-logo.js';
 import { tlog } from './debug.js';
 import { theme } from './theme.js';
-import { Header, Sidebar, MessageView, LiveMessage, StatusLine, InputBox, type PaletteAction } from './components.js';
+import {
+  Footer,
+  MessageView,
+  LiveMessage,
+  StatusLine,
+  InputBox,
+  Toasts,
+  ErrorBlock,
+  DiffSummary,
+  type PaletteAction,
+} from './components.js';
 import { InfoPanel, CommandRunner, PermissionModal } from './palette.js';
 import { buildPalette, type PaletteItem } from './palette-source.js';
-import { applyEvent, pushUserMessage, syncMessages, emptyChat, type ChatState } from './state.js';
-import { subscribeEvents, type OpencodeHandle } from './opencode.js';
+import {
+  applyEvent,
+  messageUsage,
+  pendingQuestion,
+  questionOptions,
+  pushUserMessage,
+  syncMessages,
+  reconcilePendingPermissions,
+  emptyChat,
+  type ChatState,
+} from './state.js';
+import {
+  listPrimaryAgents,
+  subscribeEvents,
+  fetchPendingPermissions,
+  type OpencodeHandle,
+} from './opencode.js';
 
 type Overlay =
   | { kind: 'none' }
@@ -49,12 +74,16 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   const { rows, columns } = useTerminalSize();
   const [chat, setChat] = useState<ChatState>(emptyChat);
   const [overlay, setOverlay] = useState<Overlay>({ kind: 'none' });
-  const [sessions, setSessions] = useState<{ id: string; title: string }[]>([]);
+  const [draft, setDraft] = useState(''); // rascunho do input — no App pra sobreviver a overlays (Sprint 6)
+  const [showReasoning, setShowReasoning] = useState(false); // Sprint 3: Ctrl-R expande o raciocínio
+  const [modes, setModes] = useState<string[]>(['build', 'plan']); // Sprint 5: agentes primários (Tab cicla)
+  const [mode, setMode] = useState('build');
   const [ready, setReady] = useState(false);
   const [frame, setFrame] = useState(0);
   const sessionId = useRef<string>('');
   const abortRef = useRef(new AbortController());
   const busyStartedAt = useRef<number>(0); // pro tempo decorrido no StatusLine
+  const tuiCommandRef = useRef<(cmd: string) => void>(() => {}); // Sprint 7.2 — closures frescas
 
   const [splash, setSplash] = useState(splashMs > 0);
   useEffect(() => {
@@ -76,14 +105,15 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     const id = sessionId.current;
     if (!id) return;
     try {
-      const [st, msgs] = await Promise.all([
+      const [st, msgs, perms] = await Promise.all([
         handle.client.session.status(),
         handle.client.session.messages({ path: { id } }),
+        fetchPendingPermissions(handle.url),
       ]);
       const status = (st as { data?: Record<string, { type?: string }> }).data?.[id]?.type;
       const busy = status === 'busy' || status === 'retry';
       const raw = ((msgs as { data?: unknown[] }).data ?? []) as Parameters<typeof syncMessages>[1];
-      setChat((prev) => syncMessages(prev, raw, busy));
+      setChat((prev) => reconcilePendingPermissions(syncMessages(prev, raw, busy), perms));
     } catch (err) {
       tlog('resync falhou', (err as Error).message);
     }
@@ -98,8 +128,9 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
       try {
         const created = await handle.client.session.create({ body: { title: cwd.split('/').pop() ?? 'nio' } });
         sessionId.current = (created as { data?: { id?: string } }).data?.id ?? '';
-        const list = await handle.client.session.list();
-        setSessions(((list as { data?: { id: string; title?: string }[] }).data ?? []).slice(0, 20).map((s) => ({ id: s.id, title: s.title ?? '' })));
+        const agents = await listPrimaryAgents(handle.client);
+        setModes(agents);
+        setMode((cur) => (agents.includes(cur) ? cur : agents[0] ?? 'build'));
       } catch (err) {
         tlog('falha ao criar sessão', (err as Error).message);
       }
@@ -110,7 +141,19 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
           void resync(); // (re)conectou → re-sincroniza
           continue;
         }
-        if ((evt.type as string) === 'message.part.delta') continue; // ruído: o snapshot vem em message.part.updated
+        const et = evt.type as string;
+        if (et === 'message.part.delta') continue; // ruído: o snapshot vem em message.part.updated
+        // Sprint 7.2 — o motor dirige a TUI (imperativo, fora do ChatState):
+        if (et === 'tui.prompt.append') {
+          const text = (evt as { properties?: { text?: string } }).properties?.text ?? '';
+          if (text) setDraft((d) => (d ? `${d} ${text}` : text));
+          continue;
+        }
+        if (et === 'tui.command.execute') {
+          const cmd = (evt as { properties?: { command?: string } }).properties?.command ?? '';
+          tuiCommandRef.current(cmd);
+          continue;
+        }
         setChat((prev) => applyEvent(prev, evt));
       }
     })();
@@ -127,34 +170,99 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     return () => clearInterval(t);
   }, [chat.busy, resync]);
 
-  useInput((_i, key) => {
-    if (key.escape && chat.busy && sessionId.current) {
-      handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
-      setChat((prev) => ({ ...prev, busy: false }));
-    }
-  });
+  // Sprint 7.2 — poda toasts expirados (`until`).
+  useEffect(() => {
+    if (chat.toasts.length === 0) return;
+    const iv = setInterval(() => {
+      setChat((prev) => {
+        const now = Date.now();
+        const kept = prev.toasts.filter((x) => x.until > now);
+        return kept.length === prev.toasts.length ? prev : { ...prev, toasts: kept };
+      });
+    }, 700);
+    return () => clearInterval(iv);
+  }, [chat.toasts.length]);
+
+  // Atalhos globais — inativos quando há overlay/permissão por cima (o Esc é deles).
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input === 'r') return setShowReasoning((v) => !v); // Sprint 3
+      if (key.escape && chat.busy && sessionId.current) {
+        handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
+        setChat((prev) => ({ ...prev, busy: false }));
+      }
+    },
+    { isActive: overlay.kind === 'none' && chat.permissions.length === 0 },
+  );
 
   useEffect(() => () => handle.close(), [handle]);
 
   const send = (text: string) => {
     if (!sessionId.current) return;
+    setDraft('');
     setChat((prev) => pushUserMessage(prev, text));
     handle.client.session
-      .prompt({ path: { id: sessionId.current }, body: { model, parts: [{ type: 'text', text }] } })
+      .prompt({ path: { id: sessionId.current }, body: { model, agent: mode, parts: [{ type: 'text', text }] } })
       .catch((err) => tlog('prompt falhou', (err as Error).message));
+  };
+
+  // Sprint 5: Tab cicla o modo do agente (build ⇄ plan ⇄ …).
+  const cycleMode = (reverse: boolean) => {
+    setMode((cur) => {
+      const n = modes.length;
+      if (n === 0) return cur;
+      const i = Math.max(0, modes.indexOf(cur));
+      return modes[(i + (reverse ? -1 : 1) + n) % n] ?? cur;
+    });
+  };
+
+  // Sprint 7.2 — mapeia `tui.command.execute` do motor. Guardado num ref
+  // (atualizado a cada render) pra o loop de eventos ver closures frescas.
+  const toast = (message: string, variant: 'info' | 'warning' = 'info') =>
+    setChat((prev) => ({
+      ...prev,
+      toasts: [
+        ...prev.toasts.slice(-4),
+        { id: `toast-${Date.now()}`, message, variant, until: Date.now() + 3000 },
+      ],
+    }));
+  tuiCommandRef.current = (cmd: string) => {
+    switch (cmd) {
+      case 'prompt.clear':
+        return setDraft('');
+      case 'prompt.submit':
+        return send(draft);
+      case 'agent.cycle':
+        return cycleMode(false);
+      case 'session.interrupt':
+        if (sessionId.current)
+          handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
+        return setChat((prev) => ({ ...prev, busy: false }));
+      case 'session.compact':
+        if (sessionId.current)
+          handle.client.session.summarize({ path: { id: sessionId.current } }).catch(() => {});
+        return toast('compactando o contexto…');
+      default:
+        return toast(`comando do motor ignorado: ${cmd}`);
+    }
   };
 
   const palette = useMemo(() => buildPalette(program), [program]);
   const onDispatch = (item: PaletteItem, action: PaletteAction) => {
+    setDraft('');
     if (action === 'prompt' && item.kind === 'capability') return send(item.prompt);
     if (action === 'run' && item.kind === 'command') return setOverlay({ kind: 'run', item });
-    setOverlay({ kind: 'info', item }); // 'info' (comando/help)
+    setOverlay({ kind: 'info', item }); // 'info' (help, ou comando sem run)
   };
+  const closeOverlay = () => setOverlay({ kind: 'none' });
 
+  // Sprint 7.1: responde o 1º da FILA e faz shift — os outros N-1 do batch
+  // paralelo aparecem em sequência (antes: só 1 slot, o resto ficava órfão e
+  // o opencode travava em `busy`).
   const respondPermission = (r: 'once' | 'always' | 'reject') => {
-    const perm = chat.permission;
+    const perm = chat.permissions[0];
     if (!perm) return;
-    setChat((prev) => ({ ...prev, permission: null }));
+    setChat((prev) => ({ ...prev, permissions: prev.permissions.slice(1) }));
     handle.client
       .postSessionIdPermissionsPermissionId({ path: { id: perm.sessionId, permissionID: perm.id }, body: { response: r } })
       .catch((err) => tlog('permission respond falhou', (err as Error).message))
@@ -175,17 +283,21 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
 
   // fase atual (reflete o que o opencode está fazendo) — mostrada no StatusLine
   const phase = useMemo(() => {
+    if (chat.retry) return `tentando de novo (${chat.retry.attempt})`;
     const parts = live?.parts ?? [];
     const tool = parts.find((p) => p.kind === 'tool' && (p.tool?.status === 'running' || p.tool?.status === 'pending'));
-    if (tool) return `executando ${tool.text}`;
+    if (tool) return `executando ${tool.tool?.name ?? tool.text}`;
     const hasText = parts.some((p) => p.kind === 'text' && p.text.trim());
     const hasReasoning = parts.some((p) => p.kind === 'reasoning' && p.text.trim());
     if (hasText) return 'escrevendo';
     if (hasReasoning) return 'raciocinando';
     return 'pensando';
-  }, [live]);
+  }, [live, chat.retry]);
   // tempo decorrido (o frame do spinner força o re-render ~11×/s enquanto busy)
   const elapsed = chat.busy ? Math.max(0, Math.floor((Date.now() - busyStartedAt.current) / 1000)) : 0;
+  // Sprint 7.4/7.6 — o nio terminou com uma pergunta (e às vezes opções)
+  const question = useMemo(() => pendingQuestion(chat), [chat]);
+  const options = useMemo(() => questionOptions(chat), [chat]);
 
   if (splash) {
     return (
@@ -196,31 +308,81 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     );
   }
 
-  const liveMax = Math.max(4, Math.floor(rows * 0.4));
   const disabled = chat.busy || !ready;
+  const pendingPerm = chat.permissions[0] ?? null;
+  const overlayUp = overlay.kind !== 'none' || !!pendingPerm;
+  const paletteOpen = draft.startsWith('/') && !overlayUp;
+  // teto da área viva — encolhe quando a droplist `/` abre, pro total (live +
+  // status + input + droplist + rodapé) caber e não corromper o Ink.
+  const paletteMaxItems = Math.max(3, Math.min(6, rows - 16));
+  const liveMax = Math.max(3, Math.floor(rows * 0.45) - (paletteOpen ? paletteMaxItems + 3 : 0));
+  const inputActive = !overlayUp;
+  const sessionTokens = chat.messages.reduce((n, m) => {
+    const u = messageUsage(m);
+    return n + (u ? u.tokensIn + u.tokensOut : 0);
+  }, 0);
 
+  // layout tipo Claude Code (Sprint 4): fluxo vertical, sem sidebar, rodapé de 1–2 linhas.
   return (
     <Box flexDirection="column" width={columns}>
       <Static items={finished}>{(m) => <MessageView key={m.id} message={m} />}</Static>
 
-      <Box flexDirection="row">
-        <Sidebar session={session} sessions={sessions} />
-        <Box flexDirection="column" flexGrow={1} minWidth={0}>
-          <Header url={handle.url} />
-          {live && <LiveMessage message={live} maxLines={liveMax} />}
-          <StatusLine busy={chat.busy} frame={frame} seconds={elapsed} label={phase} />
+      {live && (
+        <LiveMessage
+          message={live}
+          maxLines={liveMax}
+          todos={chat.todos}
+          files={chat.files}
+          retry={chat.retry}
+          expandReasoning={showReasoning}
+        />
+      )}
+      <DiffSummary changes={chat.diff} />
+      <StatusLine busy={chat.busy} frame={frame} seconds={elapsed} label={phase} />
+      {chat.error && <ErrorBlock error={chat.error} />}
+      <Toasts toasts={chat.toasts} />
 
-          {chat.permission ? (
-            <PermissionModal title={chat.permission.title} onRespond={respondPermission} />
-          ) : overlay.kind === 'info' ? (
-            <InfoPanel item={overlay.item} onClose={() => setOverlay({ kind: 'none' })} />
-          ) : overlay.kind === 'run' ? (
-            <CommandRunner item={overlay.item} cwd={cwd} onClose={() => setOverlay({ kind: 'none' })} />
-          ) : (
-            <InputBox disabled={disabled} palette={palette} onSubmit={send} onDispatch={onDispatch} />
-          )}
+      {/* Sprint 7.4 — o nio te perguntou algo e está esperando */}
+      {question && !overlayUp && (
+        <Box paddingX={1}>
+          <Text color={theme.accentBright} wrap="truncate-end">
+            {'↳ o nio perguntou: '}
+            <Text color={theme.text}>{question.length > columns - 24 ? question.slice(0, columns - 27) + '…' : question}</Text>
+          </Text>
         </Box>
-      </Box>
+      )}
+
+      {/* o input NUNCA desmonta — o rascunho fica no App (Sprint 6). */}
+      <InputBox
+        value={draft}
+        onChange={setDraft}
+        disabled={disabled}
+        active={inputActive}
+        palette={palette}
+        onSubmit={send}
+        onDispatch={onDispatch}
+        onCycleMode={cycleMode}
+        options={overlayUp ? [] : options}
+        width={Math.max(24, columns - 6)}
+        maxItems={paletteMaxItems}
+      />
+
+      {/* camada por cima do input — não substitui, só sobrepõe. */}
+      {pendingPerm ? (
+        <PermissionModal req={pendingPerm} queued={chat.permissions.length} onRespond={respondPermission} />
+      ) : overlay.kind === 'info' ? (
+        <InfoPanel item={overlay.item} onClose={closeOverlay} />
+      ) : overlay.kind === 'run' ? (
+        <CommandRunner item={overlay.item} cwd={cwd} onClose={closeOverlay} />
+      ) : null}
+
+      <Footer
+        model="big-pickle"
+        cwd={cwd}
+        session={session}
+        mode={mode}
+        sessionTokens={sessionTokens}
+      />
     </Box>
   );
 }

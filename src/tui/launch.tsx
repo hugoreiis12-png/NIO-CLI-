@@ -1,7 +1,5 @@
 /**
- * `launchNioTui` — o branch interativo do client de IA (Fase 2): Headroom +
- * `opencode serve` headless + interface NIO (Ink). Degrada pra TUI do OpenCode
- * (sem TTY / sem `opencode` / server não sobe).
+ * Launch da interface TUI do NIO (Ink + React). Se não houver terminal interativo, ou se o Opencode não estiver no PATH
  */
 import { spawn } from 'node:child_process';
 import React from 'react';

@@ -18,6 +18,17 @@ const fail = (err: unknown): never => {
   process.exit(1);
 };
 
+/**
+ * Fecha o pool do Postgres se algum comando abriu um — senão o socket ocioso
+ * segura o event loop por `idleTimeoutMillis` (30s) e o CLI só devolve o prompt
+ * 30s depois de terminar. A flag global é setada em `getPool()`; checá-la aqui
+ * evita puxar o `pg` (~13ms) no cold start de `nio --version`/`--help`.
+ */
+const closeDbIfOpen = async (): Promise<void> => {
+  if (!(globalThis as Record<string, unknown>).__nioPgPoolOpen) return;
+  await import("./adapters/pg/client.js").then((m) => m.closePool()).catch(() => {});
+};
+
 const args = process.argv.slice(2);
 const bare = args.length === 0;
 const topHelp =
@@ -25,7 +36,7 @@ const topHelp =
 
 if (bare && process.stdout.isTTY && process.stdin.isTTY) {
   // `nio` sozinho num terminal → a esteira guiada (não o help).
-  continueChain({ from: "cold" }).catch(fail);
+  continueChain({ from: "cold" }).then(closeDbIfOpen).catch(fail);
 } else {
   // `nio --help` / `nio | cat` / CI → animação (se topo) + help/comando do commander.
   const helpPromise = topHelp
@@ -33,5 +44,8 @@ if (bare && process.stdout.isTTY && process.stdin.isTTY) {
         logoShown = true;
       })
     : Promise.resolve();
-  helpPromise.then(() => program.parseAsync(process.argv)).catch(fail);
+  helpPromise
+    .then(() => program.parseAsync(process.argv))
+    .then(closeDbIfOpen)
+    .catch(fail);
 }

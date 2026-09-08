@@ -56,12 +56,12 @@ async function runAi(): Promise<void> {
 export function registerAiCommand(program: Command): void {
   const ai = program
     .command("ai")
-    .description("Abre a interface NIO da sessão ativa (Headroom + opencode serve + Ink)")
+    .description("Abre a interface NIO da sessão ativa (opencode serve headless + chat Ink)")
     .action(runAi);
 
   ai
     .command("status")
-    .description("Estado do Headroom (proxy obrigatório do client de IA)")
+    .description("Estado do Headroom (proxy de compressão — desativado por ADR 0010, dormente)")
     .action(async () => {
       const up = await headroomHealthy();
       console.log(

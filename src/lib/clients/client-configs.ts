@@ -250,6 +250,28 @@ interface OpencodeServerEntry {
  */
 export const NIO_OPERATOR_MODEL = 'opencode/big-pickle';
 
+/**
+ * Defaults de permissão do `opencode.json` (Sprint 7.5 de UI/UX). Libera os
+ * comandos de shell só-leitura (o grosso dos prompts na TUI) e mantém `ask` pro
+ * resto: edições, rede, e qualquer bash fora da allowlist. Só é semeado quando
+ * o config ainda não tem um bloco `permission` (nunca sobrescreve o do usuário).
+ */
+export const DEFAULT_OPENCODE_PERMISSION: Record<string, unknown> = {
+  bash: {
+    'ls *': 'allow', ls: 'allow', pwd: 'allow', whoami: 'allow', date: 'allow',
+    'cat *': 'allow', 'head *': 'allow', 'tail *': 'allow', 'wc *': 'allow',
+    'file *': 'allow', 'stat *': 'allow', 'which *': 'allow', 'echo *': 'allow',
+    'find *': 'allow', 'grep *': 'allow', 'rg *': 'allow', 'tree *': 'allow',
+    'git status*': 'allow', 'git log*': 'allow', 'git diff*': 'allow',
+    'git show*': 'allow', 'git branch*': 'allow', 'git remote*': 'allow',
+    'git rev-parse*': 'allow',
+    '*': 'ask',
+  },
+  edit: 'ask',
+  webfetch: 'ask',
+  external_directory: 'ask',
+};
+
 /** Monta a entrada OpenCode de um MCP, preservando campos do usuário. Remoto (`spec.url`) → `type: 'remote'`. */
 function opencodeMcpEntry(spec: McpSpec, current?: OpencodeServerEntry): OpencodeServerEntry {
   if (spec.url) {
@@ -353,7 +375,11 @@ export function planOpencodeUpdate(
     ? opencodeProviderOk(existing, headroomUrl)
     : !opencodeHasBaseURL(existing);
   const alreadyConfigured =
-    nioOk && existing.model === NIO_OPERATOR_MODEL && mcpsOk && providerOk;
+    nioOk &&
+    existing.model === NIO_OPERATOR_MODEL &&
+    mcpsOk &&
+    providerOk &&
+    Boolean(existing.permission);
 
   const nextMcp: Record<string, OpencodeServerEntry> = {
     ...(servers as Record<string, OpencodeServerEntry>),
@@ -370,6 +396,7 @@ export function planOpencodeUpdate(
   }
 
   let next: Record<string, unknown> = { ...existing, model: NIO_OPERATOR_MODEL, mcp: nextMcp };
+  if (!existing.permission) next.permission = DEFAULT_OPENCODE_PERMISSION; // Sprint 7.5 — nunca sobrescreve
   next = headroomUrl ? planOpencodeProvider(next, headroomUrl) : clearOpencodeProviderBaseURL(next);
   return { alreadyConfigured, next };
 }

@@ -1,5 +1,6 @@
-# Contexto de build da imagem do gateway (Dockerfile.gateway copia só dist/ + package.json).
-# Mantém o contexto pequeno e — crítico — o .env (segredos) FORA do build.
+# Contexto de build da imagem do gateway (Dockerfile.gateway copia dist/ +
+# package.json + bun.lock). Mantém o contexto pequeno e — crítico — o .env
+# (segredos) FORA do build.
 .env
 .env.*
 node_modules
@@ -13,7 +14,8 @@ test
 .opencode
 kong
 headroom
-bun.lock
+# bun.lock NÃO entra aqui: o Dockerfile.gateway faz `COPY … bun.lock` +
+# `bun install --frozen-lockfile` (build reprodutível, auditoria M-2/I-3a).
 *.log
 *.md
 *.tgz
