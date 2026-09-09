@@ -29,6 +29,7 @@ services:
       NIO_GATEWAY_PORT: "3000"
       NIO_DATABASE_URL: "${NIO_DATABASE_URL}"   # env var do stack no Portainer
       JWT_SECRET: "${JWT_SECRET}"               # env var do stack no Portainer
+      NIO_GATEWAY_TOKEN: "${NIO_GATEWAY_TOKEN}" # token compartilhado (app externa)
     # SEM publish de porta no host: o gateway é alcançado só pela `nio-net` (Kong o
     # acha por nome). Isso evita conflito de :3000 e força o tráfego pelo Kong (:8000),
     # onde vale o rate-limiting. Debug local: `curl http://127.0.0.1:8000/health`.
