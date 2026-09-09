@@ -1,12 +1,13 @@
 # Arquitetura 2FA por e-mail — substituição do canal SMS (FUTURO / planejado)
 
 > ⚠️ **Feature planejada — não iniciada (planejamento de 2026-09-07).**
-> Hoje o 2º fator entrega o OTP por **SMS** (adapter HTTP genérico `SMS_*`,
-> `user_cli.phone`, `channel='sms'`; ver `ARQUITETURA-GATEWAY.md` — spec 0004 /
-> ADR 0006 foram removidos da árvore na reorg de docs de set/2026).
+> Hoje o 2º fator entrega o OTP por **WhatsApp** (Meta Graph API —
+> `WHATSAPP_ENDPOINT_URL`/`WHATSAPP_TOKEN`, `user_cli.phone`, `channel='whatsapp'`;
+> ver `ARQUITETURA-GATEWAY.md` — spec 0004 e ADR 0006).
 >
 > Este documento é o desenho da **troca do canal para e-mail** (OTP entregue por
-> SMTP). Motivo: SMS exige provedor pago (Twilio/Zenvia/…) **ou** hardware
+> SMTP). Motivo: os canais de hoje dependem de provedor pago — o WhatsApp Business
+> (Meta Graph, adotado 09 set 2026) e, antes dele, SMS (Twilio/Zenvia/…) ou hardware
 > (modem GSM + SIM); **e-mail via SMTP é 100% open-source e sem custo de
 > terceiro** — funciona igual com Postfix/Maddy self-hosted, Gmail SMTP,
 > Outlook, SES ou MailHog (dev).
@@ -58,18 +59,18 @@
 | Rotas `POST /verify-2fa`, `/security/*` + Kong (`/verify-2fa`, `/security`) | ✅ | **Sim — Kong nem muda** (rotas já genéricas) |
 | Throttle `smsAllowed` (M-4, cap por usuário/número) | ✅ | Renomeia → `otpDeliveryAllowed`, mesmos caps |
 | `smsMode()` / `devCode` (fix de visibilidade do echo, 2026-09-07) | ✅ | Renomeia → `deliveryMode()` |
-| Adapter `src/adapters/sms/http-generic.ts` (POST JSON + 1 header) | ✅ | Repurpose → adapter HTTP de e-mail (Resend/Postmark/relay) |
+| Adapter `src/adapters/sms/whatsapp.ts` (Meta Graph: token + template) | ✅ | Repurpose → adapter HTTP de e-mail (Resend/Postmark/relay) |
 | `user_cli.phone` (TEXT nullable) | ✅ | **Substituída** por `email` |
-| `channel TEXT CHECK (channel IN ('sms'))` | ✅ | Vira `CHECK (channel IN ('email'))` |
-| `SmsSender` / `SmsResult` (`src/core/messaging.ts`) | ✅ | Renomeia → `OtpMessenger` / `DeliveryResult` |
+| `channel TEXT CHECK (channel IN ('whatsapp'))` | ✅ | Vira `CHECK (channel IN ('email'))` |
+| `OtpSender` / `SmsResult` (`src/core/messaging.ts`) | ✅ | Renomeia → `OtpMessenger` / `DeliveryResult` |
 
 ---
 
 ## Riscos / reversões a registrar
 
 - **Supersede decisão documentada.** spec 0004 + ADR 0006 (SMS) saem de cena.
-  Criar **ADR 0013**; a nota de 2FA em `ARQUITETURA-GATEWAY.md` ainda fala
-  "Twilio Verify / SMS" — reescrever.
+  Criar **ADR 0013**; a nota de 2FA em `ARQUITETURA-GATEWAY.md` (reescrita em 09 set
+  2026 — WhatsApp) sairá de cena de novo se o e-mail entrar.
 - **Nova dependência: `nodemailer`.** A CLI evitou libs de rede até aqui (o SMS
   foi `fetch` POST manual, sem dep). SMTP **não** é trivial (STARTTLS, AUTH
   LOGIN/PLAIN, MIME, folding) → `nodemailer` é a escolha certa, mas é 1 dep nova
@@ -388,17 +389,17 @@ FASE 3+ (Parte C) — sob demanda, 1 PR por item
 | De | Para | Onde |
 |---|---|---|
 | `src/adapters/sms/` | `src/adapters/messaging/` | dir |
-| `SmsSender` | `OtpMessenger` | core + adapters + services + tests |
+| `OtpSender` | `OtpMessenger` | core + adapters + services + tests |
 | `SmsResult` | `DeliveryResult` | idem |
-| `createHttpSmsSender` | `createHttpOtpMessenger` | adapter + callers |
+| `createWhatsAppSender` | `createHttpOtpMessenger` | adapter + callers |
 | `smsMode` / `smsProviderHost` | `deliveryMode` / `deliveryHost` | adapter + services + CLI |
 | `smsAllowed` | `otpDeliveryAllowed` | throttle + callers |
 | `SMS_PER_USER` / `SMS_*_WINDOW_MS` | `OTP_PER_USER` / `OTP_*_WINDOW_MS` | throttle + tests |
 | `maskPhone` | `maskEmail` | login.ts + CLI (lógica muda: 1º char + domínio) |
 | `noteSmsMode` | `noteDeliveryMode` | CLI security.ts |
 | `phone` / `phoneHint` | `email` / `emailHint` | schema, types, repos, services, gateway, CLI |
-| `channel: 'sms'` | `channel: 'email'` | schema CHECK, types, repos |
-| env `SMS_ENDPOINT_URL` etc. | `NIO_SMTP_*` / `NIO_EMAIL_*` | .env.example, config.env, compose |
+| `channel: 'whatsapp'` | `channel: 'email'` | schema CHECK, types, repos |
+| env `WHATSAPP_ENDPOINT_URL` / `WHATSAPP_TOKEN` | `NIO_SMTP_*` / `NIO_EMAIL_*` | .env.example, config.env, compose |
 
 ---
 
@@ -464,7 +465,7 @@ O adapter SMTP é **o mesmo** pra todos — só muda `NIO_SMTP_HOST`.
 
 ## Ligações
 
-- `docs/arch/ARQUITETURA-GATEWAY.md` — 2º fator (a nota atual fala SMS/Twilio; reescrever)
+- `docs/arch/ARQUITETURA-GATEWAY.md` — 2º fator (nota reescrita em 09 set 2026 — WhatsApp)
 - `docs/security/README.md` — status da auditoria (o 2FA por e-mail entra como evolução, não achado)
 - ADR 0013 (a criar) — a decisão formal
 - `docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md` — mesmo formato deste doc (feature futura mapeada)

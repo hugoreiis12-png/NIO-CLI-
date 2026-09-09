@@ -13,7 +13,7 @@ import { createUserRepository } from '../../adapters/pg/user-repository.js';
 import { createLoginChallengeRepository } from '../../adapters/pg/login-challenge-repository.js';
 import { query, closePool } from '../../adapters/pg/client.js';
 import { generateBackupCodes } from '../../lib/auth/backup-codes.js';
-import type { SmsResult, SmsSender } from '../../core/messaging.js';
+import type { SmsResult, OtpSender } from '../../core/messaging.js';
 import { login, verifyLogin, logoutAll, MAX_SESSIONS_PER_USER } from './login.js';
 import { authenticate } from '../middleware/auth.js';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
@@ -27,12 +27,12 @@ afterAll(async () => {
   if (hasEnv) await closePool();
 });
 
-/** SmsSender fake que captura o código de 6 dígitos da mensagem. */
-function captureSms(): SmsSender & { code: string | null } {
+/** OtpSender fake que captura o código recebido (sendOtp recebe `to` + `code`). */
+function captureOtp(): OtpSender & { code: string | null } {
   const box = {
     code: null as string | null,
-    async send(_to: string, text: string): Promise<SmsResult> {
-      box.code = text.match(/\b(\d{6})\b/)?.[1] ?? null;
+    async sendOtp(_to: string, code: string): Promise<SmsResult> {
+      box.code = code;
       return { status: 'sent' };
     },
   };
@@ -51,7 +51,7 @@ dbTest(
 
     try {
       // ── caminho feliz: OTP ────────────────────────────────────────────
-      const sms = captureSms();
+      const sms = captureOtp();
       const started = await login(user.name, password, { sms });
       expect(started.ok).toBe(true);
       if (!started.ok || started.step !== '2fa_required') throw new Error('esperava 2fa_required');
@@ -76,7 +76,7 @@ dbTest(
 
       // ── OTP errado ×3 → attempts_exhausted + requiresBackupCode ───────
       clearThrottle(); // zera o cap de SMS (M-4) entre os sub-cenários
-      const sms2 = captureSms();
+      const sms2 = captureOtp();
       const s2 = await login(user.name, password, { sms: sms2 });
       if (!s2.ok || s2.step !== '2fa_required') throw new Error('esperava 2fa_required');
       let last;
@@ -91,7 +91,7 @@ dbTest(
 
       // ── challenge expirado ───────────────────────────────────────────
       clearThrottle();
-      const sms3 = captureSms();
+      const sms3 = captureOtp();
       const s3 = await login(user.name, password, { sms: sms3 });
       if (!s3.ok || s3.step !== '2fa_required') throw new Error();
       await query('UPDATE login_challenges SET expires_at = NOW() - INTERVAL \'1 minute\' WHERE id = $1', [s3.challengeId]);

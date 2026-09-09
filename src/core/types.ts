@@ -48,7 +48,7 @@ export interface UserCli {
   id: number;
   name: string;
   auth2: boolean;
-  /** E.164 do SMS do 2º fator; `null` = 2FA desativado. */
+  /** E.164 do WhatsApp do 2º fator; `null` = 2FA desativado. */
   phone: string | null;
   ipsUsing: string[];
   timestampCreation: Date;
@@ -68,7 +68,7 @@ export interface LoginChallenge {
   userId: number;
   purpose: ChallengePurpose;
   codeHash: string;
-  channel: 'sms';
+  channel: 'whatsapp';
   attempts: number;
   expiresAt: Date;
   consumedAt: Date | null;

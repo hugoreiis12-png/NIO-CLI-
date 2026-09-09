@@ -37,7 +37,7 @@ export function mapLoginChallengeRow(row: LoginChallengeRow): LoginChallenge {
     userId: Number(row.user_id),
     purpose: row.purpose as ChallengePurpose,
     codeHash: row.code_hash,
-    channel: row.channel as 'sms',
+    channel: row.channel as 'whatsapp',
     attempts: Number(row.attempts),
     expiresAt: row.expires_at,
     consumedAt: row.consumed_at,

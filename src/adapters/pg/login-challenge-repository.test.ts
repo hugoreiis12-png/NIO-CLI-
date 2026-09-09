@@ -10,7 +10,7 @@ const row: LoginChallengeRow = {
   user_id: '7',
   purpose: 'login',
   code_hash: 'deadbeef',
-  channel: 'sms',
+  channel: 'whatsapp',
   attempts: 2,
   expires_at: new Date('2026-08-29T12:05:00Z'),
   consumed_at: null,
@@ -21,7 +21,7 @@ test('mapLoginChallengeRow: snake→camel, user_id string→number, tipos', () =
   const c = mapLoginChallengeRow(row);
   expect(c.userId).toBe(7);
   expect(c.purpose).toBe('login');
-  expect(c.channel).toBe('sms');
+  expect(c.channel).toBe('whatsapp');
   expect(c.attempts).toBe(2);
   expect(c.consumedAt).toBeNull();
   expect(c.expiresAt).toEqual(new Date('2026-08-29T12:05:00Z'));

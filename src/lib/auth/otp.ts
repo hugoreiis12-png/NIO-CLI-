@@ -1,5 +1,5 @@
 /**
- * OTP de 6 dígitos do 2º fator (SMS). Geração + hash HMAC-SHA256 com o
+ * OTP de 6 dígitos do 2º fator (WhatsApp). Geração + hash HMAC-SHA256 com o
  * `OTP_HMAC_SECRET` (default = `JWT_SECRET` — ADR 0011 §D; nunca persiste o
  * código puro — constraint ANPD; HMAC basta pra código de vida curta e
  * rate-limitado). Ver spec 0004.

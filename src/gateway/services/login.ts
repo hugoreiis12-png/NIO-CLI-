@@ -1,6 +1,6 @@
 /**
  * Orquestra o login: credencial → (2º fator, se `auth_2`) → auth_session → JWT
- * (`jti = auth_session.id`). Consome os repos + `SmsSender`, sem saber de HTTP.
+ * (`jti = auth_session.id`). Consome os repos + `OtpSender`, sem saber de HTTP.
  * Ver `docs/specs/auth/0004-login-2fa-sms-otp.md` e ADR 0006.
  */
 import jwt from 'jsonwebtoken';
@@ -10,13 +10,12 @@ import type {
   LoginChallengeRepository,
   AuthSessionRepository,
 } from '../../core/repositories.js';
-import type { SmsSender } from '../../core/messaging.js';
+import type { OtpSender } from '../../core/messaging.js';
 import { createUserRepository } from '../../adapters/pg/user-repository.js';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
 import { createLoginChallengeRepository } from '../../adapters/pg/login-challenge-repository.js';
-import { createHttpSmsSender } from '../../adapters/sms/http-generic.js';
+import { createWhatsAppSender, smsMode, type SmsMode } from '../../adapters/sms/whatsapp.js';
 import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
-import { smsMode, type SmsMode } from '../../adapters/sms/http-generic.js';
 import { verifyBackupCode, markUsed, countRemaining } from '../../lib/auth/backup-codes.js';
 import { JWT_EXPIRES_IN, JWT_ISSUER, JWT_AUDIENCE } from '../config.js';
 import { jwtSigningKey } from '../../lib/auth/secrets.js';
@@ -60,9 +59,9 @@ export type LoginOutcome =
       step: '2fa_required';
       challengeId: string;
       phoneHint: string;
-      /** Backend de SMS — a CLI avisa se `echo` (dev, nenhum SMS real). */
+      /** Backend de WhatsApp — a CLI avisa se `echo` (dev, nenhuma mensagem real). */
       smsMode: SmsMode;
-      /** Só em `smsMode === 'echo'`: o OTP, já que nenhum SMS saiu. */
+      /** Só em `smsMode === 'echo'`: o OTP, já que nenhuma mensagem saiu. */
       devCode?: string;
     };
 
@@ -80,7 +79,7 @@ export type VerifyOutcome =
 export interface LoginDeps {
   users?: UserRepository;
   challenges?: LoginChallengeRepository;
-  sms?: SmsSender;
+  sms?: OtpSender;
 }
 
 /** Converte '12h' | '30m' | '3600s' | '1d' em milissegundos. Throw se o formato não bater. */
@@ -150,7 +149,7 @@ export async function issueSession(user: UserCli): Promise<SessionPayload> {
 }
 
 /**
- * 1º fator (senha) e, se `auth_2`, dispara o 2º (SMS OTP). Não emite JWT no
+ * 1º fator (senha) e, se `auth_2`, dispara o 2º (OTP via WhatsApp). Não emite JWT no
  * caminho de 2FA — a rota `/verify-2fa` faz isso via `verifyLogin`.
  */
 export async function login(
@@ -166,31 +165,31 @@ export async function login(
     return { ok: true, step: 'done', session: await issueSession(user) };
   }
 
-  // M-4: cap de SMS por usuário/número — mesmo com a senha certa, não dá pra
-  // torrar SMS repetindo o login.
+  // M-4: cap de OTP por usuário/número — mesmo com a senha certa, não dá pra
+  // torrar mensagens repetindo o login.
   if (!smsAllowed(user.id, user.phone)) {
     return { ok: false, reason: 'server_error', error: 'muitos códigos solicitados — aguarde alguns minutos.' };
   }
 
   const challenges = deps.challenges ?? createLoginChallengeRepository();
-  const sms = deps.sms ?? createHttpSmsSender();
+  const sms = deps.sms ?? createWhatsAppSender();
   const code = generateOtp();
   const challenge = await challenges.create({
     userId: user.id,
     purpose: 'login',
     codeHash: hashOtp(code),
-    channel: 'sms',
+    channel: 'whatsapp',
     expiresAt: new Date(Date.now() + OTP_TTL_MS),
   });
 
-  const sent = await sms.send(user.phone, `NIO: seu código de confirmação é ${code} (expira em 5 min).`);
+  const sent = await sms.sendOtp(user.phone, code);
   if (sent.status === 'skipped') {
     await challenges.consume(challenge.id).catch(() => {});
-    return { ok: false, reason: 'server_error', error: '2FA não configurado no servidor (SMS_*).' };
+    return { ok: false, reason: 'server_error', error: '2FA não configurado no servidor (WHATSAPP_*).' };
   }
   if (sent.status === 'failed') {
     await challenges.consume(challenge.id).catch(() => {});
-    return { ok: false, reason: 'server_error', error: `falha ao enviar o SMS: ${sent.error ?? ''}`.trim() };
+    return { ok: false, reason: 'server_error', error: `falha ao enviar o WhatsApp: ${sent.error ?? ''}`.trim() };
   }
 
   const mode = smsMode();

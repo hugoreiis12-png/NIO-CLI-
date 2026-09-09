@@ -11,14 +11,15 @@ import type {
   AuthFailure,
   AuthSessionRepository,
 } from '../../core/repositories.js';
-import type { SmsSender } from '../../core/messaging.js';
+import type { OtpSender } from '../../core/messaging.js';
 import type { UserCli } from '../../core/types.js';
 
-const SMS_TMPL = '{"to":"{to}","text":"{text}"}';
 afterEach(() => {
   clearThrottle();
-  delete process.env.SMS_ENDPOINT_URL;
-  delete process.env.SMS_BODY_TEMPLATE;
+  delete process.env.WHATSAPP_ENDPOINT_URL;
+  delete process.env.WHATSAPP_TOKEN;
+  delete process.env.WHATSAPP_TEMPLATE_NAME;
+  delete process.env.WHATSAPP_TEMPLATE_LANGUAGE;
 });
 
 test('isE164', () => {
@@ -34,13 +35,13 @@ function challengeDeps() {
     create: async () => ({ id: 'ch-1' }),
     consume: async () => {},
   } as unknown as LoginChallengeRepository;
-  const sms = { send: async () => ({ status: 'sent' as const }) } as unknown as SmsSender;
+  const sms = { sendOtp: async () => ({ status: 'sent' as const }) } as unknown as OtpSender;
   return { challenges, sms };
 }
 
 test('startSecurityChallenge: endpoint loopback → smsMode=echo + devCode', async () => {
-  process.env.SMS_ENDPOINT_URL = 'http://127.0.0.1:4545/send';
-  process.env.SMS_BODY_TEMPLATE = SMS_TMPL;
+  process.env.WHATSAPP_ENDPOINT_URL = 'http://127.0.0.1:4545/send';
+  process.env.WHATSAPP_TOKEN = 'dummy';
   const r = await startSecurityChallenge(1, '+5511999998888', challengeDeps());
   expect(r.ok).toBe(true);
   if (!r.ok) throw new Error();
@@ -49,8 +50,8 @@ test('startSecurityChallenge: endpoint loopback → smsMode=echo + devCode', asy
 });
 
 test('startSecurityChallenge: provedor externo → smsMode=provider, sem devCode', async () => {
-  process.env.SMS_ENDPOINT_URL = 'https://api.provedor.com/sms';
-  process.env.SMS_BODY_TEMPLATE = SMS_TMPL;
+  process.env.WHATSAPP_ENDPOINT_URL = 'https://api.provedor.com/sms';
+  process.env.WHATSAPP_TOKEN = 'dummy';
   const r = await startSecurityChallenge(1, '+5511999998888', challengeDeps());
   expect(r.ok).toBe(true);
   if (!r.ok) throw new Error();
@@ -101,13 +102,13 @@ test('status: 2FA inativo → enabled false, mas recentIps/recentFailedAttempts 
   expect(st.recentFailedAttempts).toEqual([]);
 });
 
-test('status: reporta o backend de SMS (fix do 2º fator — B)', async () => {
-  process.env.SMS_ENDPOINT_URL = 'http://127.0.0.1:4545/send';
-  process.env.SMS_BODY_TEMPLATE = SMS_TMPL;
+test('status: reporta o backend de WhatsApp (fix do 2º fator — B)', async () => {
+  process.env.WHATSAPP_ENDPOINT_URL = 'http://127.0.0.1:4545/send';
+  process.env.WHATSAPP_TOKEN = 'dummy';
   expect((await status(1, deps())).sms).toEqual({ mode: 'echo', host: '127.0.0.1' });
 
-  delete process.env.SMS_ENDPOINT_URL;
-  delete process.env.SMS_BODY_TEMPLATE;
+  delete process.env.WHATSAPP_ENDPOINT_URL;
+  delete process.env.WHATSAPP_TOKEN;
   expect((await status(1, deps())).sms).toEqual({ mode: 'unconfigured', host: null });
 });
 

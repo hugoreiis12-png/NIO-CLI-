@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS login_challenges (
     user_id BIGINT NOT NULL REFERENCES user_cli(id) ON DELETE CASCADE,
     purpose TEXT NOT NULL CHECK (purpose IN ('login', 'enable_2fa')),
     code_hash TEXT NOT NULL,       -- HMAC-SHA256(código, JWT_SECRET). NUNCA o código puro.
-    channel TEXT NOT NULL CHECK (channel IN ('sms')),
+    channel TEXT NOT NULL CHECK (channel IN ('whatsapp')),
     attempts INT NOT NULL DEFAULT 0,
     expires_at TIMESTAMPTZ NOT NULL,
     consumed_at TIMESTAMPTZ,       -- NULL = ativo; preenchido = já usado

@@ -85,7 +85,7 @@ export const SECTIONS: DocSection[] = [
           ['JWT_SECRET (segredo do time)', 'assinar/validar as sessões — mesmo valor em toda máquina'],
           ['OpenCode', 'operador de IA — o `nio init` oferece instalar (`npm i -g opencode-ai`)'],
           ['Docker (opcional)', 'NÃO é preciso pro `nio ai` (Headroom desativado, ADR 0010). Só pra `nio docker` e o gateway conteinerizado'],
-          ['provedor de SMS (opcional)', '2º fator — SMS_ENDPOINT_URL + SMS_AUTH_HEADER + SMS_BODY_TEMPLATE'],
+          ['provedor de WhatsApp (opcional)', '2º fator — WHATSAPP_ENDPOINT_URL + WHATSAPP_TOKEN + WHATSAPP_TEMPLATE_NAME'],
         ],
       },
     ],
@@ -117,7 +117,7 @@ export const SECTIONS: DocSection[] = [
         rows: [
           ['NIO_DATABASE_URL / NIO_DATABASE_SSL', 'tudo que toca o banco'],
           ['JWT_SECRET / JWT_EXPIRES_IN (sem prefixo)', 'nio-gateway + nio-cli'],
-          ['SMS_* (sem prefixo)', 'nio-gateway'],
+          ['WHATSAPP_* (sem prefixo)', 'nio-gateway'],
           ['NIO_GATEWAY_HOST (default 127.0.0.1)', 'nio-gateway — 0.0.0.0 p/ Kong em container'],
           ['NIO_GATEWAY_URL (default http://127.0.0.1:3000)', 'a CLI acha o nio-gateway. Kong na frente? aponta pra :8000'],
         ],
@@ -248,16 +248,16 @@ export const SECTIONS: DocSection[] = [
   },
   {
     id: '2fa',
-    title: '2º fator (SMS)',
+    title: '2º fator (WhatsApp)',
     blocks: [
       {
         kind: 'p',
-        text: 'Opt-in por conta. Com auth_2 ativo, o `nio login` pede um código de 6 dígitos por SMS; se o SMS não chega, vale um dos 10 códigos de backup (mostrados uma vez no enable-2fa).',
+        text: 'Opt-in por conta. Com auth_2 ativo, o `nio login` pede um código de 6 dígitos por WhatsApp; se o WhatsApp não chega, vale um dos 10 códigos de backup (mostrados uma vez no enable-2fa).',
       },
       {
         kind: 'code',
         text: [
-          'nio security enable-2fa               cadastra o celular, confirma via SMS, mostra os backups',
+          'nio security enable-2fa               cadastra o celular, confirma via WhatsApp, mostra os backups',
           'nio security status                   ativo? número (mascarado)? quantos backups restam?',
           'nio security disable-2fa',
           'nio security regenerate-backup-codes',
@@ -265,7 +265,7 @@ export const SECTIONS: DocSection[] = [
       },
       {
         kind: 'p',
-        text: 'O gateway gera/valida o OTP em processo (sem Twilio, sem broker), guarda só o HMAC do código (TTL 5 min, 3 tentativas, uso único) e manda o SMS por um adapter HTTP genérico. Sem SMS_ENDPOINT_URL, o login com auth_2 responde 503 — o de 1 fator segue normal.',
+        text: 'O gateway gera/valida o OTP em processo (sem Twilio, sem broker), guarda só o HMAC do código (TTL 5 min, 3 tentativas, uso único) e manda o WhatsApp por um adapter da Meta Graph (template de autenticação). Sem WHATSAPP_ENDPOINT_URL/WHATSAPP_TOKEN, o login com auth_2 responde 503 — o de 1 fator segue normal.',
       },
     ],
   },
@@ -292,7 +292,7 @@ export const SECTIONS: DocSection[] = [
           '"NIO_DATABASE_URL não definida" → ponha em ~/.nio/config.env, ou rode `nio config setup`.',
           '"Não consegui falar com o nio-gateway" → suba `nio-gateway &`.',
           '"Não autenticado" → `nio register` (1ª vez) e `nio login`.',
-          '"2FA não configurado no servidor" (503) → faltam as SMS_* no ambiente do nio-gateway.',
+          '"2FA não configurado no servidor" (503) → faltam as WHATSAPP_* no ambiente do nio-gateway.',
           '`nio ai` diz "precisa de um terminal interativo" → você está num pipe/CI; rode num terminal de verdade.',
           '`nio ai` travado em "processando" → `Esc` aborta o turno. O motor recupera permissão perdida sozinho em ~4s; se persistir, `NIO_DEBUG=1 nio ai` e veja `~/.nio/tui.log`.',
           'A IDE não abriu o terminal do NIO sozinha → permita "tarefas automáticas", ou rode a task "NIO" (Cmd/Ctrl+Shift+P → Run Task), ou só `nio ai`.',

@@ -1,14 +1,20 @@
 # Arquitetura do Gateway de Autenticação (v2)
 
-> ⚠️ **Atualização (29–30 ago 2026) — o 2º fator foi implementado, mas diferente
+> ⚠️ **Atualização (29 ago–09 set 2026) — o 2º fator foi implementado, mas diferente
 > do desenho abaixo.** Ver [spec 0004](../specs/auth/0004-login-2fa-sms-otp.md) e
 > [ADR 0006](../adr/0006-2fa-sms-otp.md). Resumo das mudanças em relação a este doc:
-> - **Twilio Verify → adapter de SMS HTTP genérico** (`SMS_ENDPOINT_URL` etc.).
+> - **Envio do OTP → WhatsApp Business API (Meta Graph)** (`WHATSAPP_ENDPOINT_URL`/
+>   `WHATSAPP_TOKEN`, template de autenticação `autenticao`). Em 29-30 ago o caminho
+>   era um adapter de SMS HTTP genérico (`SMS_*`) — substituído pelo WhatsApp em
+>   09 set (`src/adapters/sms/whatsapp.ts`; migração `0009`, `channel 'whatsapp'`).
 > - **O estado do OTP é nosso** (tabela `login_challenges`) — sem Twilio, não há
 >   onde guardar geração/TTL/tentativas fora do repo.
-> - **Caminho alternativo ao SMS (exigência NIST)** = 10 **códigos de backup** de
+> - **Caminho alternativo à mensagem (exigência NIST)** = 10 **códigos de backup** de
 >   uso único, gerados no `nio security enable-2fa`.
 > - **Mensageria = serviço direto no `nio-gateway`** — sem message broker, sem fila.
+> - **Modo echo (dev)** — `bun run dev:whatsapp-echo` sobe um endpoint de loopback
+>   (`WHATSAPP_ENDPOINT_URL` para 127.0.0.1/localhost); nenhuma mensagem real sai,
+>   o código aparece no terminal e a CLI o mostra (`devCode`) no `enable-2fa`.
 > - O Edge Filter, o Kong (rate-limit) e o `nio-gateway` já existem e estão no ar;
 >   as rotas novas são `POST /verify-2fa` e `/security/*`.
 >

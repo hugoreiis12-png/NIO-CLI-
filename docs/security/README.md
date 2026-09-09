@@ -40,7 +40,7 @@ Pasta de rastreio da auditoria de segurança e do trabalho que ela gerou.
 | M-1 | Média | MCP usa `session.json.name` em vez do `userId` do token | ✅ feito | — | **código pronto** |
 | M-2 | Média | Sem lockfile no build da imagem | ✅ feito | — | **código pronto** (all-bun, Dockerfile multi-stage) |
 | M-3 | Média | 1º fator sem lockout na aplicação | ✅ feito | — | **código pronto** (atraso escalonado in-memory) |
-| M-4 | Média | `/security/enable-2fa` → SMS pra número arbitrário | ✅ feito | — | **código pronto** (cap in-memory 3/15min + 1/60s) |
+| M-4 | Média | `/security/enable-2fa` → WhatsApp pra número arbitrário | ✅ feito | — | **código pronto** (cap in-memory 3/15min + 1/60s) |
 | M-5 | Média | Enumeração de usuário por timing | ✅ feito | — | **código pronto** |
 | M-6 | Média | `.env` do cwd carregado sem filtro | ✅ feito | — | **código pronto** |
 | M-7 | Média | Kong Admin API sem auth | ✅ feito | validado em dev (login pelo Kong OK) | **fechado** (dev + deploy) |

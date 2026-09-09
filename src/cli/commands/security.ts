@@ -1,5 +1,5 @@
 /**
- * `nio security` — gerência do 2º fator (SMS OTP + códigos de backup) pelo
+ * `nio security` — gerência do 2º fator (WhatsApp OTP + códigos de backup) pelo
  * usuário logado. Fala com o `nio-gateway` (`/security/*`, exige o JWT da sessão).
  * Ver `docs/specs/auth/0004-login-2fa-sms-otp.md`.
  */
@@ -29,7 +29,7 @@ function printBackupCodes(codes: string[]): void {
         "",
         ...codes.map((code, i) => `  ${String(i + 1).padStart(2, "0")}. ${c.bold(code)}`),
         "",
-        "Cada código serve UMA vez. Use-os se o SMS não chegar no login.",
+        "Cada código serve UMA vez. Use-os se o WhatsApp não chegar no login.",
         `Regenerar: ${brand.name} security regenerate-backup-codes`,
       ].join("\n"),
       { borderColor: "yellow", title: "códigos de backup" },
@@ -39,7 +39,7 @@ function printBackupCodes(codes: string[]): void {
 
 async function runEnable(): Promise<void> {
   const token = await requireToken();
-  section("2º fator", "ativar (SMS)");
+  section("2º fator", "ativar (WhatsApp)");
 
   const st = await gatewaySecurity.status(token).catch((e) => {
     console.error(`${c.red(sym.err)} ${(e as Error).message}`);
@@ -66,7 +66,7 @@ async function runEnable(): Promise<void> {
     console.error(`${c.red(sym.err)} ${(err as Error).message}`);
     process.exit(1);
   }
-  console.log(`  ${c.dim(`SMS enviado para ${phone}`)}`);
+  console.log(`  ${c.dim(`WhatsApp enviado para ${phone}`)}`);
   noteSmsMode({ smsMode, devCode });
 
   const code = (await input({ message: "Código de confirmação", validate: (v) => v.trim().length > 0 || "obrigatório" })).trim();
@@ -81,27 +81,27 @@ async function runEnable(): Promise<void> {
 }
 
 /**
- * Modo echo (dev): nenhum SMS real foi enviado — o código só existe no mock
- * (`scripts/sms-echo.ts` / `~/.nio/sms-echo-last.json`). Mostra ele direto pra
- * não deixar o usuário esperando um SMS que nunca chega.
+ * Modo echo (dev): nenhuma mensagem real foi enviada — o código só existe no mock
+ * (`scripts/whatsapp-echo.ts` / `~/.nio/whatsapp-echo-last.json`). Mostra ele direto pra
+ * não deixar o usuário esperando um WhatsApp que nunca chega.
  */
 function noteSmsMode(r: { smsMode?: string; devCode?: string }): void {
   if (r.smsMode === "echo") {
     console.log(
       box(
-        `${c.yellow(sym.warn)} ${c.bold("modo echo (dev) — nenhum SMS real foi enviado.")}\n` +
-          `O gateway está apontado pra um mock local (SMS_ENDPOINT_URL em loopback).\n\n` +
+        `${c.yellow(sym.warn)} ${c.bold("modo echo (dev) — nenhum WhatsApp real foi enviado.")}\n` +
+          `O gateway está apontado pra um mock local (WHATSAPP_ENDPOINT_URL em loopback).\n\n` +
           (r.devCode ? `Código: ${c.bold(r.devCode)}\n` : "") +
-          `${c.dim("Pra receber SMS de verdade: configure um SMS_ENDPOINT_URL real em ~/.nio/config.env")}`,
-        { borderColor: "yellow", title: "SMS" },
+          `${c.dim("Pra receber WhatsApp de verdade: configure WHATSAPP_ENDPOINT_URL e WHATSAPP_TOKEN em ~/.nio/config.env")}`,
+        { borderColor: "yellow", title: "WhatsApp" },
       ),
     );
   } else if (r.smsMode === "unconfigured") {
-    console.log(`  ${c.yellow(sym.warn)} SMS não configurado no gateway — use um código de backup.`);
+    console.log(`  ${c.yellow(sym.warn)} WhatsApp não configurado no gateway — use um código de backup.`);
   }
 }
 
-/** Dispara o SMS pro número registrado e devolve o challengeId + código digitado. */
+/** Dispara o WhatsApp pro número registrado e devolve o challengeId + código digitado. */
 async function challengeAndCode(token: string): Promise<{ challengeId: string; code: string; type: "otp" | "backup" }> {
   let challengeId: string;
   let smsMode: string | undefined;
@@ -112,12 +112,12 @@ async function challengeAndCode(token: string): Promise<{ challengeId: string; c
     console.error(`${c.red(sym.err)} ${(err as Error).message}`);
     process.exit(1);
   }
-  console.log(`  ${c.dim("SMS enviado para o número registrado.")}`);
+  console.log(`  ${c.dim("WhatsApp enviado para o número registrado.")}`);
   noteSmsMode({ smsMode, devCode });
-  const useBackup = !(await confirm({ message: "Recebeu o SMS (ou tem o código)?", default: true }));
+  const useBackup = !(await confirm({ message: "Recebeu o WhatsApp (ou tem o código)?", default: true }));
   const code = (
     await input({
-      message: useBackup ? "Código de backup" : "Código recebido por SMS",
+      message: useBackup ? "Código de backup" : "Código recebido por WhatsApp",
       validate: (v) => v.trim().length > 0 || "obrigatório",
     })
   ).trim();
@@ -197,11 +197,11 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
   if (st.sms) {
     const label =
       st.sms.mode === "echo"
-        ? `${c.yellow("echo (dev)")} — ${c.dim("nenhum SMS real é enviado")}`
+        ? `${c.yellow("echo (dev)")} — ${c.dim("nenhum WhatsApp real é enviado")}`
         : st.sms.mode === "provider"
           ? `${c.green("provedor")} ${c.dim(st.sms.host ?? "")}`.trimEnd()
-          : `${c.red("não configurado")} — ${c.dim("2FA por SMS indisponível")}`;
-    console.log(`SMS:      ${label}`);
+          : `${c.red("não configurado")} — ${c.dim("2FA por WhatsApp indisponível")}`;
+    console.log(`WhatsApp:  ${label}`);
   }
   if (st.enabled) {
     console.log(`número:   ${st.phoneHint}`);
@@ -231,9 +231,9 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
 }
 
 export function registerSecurityCommands(program: Command): void {
-  const cmd = program.command("security").description("Senha e 2º fator do login (SMS OTP + códigos de backup)");
+  const cmd = program.command("security").description("Senha e 2º fator do login (WhatsApp OTP + códigos de backup)");
 
-  cmd.command("enable-2fa").description("Ativa o 2º fator via SMS").action(runEnable);
+  cmd.command("enable-2fa").description("Ativa o 2º fator via WhatsApp").action(runEnable);
   cmd.command("disable-2fa").description("Desativa o 2º fator").action(runDisable);
   cmd
     .command("change-password")

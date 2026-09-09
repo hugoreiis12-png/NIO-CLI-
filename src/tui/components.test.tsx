@@ -107,7 +107,7 @@ test('LiveMessage: reflete o motor — checklist, tool(args+saída), retry, toke
         id: 't1',
         kind: 'tool',
         text: 'Lendo messaging.ts',
-        tool: { name: 'read', status: 'completed', input: { filePath: 'src/core/messaging.ts' }, output: 'export interface SmsSender {\n  ...' },
+        tool: { name: 'read', status: 'completed', input: { filePath: 'src/core/messaging.ts' }, output: 'export interface OtpSender {\n  ...' },
       },
       { id: 's1', kind: 'step', text: '', step: { tokensIn: 1200, tokensOut: 3400, cost: 0.012 } },
       { id: 'x1', kind: 'text', text: 'pronto' },
@@ -119,7 +119,7 @@ test('LiveMessage: reflete o motor — checklist, tool(args+saída), retry, toke
       maxLines={20}
       todos={[
         { content: 'Ler o adapter atual', status: 'completed' },
-        { content: 'Trocar SmsSender por OtpMessenger', status: 'in_progress' },
+        { content: 'Trocar OtpSender por OtpMessenger', status: 'in_progress' },
         { content: 'Rodar os testes', status: 'pending' },
       ]}
       files={['src/core/messaging.ts', 'src/adapters/messaging/smtp.ts']}
@@ -128,10 +128,10 @@ test('LiveMessage: reflete o motor — checklist, tool(args+saída), retry, toke
   );
 
   expect(f).toContain('☑ Ler o adapter atual');
-  expect(f).toContain('◐ Trocar SmsSender por OtpMessenger');
+  expect(f).toContain('◐ Trocar OtpSender por OtpMessenger');
   expect(f).toContain('☐ Rodar os testes');
   expect(f).toContain('read(src/core/messaging.ts)'); // nome + args da tool
-  expect(f).toContain('⎿ export interface SmsSender'); // 1ª linha da saída
+  expect(f).toContain('⎿ export interface OtpSender'); // 1ª linha da saída
   expect(f).toContain('↻ tentativa 2 — rate limit');
   expect(f).toContain('↑1.2k ↓3.4k'); // tokens
   expect(f).toContain('$0.012'); // custo

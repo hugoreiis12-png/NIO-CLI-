@@ -11,7 +11,7 @@ import { hashOtp } from '../../lib/auth/otp.js';
 import { __clear as clearThrottle } from '../throttle.js';
 import type { UserCli, LoginChallenge } from '../../core/types.js';
 import type { UserRepository, LoginChallengeRepository } from '../../core/repositories.js';
-import type { SmsSender } from '../../core/messaging.js';
+import type { OtpSender } from '../../core/messaging.js';
 
 beforeAll(() => {
   // ≥ 32 chars + variedade — `getJwtSecret()` rejeita segredo fraco (H-1).
@@ -49,7 +49,7 @@ describe('challengeUsable', () => {
     userId: 1,
     purpose: 'login',
     codeHash: 'h',
-    channel: 'sms',
+    channel: 'whatsapp',
     attempts: 0,
     expiresAt: new Date(Date.now() + 60_000),
     consumedAt: null,
@@ -72,7 +72,7 @@ function user(over: Partial<UserCli> = {}): UserCli {
   };
 }
 
-function deps(over: Partial<{ u: UserCli | null; challenge: LoginChallenge | null; sms: SmsSender['send'] }> = {}): LoginDeps {
+function deps(over: Partial<{ u: UserCli | null; challenge: LoginChallenge | null; sms: OtpSender['sendOtp'] }> = {}): LoginDeps {
   let stored: LoginChallenge | null = over.challenge ?? null;
   const users: Partial<UserRepository> = {
     verifyCredentials: async () => over.u ?? null,
@@ -82,14 +82,14 @@ function deps(over: Partial<{ u: UserCli | null; challenge: LoginChallenge | nul
   };
   const challenges: Partial<LoginChallengeRepository> = {
     create: async (i) => {
-      stored = { id: 'ch-new', userId: i.userId, purpose: i.purpose, codeHash: i.codeHash, channel: 'sms', attempts: 0, expiresAt: i.expiresAt, consumedAt: null, createdAt: new Date() };
+      stored = { id: 'ch-new', userId: i.userId, purpose: i.purpose, codeHash: i.codeHash, channel: 'whatsapp', attempts: 0, expiresAt: i.expiresAt, consumedAt: null, createdAt: new Date() };
       return stored;
     },
     findById: async () => stored,
     incrementAttempts: async () => (stored ? ++stored.attempts : 0),
     consume: async () => { if (stored) stored.consumedAt = new Date(); },
   };
-  const sms: SmsSender = { send: over.sms ?? (async () => ({ status: 'sent' })) };
+  const sms: OtpSender = { sendOtp: over.sms ?? (async () => ({ status: 'sent' })) };
   return { users: users as UserRepository, challenges: challenges as LoginChallengeRepository, sms };
 }
 
@@ -100,30 +100,30 @@ describe('login', () => {
     expect(out).toEqual({ ok: false, reason: 'bad_credentials' });
   });
 
-  test('auth_2 ligado + phone → 2fa_required (SMS enviado, sem JWT)', async () => {
+  test('auth_2 ligado + phone → 2fa_required (WhatsApp enviado, sem JWT)', async () => {
     const out = await login('hugo', 'pw', deps({ u: user({ auth2: true, phone: '+5511988887777' }) }));
     expect(out.ok).toBe(true);
     expect(out.ok && out.step).toBe('2fa_required');
     expect(out.ok && out.step === '2fa_required' && out.phoneHint).toBe('+55•••••••7777');
-    // fix do 2º fator: informa o backend de SMS (sem SMS_* no teste → unconfigured)
+    // fix do 2º fator: informa o backend de WhatsApp (sem WHATSAPP_* no teste → unconfigured)
     expect(out.ok && out.step === '2fa_required' && out.smsMode).toBe('unconfigured');
   });
 
-  test('endpoint de SMS em loopback → 2fa_required com smsMode=echo + devCode', async () => {
-    process.env.SMS_ENDPOINT_URL = 'http://127.0.0.1:4545/send';
-    process.env.SMS_BODY_TEMPLATE = '{"to":"{to}","text":"{text}"}';
+  test('endpoint de WhatsApp em loopback → 2fa_required com smsMode=echo + devCode', async () => {
+    process.env.WHATSAPP_ENDPOINT_URL = 'http://127.0.0.1:4545/send';
+    process.env.WHATSAPP_TOKEN = 'dummy';
     try {
       const out = await login('hugo', 'pw', deps({ u: user({ auth2: true, phone: '+5511988887777' }) }));
       if (!out.ok || out.step !== '2fa_required') throw new Error('esperava 2fa_required');
       expect(out.smsMode).toBe('echo');
       expect(out.devCode).toMatch(/^\d{6}$/);
     } finally {
-      delete process.env.SMS_ENDPOINT_URL;
-      delete process.env.SMS_BODY_TEMPLATE;
+      delete process.env.WHATSAPP_ENDPOINT_URL;
+      delete process.env.WHATSAPP_TOKEN;
     }
   });
 
-  test('SMS não configurado → server_error, challenge consumido', async () => {
+  test('WhatsApp não configurado → server_error, challenge consumido', async () => {
     const out = await login('hugo', 'pw', deps({
       u: user({ auth2: true, phone: '+55119' }),
       sms: async () => ({ status: 'skipped' }),
@@ -131,7 +131,7 @@ describe('login', () => {
     expect(out).toEqual({ ok: false, reason: 'server_error', error: expect.stringContaining('não configurado') });
   });
 
-  test('SMS falhou no provedor → server_error', async () => {
+  test('WhatsApp falhou no provedor → server_error', async () => {
     const out = await login('hugo', 'pw', deps({
       u: user({ auth2: true, phone: '+55119' }),
       sms: async () => ({ status: 'failed', error: '429' }),
@@ -144,7 +144,7 @@ describe('login', () => {
 // ─── verifyLogin: caminhos de falha (sem issueSession) ───────────────
 describe('verifyLogin', () => {
   const ch = (over: Partial<LoginChallenge> = {}): LoginChallenge => ({
-    id: 'ch1', userId: 1, purpose: 'login', codeHash: hashOtp('481920'), channel: 'sms',
+    id: 'ch1', userId: 1, purpose: 'login', codeHash: hashOtp('481920'), channel: 'whatsapp',
     attempts: 0, expiresAt: new Date(Date.now() + 60_000), consumedAt: null, createdAt: new Date(), ...over,
   });
 

@@ -70,7 +70,7 @@ export interface NewLoginChallengeInput {
   userId: number;
   purpose: ChallengePurpose;
   codeHash: string;
-  channel: 'sms';
+  channel: 'whatsapp';
   expiresAt: Date;
 }
 

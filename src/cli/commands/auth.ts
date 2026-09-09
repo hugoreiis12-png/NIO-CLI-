@@ -21,7 +21,7 @@ import { box, cmd } from "../../lib/colors.js";
 import { authCopy } from "../copy.js";
 
 /**
- * 2º fator: o `/login` respondeu `2fa_required`. Pede o código (SMS), até 3 vezes;
+ * 2º fator: o `/login` respondeu `2fa_required`. Pede o código (WhatsApp), até 3 vezes;
  * se as tentativas de OTP esgotam, troca pro prompt de código de backup.
  * Retorna a sessão emitida, ou `null` (usuário desistiu / esgotou).
  */
@@ -32,24 +32,24 @@ async function resolveSecondFactor(
 ): Promise<GatewaySession | null> {
   if (sms?.smsMode === "echo") {
     console.log(
-      `  ${c.yellow(sym.warn)} modo echo (dev) — nenhum SMS real foi enviado` +
-        (sms.devCode ? `. Código: ${c.bold(sms.devCode)}` : " (veja ~/.nio/sms-echo-last.json)"),
+      `  ${c.yellow(sym.warn)} modo echo (dev) — nenhum WhatsApp real foi enviado` +
+        (sms.devCode ? `. Código: ${c.bold(sms.devCode)}` : " (veja ~/.nio/whatsapp-echo-last.json)"),
     );
   } else {
-    console.log(`  ${c.dim(`código enviado por SMS para ${phoneHint}`)}`);
+    console.log(`  ${c.dim(`código enviado por WhatsApp para ${phoneHint}`)}`);
   }
   let type: "otp" | "backup" = "otp";
   for (let attempt = 0; attempt < 4; attempt++) {
     const code = (
       await input({
-        message: type === "otp" ? "Código de confirmação (SMS)" : "Código de backup",
+        message: type === "otp" ? "Código de confirmação (WhatsApp)" : "Código de backup",
         validate: (v) => v.trim().length > 0 || "obrigatório",
       })
     ).trim();
     const res = await gatewayVerify2fa(challengeId, code, type);
     if (res.ok) return res;
     if (res.requiresBackupCode) {
-      console.log(`  ${c.yellow(sym.warn)} tentativas de SMS esgotadas — use um código de backup.`);
+      console.log(`  ${c.yellow(sym.warn)} tentativas de código esgotadas — use um código de backup.`);
       type = "backup";
       continue;
     }

@@ -53,7 +53,7 @@
     "db:tls": "bash scripts/db-tls-setup.sh",
     "db:migrate": "bun run scripts/migrate.ts",
     "argon2:calibrate": "node scripts/argon2-calibrate.mjs",
-    "dev:sms-echo": "bun run scripts/sms-echo.ts",
+    "dev:whatsapp-echo": "bun run scripts/whatsapp-echo.ts",
     "dev:cli": "bun run src/cli.ts",
     "dev:mcp": "bun run src/mcp-server.ts",
     "dev:gateway": "bun run src/gateway/index.ts",

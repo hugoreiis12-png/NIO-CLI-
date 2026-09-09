@@ -8,7 +8,7 @@
  * SEGURANÇA (auditoria M-6): o `nio` roda dentro de repositórios de projeto
  * arbitrários. Um `.env` hostil na raiz de um repo clonado poderia injetar
  * `NIO_DATABASE_URL` (aponta o NIO pro banco do atacante), `NIO_SKILLS_REPO`
- * (→ execução de código), `SMS_*`, etc. Por isso o `.env` do **cwd** só carrega
+ * (→ execução de código), `WHATSAPP_*`, etc. Por isso o `.env` do **cwd** só carrega
  * um allowlist de chaves inócuas. Config sensível vem só do shell, do
  * `NIO_ENV_FILE` explícito, ou de `~/.nio/config.env` (o do próprio usuário).
  */

@@ -1,7 +1,7 @@
 /**
  * Gerência do 2º fator pelo usuário logado (`nio security …`) — recebe o `userId`
  * já autenticado (Bearer). Cada mudança sensível confirma com um código (OTP por
- * SMS ou backup). Ver `docs/specs/auth/0004-login-2fa-sms-otp.md`.
+ * WhatsApp ou backup). Ver `docs/specs/auth/0004-login-2fa-sms-otp.md`.
  */
 import type {
   UserRepository,
@@ -10,13 +10,13 @@ import type {
   AuthEventRepository,
   AuthSessionRepository,
 } from '../../core/repositories.js';
-import type { SmsSender } from '../../core/messaging.js';
+import type { OtpSender } from '../../core/messaging.js';
 import { createUserRepository } from '../../adapters/pg/user-repository.js';
 import { createLoginChallengeRepository } from '../../adapters/pg/login-challenge-repository.js';
 import { createLoginIpRepository } from '../../adapters/pg/login-ip-repository.js';
 import { createAuthEventRepository } from '../../adapters/pg/auth-event-repository.js';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
-import { createHttpSmsSender, smsMode, smsProviderHost, type SmsMode } from '../../adapters/sms/http-generic.js';
+import { createWhatsAppSender, smsMode, smsProviderHost, type SmsMode } from '../../adapters/sms/whatsapp.js';
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../../lib/auth/password.js';
 import { checkPasswordBreach } from '../../lib/auth/breach-check.js';
 import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
@@ -33,7 +33,7 @@ import { currentPepperId } from '../../lib/auth/secrets.js';
 export interface SecurityDeps {
   users?: UserRepository;
   challenges?: LoginChallengeRepository;
-  sms?: SmsSender;
+  sms?: OtpSender;
   loginIps?: LoginIpRepository;
   authEvents?: AuthEventRepository;
   authSessions?: AuthSessionRepository;
@@ -80,14 +80,14 @@ type StartResult =
   | {
       ok: true;
       challengeId: string;
-      /** Backend de SMS que atendeu — a CLI avisa se for `echo` (dev). */
+      /** Backend de WhatsApp que atendeu — a CLI avisa se for `echo` (dev). */
       smsMode: SmsMode;
-      /** Só em `smsMode === 'echo'`: o código, já que nenhum SMS real saiu. */
+      /** Só em `smsMode === 'echo'`: o código, já que nenhuma mensagem real saiu. */
       devCode?: string;
     }
   | { ok: false; error: string };
 
-/** Gera um OTP `enable_2fa` e manda o SMS pro número dado. */
+/** Gera um OTP `enable_2fa` e manda o WhatsApp pro número dado. */
 export async function startSecurityChallenge(
   userId: number,
   toPhone: string,
@@ -95,28 +95,28 @@ export async function startSecurityChallenge(
 ): Promise<StartResult> {
   if (!isE164(toPhone)) return { ok: false, error: 'número inválido (use E.164, ex.: +5511999998888)' };
   // M-4: `enable-2fa` aceita telefone arbitrário — sem cap, um Bearer válido
-  // torrava SMS pra qualquer número (toll fraud).
+  // torrava mensagens pra qualquer número (toll fraud).
   if (!smsAllowed(userId, toPhone)) {
     return { ok: false, error: 'muitos códigos solicitados — aguarde alguns minutos.' };
   }
   const challenges = deps.challenges ?? createLoginChallengeRepository();
-  const sms = deps.sms ?? createHttpSmsSender();
+  const sms = deps.sms ?? createWhatsAppSender();
   const code = generateOtp();
   const challenge = await challenges.create({
     userId,
     purpose: 'enable_2fa',
     codeHash: hashOtp(code),
-    channel: 'sms',
+    channel: 'whatsapp',
     expiresAt: new Date(Date.now() + OTP_TTL_MS),
   });
-  const sent = await sms.send(toPhone, `NIO: seu código de confirmação é ${code} (expira em 5 min).`);
+  const sent = await sms.sendOtp(toPhone, code);
   if (sent.status === 'skipped') {
     await challenges.consume(challenge.id).catch(() => {});
-    return { ok: false, error: '2FA não configurado no servidor (SMS_*).' };
+    return { ok: false, error: '2FA não configurado no servidor (WHATSAPP_*).' };
   }
   if (sent.status === 'failed') {
     await challenges.consume(challenge.id).catch(() => {});
-    return { ok: false, error: `falha ao enviar o SMS: ${sent.error ?? ''}`.trim() };
+    return { ok: false, error: `falha ao enviar o WhatsApp: ${sent.error ?? ''}`.trim() };
   }
   const mode = smsMode();
   return {
@@ -215,7 +215,7 @@ export interface SecurityStatus {
   recentIps: { ip: string; lastSeen: string; count: number }[];
   /** Últimas tentativas de auth falhas do usuário (trilha — ADR 0012). */
   recentFailedAttempts: { at: string; event: string; ip: string | null }[];
-  /** Backend de SMS ativo — `echo` (dev, nenhum SMS real) / `provider` / `unconfigured`. */
+  /** Backend de WhatsApp ativo — `echo` (dev, nenhuma mensagem real) / `provider` / `unconfigured`. */
   sms: { mode: SmsMode; host: string | null };
 }
 

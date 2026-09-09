@@ -1,6 +1,6 @@
 /**
  * Códigos de backup do 2º fator — 10 de uso único, mostrados 1× no `enable-2fa`,
- * a alternativa ao SMS exigida por NIST SP 800-63B. Hash argon2id (reusa
+ * a alternativa ao WhatsApp exigida por NIST SP 800-63B. Hash argon2id (reusa
  * `lib/password`, incl. o pepper — ADR 0011), juntos por `|` em
  * `user_cli.backup_codes`; usado → `[USED]`. O pepper usado vai pra
  * `user_cli.backup_pepper_id`.

@@ -62,7 +62,7 @@ Ficam no PATH: `nio` (CLI), `nio-gateway` (serviço de auth), `nio-cli` e
 | **`JWT_SECRET`** (segredo do time) | assinar/validar as sessões | mesmo valor em toda máquina |
 | **OpenCode** | operador de IA | o `nio init` oferece instalar (`npm i -g opencode-ai`) |
 | **Docker** | **não é necessário** pro `nio ai` (Headroom desativado, ADR 0010 — client fala direto no LLM). Ainda usado por `nio docker` (toolkit/cluster) e pelo gateway conteinerizado | `docker compose version` |
-| *(opcional)* provedor de SMS | 2º fator | `SMS_ENDPOINT_URL` + `SMS_AUTH_HEADER` + `SMS_BODY_TEMPLATE` |
+| *(opcional)* WhatsApp Business API (Meta Graph) | 2º fator | `WHATSAPP_ENDPOINT_URL` + `WHATSAPP_TOKEN` (+ template) |
 
 ---
 
@@ -93,10 +93,15 @@ NIO_DATABASE_URL=postgres://usuario:senha@HOST:5432/nio_cli
 # NIO_DATABASE_SSL=true          # só se o banco exigir TLS (gerenciado/nuvem)
 JWT_SECRET=<mesmo-valor-do-time>
 
-# 2º fator (SMS) — opcional, só no lado do gateway
-# SMS_ENDPOINT_URL=https://api.provedor.com/v2/sms
-# SMS_AUTH_HEADER=X-API-TOKEN: seu-token
-# SMS_BODY_TEMPLATE={"to":"{to}","message":"{text}"}
+# 2º fator (WhatsApp OTP via Meta Graph) — opcional, só no lado do gateway
+# WHATSAPP_ENDPOINT_URL=https://graph.facebook.com/v25.0/1076830002188066/messages
+# WHATSAPP_TOKEN=<bearer da Meta Graph>           # app secret; rotaciona ~24h
+# WHATSAPP_TEMPLATE_NAME=autenticao               # template de autenticação aprovado
+# WHATSAPP_TEMPLATE_LANGUAGE=pt_BR                # variação do template
+#
+# DEV: se WHATSAPP_ENDPOINT_URL for loopback (127.0.0.1/localhost — o mock
+# `bun run dev:whatsapp-echo`), o gateway entra em "modo echo": NENHUM WhatsApp real sai.
+# A CLI avisa e mostra o código direto; `nio security status` mostra o backend.
 ```
 
 > Alternativa pra time: gere o `~/.nio/config.env` uma vez e distribua o arquivo
@@ -106,7 +111,7 @@ JWT_SECRET=<mesmo-valor-do-time>
 |---|---|---|
 | `NIO_DATABASE_URL` / `NIO_DATABASE_SSL` | `NIO_` | tudo que toca o banco |
 | `JWT_SECRET` / `JWT_EXPIRES_IN` | **sem** prefixo (segredo do time) | `nio-gateway` + `nio-cli` |
-| `SMS_ENDPOINT_URL` / `SMS_AUTH_HEADER` / `SMS_BODY_TEMPLATE` / `SMS_FROM` | **sem** prefixo | `nio-gateway` |
+| `WHATSAPP_ENDPOINT_URL` / `WHATSAPP_TOKEN` (+ `WHATSAPP_TEMPLATE_NAME` / `WHATSAPP_TEMPLATE_LANGUAGE`) | **sem** prefixo | `nio-gateway` |
 | `NIO_GATEWAY_HOST` (default `127.0.0.1`) | `NIO_` | `nio-gateway` — `0.0.0.0` p/ Kong em container |
 | `NIO_GATEWAY_URL` (default `http://127.0.0.1:3000`) | `NIO_` | a CLI acha o nio-gateway (Kong na frente = aponta :8000) |
 
@@ -191,29 +196,30 @@ nio whoami      # mostra quem está logado (--json pra saída estável)
 nio logout      # revoga a auth_session no banco e limpa a sessão local
 ```
 
-### 2º fator (SMS)
+### 2º fator (WhatsApp)
 
 Opt-in por conta. Com `auth_2` ativo, o `nio login` pede um código de 6 dígitos
-por SMS; se o SMS não chega, vale um dos 10 **códigos de backup** (mostrados uma
-vez no `enable-2fa`).
+enviado por WhatsApp (template de autenticação da Meta Graph); se a mensagem não
+chega, vale um dos 10 **códigos de backup** (mostrados uma vez no `enable-2fa`).
 
 ```bash
-nio security enable-2fa               # cadastra o celular, confirma via SMS, mostra os backups
+nio security enable-2fa               # cadastra o celular, confirma via WhatsApp, mostra os backups
 nio security status                   # ativo? número (mascarado)? quantos backups restam?
 nio security disable-2fa
 nio security regenerate-backup-codes
 ```
 
 O gateway gera/valida o OTP em processo (sem Twilio, sem broker), guarda só o
-**HMAC** do código (TTL 5 min, 3 tentativas, uso único) e manda o SMS por um
-**adapter HTTP genérico**. Sem `SMS_ENDPOINT_URL` no ambiente, o login com
-`auth_2` responde `503 "2FA não configurado"` — o login de 1 fator segue normal.
+**HMAC** do código (TTL 5 min, 3 tentativas, uso único) e manda a mensagem pela
+**WhatsApp Business API (Meta Graph)**. Sem `WHATSAPP_ENDPOINT_URL`/`WHATSAPP_TOKEN`
+no ambiente, o login com `auth_2` responde `503 "2FA não configurado"` — o login
+de 1 fator segue normal.
 Detalhes: [spec 0004](docs/specs/auth/0004-login-2fa-sms-otp.md) ·
 [ADR 0006](docs/adr/0006-2fa-sms-otp.md) ·
 [`docs/arch/ARQUITETURA-GATEWAY.md`](docs/arch/ARQUITETURA-GATEWAY.md).
 
-Pra testar sem SMS real, o repo traz um mock: `bun run dev:sms-echo` sobe um
-endpoint local que imprime o código no terminal (aponte `SMS_ENDPOINT_URL` pra ele).
+Pra testar sem WhatsApp real, o repo traz um mock: `bun run dev:whatsapp-echo` sobe
+um endpoint local que imprime o código no terminal (aponte `WHATSAPP_ENDPOINT_URL` pra ele).
 
 ---
 
@@ -358,10 +364,10 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | `open` | Abre a IDE da sessão ativa na pasta do projeto |
 | `plan` | Roda o engine pensante sobre o projeto e escreve/refina o plan.md da raiz. |
 | `register` | Cria um novo usuário via nio-gateway e já entra (login) |
-| `security` | Senha e 2º fator do login (SMS OTP + códigos de backup) |
+| `security` | Senha e 2º fator do login (WhatsApp OTP + códigos de backup) |
 | `security change-password` | Troca a senha (exige a senha atual) e encerra todas as sessões |
 | `security disable-2fa` | Desativa o 2º fator |
-| `security enable-2fa` | Ativa o 2º fator via SMS |
+| `security enable-2fa` | Ativa o 2º fator via WhatsApp |
 | `security regenerate-backup-codes` | Invalida os códigos de backup e gera 10 novos |
 | `security status` | Mostra o estado do 2º fator |
 | `sessions` | Gerencia as sessões de ambiente (list/activate/pause/delete) |
@@ -559,7 +565,7 @@ background em qualquer comando (`update-notifier`).
 | `Não consegui falar com o nio-gateway` | o `nio-gateway` não está no ar — rode `nio-gateway &` |
 | `Não autenticado` | `nio register` (1ª vez) e depois `nio login` |
 | Erro de conexão com o banco | `ECONNREFUSED` = Postgres fora do ar / host errado; `password authentication failed` = credencial; erro de SSL = `NIO_DATABASE_SSL=true` |
-| `2FA não configurado no servidor` (503) | faltam as `SMS_*` no ambiente do `nio-gateway` |
+| `2FA não configurado no servidor` (503) | faltam as `WHATSAPP_*` no ambiente do `nio-gateway` |
 | `nio ai` diz `precisa de um terminal interativo` | você está num pipe/CI — rode num terminal de verdade |
 | `nio ai` travado em "processando" | `Esc` aborta o turno; o motor recupera permissão perdida sozinho em ~4s. Persistiu? `NIO_DEBUG=1 nio ai` e veja `~/.nio/tui.log` |
 | `nio ai` cai na TUI do OpenCode | falta o binário `opencode` no PATH — `npm i -g opencode-ai` |

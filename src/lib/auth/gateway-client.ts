@@ -136,7 +136,7 @@ export async function gatewayLogoutAll(token: string): Promise<void> {
   if (!res.ok) throw await errorFromResponse(res);
 }
 
-/** `echo` = SMS foi pro mock loopback (dev) — nenhuma mensagem real saiu. */
+/** `echo` = WhatsApp foi pro mock loopback (dev) — nenhuma mensagem real saiu. */
 export type SmsMode = 'echo' | 'provider' | 'unconfigured';
 
 /** Resposta de `enable-2fa` / `challenge`: em modo `echo` vem o `devCode`. */
