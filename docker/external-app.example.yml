@@ -1,0 +1,40 @@
+# Exemplo: app externo consumindo a API de auth da NIO via Kong.
+#
+# COMO USAR:
+# 1. Defina NIO_GATEWAY_TOKEN (mesmo valor da stack nio_cli277 no Portainer)
+# 2. Defina NIO_KONG_URL (IP do host + porta do Kong, ex: http://192.168.0.160:8000)
+# 3. Suba: docker compose -f external-app.example.yml up -d
+#
+# Fluxo de auth:
+#   POST /register  → criar usuário
+#   POST /login     → retornar JWT (ou step 2fa_required)
+#   POST /verify-2fa → se 2FA ativo, retornar JWT
+#   Usar Bearer JWT em /security/* e /logout*
+#
+# Headers obrigatórios em TODA request:
+#   x-nio-gateway-token: <NIO_GATEWAY_TOKEN>
+#
+name: external-app
+
+services:
+  app:
+    image: your-app-image:latest    # substitua pela imagem do seu app
+    container_name: external-app
+    restart: unless-stopped
+    environment:
+      # Gateway token — DEVE ser idêntico ao da stack nio_cli277
+      NIO_GATEWAY_TOKEN: "f6df401be8ac6f19149f6d7779845d299a3b804648b0896752f76e2d90eb23cc"
+
+      # URL do Kong (acessível da rede do container)
+      # Se ambos os stacks estão na mesma rede Docker: http://nio-kong:8000
+      # Se o app roda fora do Docker: http://<host-ip>:8000
+      NIO_KONG_URL: "http://nio-kong:8000"
+
+      # Headroom (proxy OpenAI) — opcional, se o app usa IA
+      NIO_HEADROOM_URL: "http://nio-headroom:8787"
+    networks:
+      - nio-net              # rede compartilhada com o stack NIO
+
+networks:
+  nio-net:
+    external: true           # rede criada pelo stack nio_cli277

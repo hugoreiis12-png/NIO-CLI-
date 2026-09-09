@@ -18,6 +18,9 @@ import { homePath } from '../../brand.js';
 export const GATEWAY_TOKEN_FILE = homePath('gateway.token');
 
 export async function getOrCreateGatewayToken(file: string = GATEWAY_TOKEN_FILE): Promise<string> {
+  const envToken = process.env.NIO_GATEWAY_TOKEN?.trim();
+  if (envToken) return envToken;
+
   try {
     const existing = (await readFile(file, 'utf8')).trim();
     if (existing) return existing;

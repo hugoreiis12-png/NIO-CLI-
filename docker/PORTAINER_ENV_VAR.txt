@@ -1,0 +1,11 @@
+# Portainer Stack Env Vars — adicionar na stack nio_cli277
+#
+# Copie e cole no "Environment variables" ao editar a stack no Portainer:
+# https://192.168.0.160:9443/#!/3/docker/stacks/nio_cli277?id=106
+#
+# --- BEGIN ---
+NIO_GATEWAY_TOKEN=f6df401be8ac6f19149f6d7779845d299a3b804648b0896752f76e2d90eb23cc
+# --- END ---
+#
+# O nio-gateway já foi modificado para ler esta env var (src/lib/auth/gateway-token.ts:21-22).
+# Após adicionar e redeployar, o gateway passa a aceitar este token no header x-nio-gateway-token.
