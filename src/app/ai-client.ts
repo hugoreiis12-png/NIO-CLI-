@@ -7,7 +7,8 @@
  * `launchAiClient` é **headless** (`opencode run`, pro `nio docker …`); o interativo
  * é `launchNioTui`.
  */
-import { spawn } from 'node:child_process';
+import type { spawn } from 'node:child_process';
+import { spawnPortable } from '../lib/proc.js';
 import { installOpencodeGlobal, NIO_OPERATOR_MODEL, NIO_AI_BASE_URL } from '../lib/clients/client-configs.js';
 import { isBinaryInstalled } from '../lib/clients/client-install.js';
 import { c, sym } from '../lib/colors.js';
@@ -50,7 +51,7 @@ export async function launchAiClient(
   opts: { cwd: string; prompt: string },
   deps: LaunchAiDeps = {},
 ): Promise<number> {
-  const spawnFn = deps.spawnFn ?? spawn;
+  const spawnFn = deps.spawnFn ?? spawnPortable;
   const isInstalled = deps.isInstalled ?? isBinaryInstalled;
 
   await ensureHeadroomAndWire();
