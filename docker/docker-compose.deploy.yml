@@ -21,7 +21,7 @@ volumes:
 
 services:
   nio-gateway:
-    image: ghcr.io/hugoreiis12-png/nio-gateway:v0.8.0  # bumped by .github/workflows/image.yml
+    image: ghcr.io/hugoreiis12-png/nio-gateway:v0.9.0  # bumped by .github/workflows/image.yml
     container_name: nio-gateway
     restart: unless-stopped
     environment:
