@@ -217,6 +217,13 @@ export async function verifyLogin(
   if (!usable.ok) return { ok: false, reason: usable.reason };
   const ch = usable.ch;
 
+  // Teto absoluto do desafio: uma vez esgotado, NENHUM código é mais conferido —
+  // sem isto, o `attempts` só trocava a mensagem e o OTP (6 dígitos) ficava
+  // brute-forçável dentro do TTL, já que `verifyOtp` rodava em toda chamada.
+  if (ch.attempts >= CHALLENGE_MAX_ATTEMPTS) {
+    return { ok: false, reason: 'attempts_exhausted', userId: ch.userId };
+  }
+
   const user = await users.findById(ch.userId);
   if (!user) return { ok: false, reason: 'not_found', userId: ch.userId };
 
@@ -238,6 +245,12 @@ export async function verifyLogin(
       session: await issueSession(user),
       backupCodesRemaining: countRemaining(used),
     };
+  }
+
+  // Soft-cap do OTP: esgotadas as 3 tentativas, o OTP não é mais conferido — o
+  // usuário cai pro código de backup (até o teto absoluto acima).
+  if (ch.attempts >= OTP_MAX_ATTEMPTS) {
+    return { ok: false, reason: 'attempts_exhausted', requiresBackupCode: true, userId: ch.userId };
   }
 
   if (verifyOtp(code, ch.codeHash)) {

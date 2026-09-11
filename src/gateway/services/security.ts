@@ -26,7 +26,7 @@ import {
   markUsed,
   countRemaining,
 } from '../../lib/auth/backup-codes.js';
-import { challengeUsable, maskPhone, OTP_TTL_MS, OTP_MAX_ATTEMPTS } from './login.js';
+import { challengeUsable, maskPhone, OTP_TTL_MS, OTP_MAX_ATTEMPTS, CHALLENGE_MAX_ATTEMPTS } from './login.js';
 import { smsAllowed } from '../throttle.js';
 import { currentPepperId } from '../../lib/auth/secrets.js';
 
@@ -144,12 +144,20 @@ async function consumeSecurityCode(
     return { ok: false, error: 'desafio não corresponde' };
   }
 
+  // Teto absoluto: uma vez esgotado, nenhum código é mais conferido — sem isto o
+  // caminho backup nem incrementava o contador, ficando brute-forçável no TTL.
+  if (ch.attempts >= CHALLENGE_MAX_ATTEMPTS) return { ok: false, error: 'tentativas esgotadas' };
+
   if (type === 'backup') {
     const stored = await users.getBackupCodes(userId);
     const idx = await verifyBackupCode(code, stored.codes, stored.pepperId);
-    if (idx < 0) return { ok: false, error: 'código de backup inválido' };
+    if (idx < 0) {
+      const n = await challenges.incrementAttempts(ch.id);
+      return { ok: false, error: n >= CHALLENGE_MAX_ATTEMPTS ? 'tentativas esgotadas' : 'código de backup inválido' };
+    }
     await users.updateBackupCodes(userId, markUsed(stored.codes!, idx), stored.pepperId);
   } else {
+    if (ch.attempts >= OTP_MAX_ATTEMPTS) return { ok: false, error: 'tentativas esgotadas' };
     if (!verifyOtp(code, ch.codeHash)) {
       const n = await challenges.incrementAttempts(ch.id);
       return {

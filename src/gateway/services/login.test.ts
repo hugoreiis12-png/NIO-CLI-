@@ -180,4 +180,21 @@ describe('verifyLogin', () => {
       reason: 'attempts_exhausted',
     });
   });
+
+  test('teto absoluto esgotado → nem o OTP correto passa (fix brute-force)', async () => {
+    const d = deps({ challenge: ch({ attempts: 6 }), u: user() });
+    expect(await verifyLogin('ch1', '481920', 'otp', d)).toMatchObject({
+      ok: false,
+      reason: 'attempts_exhausted',
+    });
+  });
+
+  test('soft-cap do OTP esgotado → nem o OTP correto passa, pede backup', async () => {
+    const d = deps({ challenge: ch({ attempts: 3 }), u: user() });
+    expect(await verifyLogin('ch1', '481920', 'otp', d)).toMatchObject({
+      ok: false,
+      reason: 'attempts_exhausted',
+      requiresBackupCode: true,
+    });
+  });
 });

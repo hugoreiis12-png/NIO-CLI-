@@ -1,6 +1,7 @@
 import { afterEach, test, expect } from 'bun:test';
 process.env.NIO_HIBP_DISABLE = '1'; // SP-7: sem rede nos testes
-import { isE164, status, changePassword, startSecurityChallenge } from './security.js';
+import { isE164, status, changePassword, startSecurityChallenge, disable2fa } from './security.js';
+import { CHALLENGE_MAX_ATTEMPTS } from './login.js';
 import { __clear as clearThrottle } from '../throttle.js';
 import type {
   UserRepository,
@@ -12,7 +13,7 @@ import type {
   AuthSessionRepository,
 } from '../../core/repositories.js';
 import type { OtpSender } from '../../core/messaging.js';
-import type { UserCli } from '../../core/types.js';
+import type { UserCli, LoginChallenge } from '../../core/types.js';
 
 afterEach(() => {
   clearThrottle();
@@ -172,4 +173,32 @@ test('status: repos de auditoria que lançam não derrubam o status', async () =
   const st = await status(1, { users, loginIps, authEvents });
   expect(st.recentIps).toEqual([]);
   expect(st.recentFailedAttempts).toEqual([]);
+});
+
+// ─── consumeSecurityCode: teto de tentativas (fix brute-force) ───────
+function exhaustedChallengeDeps() {
+  const calls = { consume: 0, disable2fa: 0 };
+  const challenge: LoginChallenge = {
+    id: 'ch-1', userId: 1, purpose: 'enable_2fa', codeHash: 'x', channel: 'whatsapp',
+    attempts: CHALLENGE_MAX_ATTEMPTS, expiresAt: new Date(Date.now() + 60_000),
+    consumedAt: null, createdAt: new Date(),
+  };
+  const challenges = {
+    findById: async () => challenge,
+    incrementAttempts: async () => challenge.attempts,
+    consume: async () => { calls.consume++; },
+  } as unknown as LoginChallengeRepository;
+  const users = {
+    getBackupCodes: async () => ({ codes: null, pepperId: 0 }),
+    disable2fa: async () => { calls.disable2fa++; },
+  } as unknown as UserRepository;
+  return { deps: { challenges, users }, calls };
+}
+
+test('disable2fa: teto esgotado → recusa sem conferir código nem desativar (fix brute-force)', async () => {
+  const { deps, calls } = exhaustedChallengeDeps();
+  const r = await disable2fa(1, 'ch-1', 'AAAAAAAA', 'backup', deps);
+  expect(r).toEqual({ ok: false, error: 'tentativas esgotadas' });
+  expect(calls.consume).toBe(0);
+  expect(calls.disable2fa).toBe(0);
 });
