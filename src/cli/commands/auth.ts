@@ -143,6 +143,16 @@ export async function runRegister(): Promise<void> {
     const user = await gatewayRegister(name.trim(), pass);
     spinner.stop();
     console.log(`${c.green(sym.ok)} Usuário criado: ${user.name} (id ${user.userId})`);
+    if (user.passwordWarning === 'breached') {
+      console.log(
+        box(
+          `${c.yellow(sym.warn)} ${c.bold('Sua senha aparece em vazamentos conhecidos.')}\n` +
+            `${c.dim('O cadastro foi concluído, mas considere trocar por uma senha exclusiva:')} ` +
+            `${cmd(`${brand.name} security change-password`)}`,
+          { borderColor: 'yellow', title: 'senha fraca' },
+        ),
+      );
+    }
   } catch (err) {
     spinner.fail(`Falha ao criar usuário: ${(err as Error).message}`);
     process.exit(1);

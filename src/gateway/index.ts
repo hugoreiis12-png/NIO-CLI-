@@ -121,14 +121,17 @@ async function handleRegister(req: IncomingMessage, res: ServerResponse, ctx: Re
     const msg = {
       invalid_name: 'nome inválido (1–64 chars)',
       weak_password: 'senha muito curta',
-      breached_password: 'senha comprometida (aparece em vazamentos conhecidos) — escolha outra',
       name_taken: 'nome já em uso',
     }[out.reason];
     sendJson(res, out.reason === 'name_taken' ? 409 : 400, { error: msg, reason: out.reason });
     return;
   }
   auditAuth(req, ctx, 'register', { name: out.name, userId: out.userId });
-  sendJson(res, 201, { userId: out.userId, name: out.name });
+  sendJson(res, 201, {
+    userId: out.userId,
+    name: out.name,
+    ...(out.passwordWarning ? { passwordWarning: out.passwordWarning } : {}),
+  });
 }
 
 async function handleLogin(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {

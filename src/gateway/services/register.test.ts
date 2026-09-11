@@ -51,9 +51,21 @@ describe('register', () => {
     expect(await register('Ana', 'senha-forte-1', { users })).toEqual({ ok: false, reason: 'name_taken' });
   });
 
-  test('senha comum (lista local) → breached_password, não cria', async () => {
+  test('senha comum (lista local) → cria com passwordWarning, não bloqueia', async () => {
     const { users, created } = fakeUsers();
-    expect(await register('Ana', 'password', { users })).toEqual({ ok: false, reason: 'breached_password' });
-    expect(created).toEqual([]);
+    expect(await register('Ana', 'password', { users })).toEqual({
+      ok: true,
+      userId: 42,
+      name: 'Ana',
+      passwordWarning: 'breached',
+    });
+    expect(created).toEqual(['Ana']);
+  });
+
+  test('senha forte → cria sem warning', async () => {
+    const { users } = fakeUsers();
+    const out = await register('Ana', 'senha-forte-1', { users });
+    expect(out).toEqual({ ok: true, userId: 42, name: 'Ana' });
+    expect('passwordWarning' in out).toBe(false);
   });
 });

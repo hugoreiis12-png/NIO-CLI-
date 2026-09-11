@@ -80,13 +80,16 @@ async function post<T>(path: string, body: unknown, headers: Record<string, stri
  * `POST /register` — cria o usuário no gateway (role `nio_gateway`). O CLI não
  * escreve mais em `user_cli` (migration 0008). Lança em qualquer não-2xx.
  */
-export async function gatewayRegister(name: string, password: string): Promise<{ userId: number; name: string }> {
+export async function gatewayRegister(
+  name: string,
+  password: string,
+): Promise<{ userId: number; name: string; passwordWarning?: string }> {
   const res = await gwFetch('POST', '/register', {
     headers: await baseHeaders(),
     body: JSON.stringify({ name, password }),
   });
   if (!res.ok) throw await errorFromResponse(res);
-  return (await res.json()) as { userId: number; name: string };
+  return (await res.json()) as { userId: number; name: string; passwordWarning?: string };
 }
 
 export async function gatewayLogin(name: string, password: string): Promise<GatewayLoginResult | null> {
