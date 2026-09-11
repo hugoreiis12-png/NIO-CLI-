@@ -58,7 +58,7 @@ export function opencodeBinaryVersion(): string | null {
 /**
  * O `opencode` no PATH está numa minor compatível com o SDK que a CLI embute?
  * `null` = alinhado (ou não deu pra checar). Só compara `major.minor` — patch
- * pode divergir (auditoria §4.2). Warn-only: o caller avisa, não bloqueia.
+ * pode divergir (auditoria §4.2). Warn-only: o nio-cli não bloqueia a execução, mas recomenda atualizar o binário 
  */
 export function opencodeVersionSkew(): { binary: string; sdk: string } | null {
   const binary = opencodeBinaryVersion();
