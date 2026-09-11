@@ -118,6 +118,25 @@ JWT_SECRET=<mesmo-valor-do-time>
 O schema de conexão é sempre `postgres://…`; um destino inválido falha explícito,
 nunca cai num default silencioso.
 
+### Backend de IA próprio (uso fora da rede NIO)
+
+O motor de IA (`nio ai`/`exec`/`plan`) fala com um backend OpenAI-compatível
+(`/v1`). **O default aponta pra infra interna** (`http://192.168.0.140:8001/v1`,
+modelo `RedHatAI/Qwen3.8-27B-INT4`) — fora dessa rede, suba seu próprio
+vLLM (ou compatível) e aponte a CLI pra ele em `~/.nio/config.env`
+(`nio config path`; `NIO_AI_*` **não** valem no `.env` do projeto):
+
+```bash
+NIO_AI_BASE_URL=https://seu-vllm:8000/v1   # raiz /v1 (o SDK anexa /chat/completions)
+NIO_AI_MODEL=seu-org/seu-modelo            # id EXATO que o backend serve em /v1/models
+NIO_AI_CONTEXT=65536                       # max_model_len do backend; 0 = usa catálogo
+NIO_AI_OUTPUT=2048                         # teto de saída (input + output ≤ contexto!)
+NIO_AI_MAX_INPUT=32000                     # trava de input por prompt (0 = desativa)
+```
+
+Confira com `nio config check` — ele sonda `GET <base>/models` e avisa (sem
+reprovar) se o backend está fora do ar ou não serve o modelo configurado.
+
 ---
 
 ## Primeiros passos

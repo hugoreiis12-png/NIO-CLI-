@@ -1,10 +1,10 @@
-// Configuração do client (opencode, vscode , claude code)
+// Configuração do client (opencode; vscode usa só .vscode/mcp.json)
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { backupFile, readJson, writeJson, readToml, writeToml } from '../file-merge.js';
-import { brand, envName } from '../../brand.js';
+import { backupFile, readJson, writeJson } from '../file-merge.js';
+import { brand, envName, env } from '../../brand.js';
 import type { McpSpec } from '../../core/environment.js';
 
 const MCP_COMMAND = brand.mcpBinName;
@@ -63,16 +63,6 @@ function ensureMcpServersJson(
   };
   writeJson(path, next);
   return { status: 'updated', path, backup };
-}
-
-export function installClaudeCodeGlobal(): InstallResult {
-  const path = join(homedir(), '.claude', 'settings.json');
-  return ensureMcpServersJson(path, 'mcpServers');
-}
-
-export function installClaudeCodeRepo(cwd: string): InstallResult {
-  const path = join(cwd, '.mcp.json');
-  return ensureMcpServersJson(path, 'mcpServers');
 }
 
 export function installVSCodeRepo(cwd: string): InstallResult {
@@ -168,72 +158,6 @@ export function installCoworkGlobal(): InstallResult {
   return { status: 'updated', path, backup };
 }
 
-// O Claude Code injeta "Co-Authored-By: Claude" nos commits por padrão; em repos
-// de cliente isso suja o histórico. Estas funções leem/desligam esse knob global.
-export interface CoAuthoredByStatus {
-  path: string;
-  /** Valor atual de includeCoAuthoredBy; undefined = não setado (Claude Code assume ligado). */
-  value: boolean | undefined;
-  /** true se os commits ganham o trailer (setado true ou ausente). */
-  enabled: boolean;
-}
-
-function claudeSettingsPath(): string {
-  return join(homedir(), '.claude', 'settings.json');
-}
-
-export function readCoAuthoredBy(path = claudeSettingsPath()): CoAuthoredByStatus {
-  if (!existsSync(path)) return { path, value: undefined, enabled: true };
-  const json = (readJsonSafe(path) ?? {}) as { includeCoAuthoredBy?: boolean };
-  const value = json.includeCoAuthoredBy;
-  return { path, value, enabled: value !== false };
-}
-
-// ponytail: setamos só includeCoAuthoredBy=false (knob simples, ainda honrado).
-// Se o Claude Code um dia remover em favor do `attribution`, migra aqui.
-export function disableCoAuthoredBy(path = claudeSettingsPath()): InstallResult {
-  const exists = existsSync(path);
-  const existing = exists ? (readJsonSafe(path) ?? {}) : {};
-  const backup = exists ? backupFile(path) : undefined;
-  writeJson(path, { ...existing, includeCoAuthoredBy: false });
-  return { status: exists ? 'updated' : 'created', path, backup };
-}
-
-interface CodexServerEntry {
-  command?: string;
-  env?: Record<string, string>;
-}
-
-/**
- * Decide se o `nio` já está OK no TOML e monta o próximo objeto se precisar
- * atualizar (pura, sem IO). Já-OK só se command bate E env NIO_CLIENT=codex já
- * existe — senão atualiza (instalações antigas ganham o env no próximo run).
- */
-export function planCodexUpdate(
-  existing: Record<string, unknown>,
-  nioEntry: { command: string; env: Record<string, string> },
-): { alreadyConfigured: boolean; next: Record<string, unknown> } {
-  const servers = (existing.mcp_servers ?? {}) as Record<string, CodexServerEntry | undefined>;
-  const current = servers[brand.mcpServerKey];
-
-  const alreadyConfigured = Boolean(
-    current && current.command === MCP_COMMAND && current.env?.[envName('CLIENT')] === 'codex',
-  );
-
-  const next: Record<string, unknown> = {
-    ...existing,
-    mcp_servers: {
-      ...servers,
-      [brand.mcpServerKey]: {
-        ...current,
-        ...nioEntry,
-        env: { ...current?.env, [envName('CLIENT')]: 'codex' },
-      },
-    },
-  };
-  return { alreadyConfigured, next };
-}
-
 interface OpencodeServerEntry {
   type?: string;
   command?: string[];
@@ -243,12 +167,69 @@ interface OpencodeServerEntry {
 }
 
 /**
- * Modelo fixo do operador de IA embutido (ver `docs/arch/ARQUITETURA-CLIENTE-IA.md`).
- * É só um DEFAULT no `opencode.json` — o OpenCode não trava modelo de
- * verdade a nível de config de projeto/global (limitação documentada, não
- * finja que é um lock forte).
+ * Motor de IA da CLI (ver `docs/arch/ARQUITETURA-CLIENTE-IA.md`). O NIO **não** roteia
+ * mais pelo provider `opencode` (Zen) — esse fica no default dele (big-pickle) e sem
+ * competência sobre o motor da CLI. Em vez disso, o NIO semeia um **provider dedicado**
+ * (`NIO_AI_PROVIDER`, OpenAI-compatível) que fala DIRETO no backend, e é ESSE o `model`
+ * default. Assim o OpenCode vira só o runtime (serve/TUI/SDK), não o motor.
  */
-export const NIO_OPERATOR_MODEL = 'opencode/big-pickle';
+export const NIO_AI_PROVIDER = env('AI_PROVIDER')?.trim() || 'nio-local';
+
+/** Id do modelo **exatamente como o backend serve** (sem prefixo de provider). Override `NIO_AI_MODEL`. */
+export const NIO_AI_MODEL_ID = env('AI_MODEL')?.trim() || 'RedHatAI/Qwen3.8-27B-INT4';
+
+/** Ref completo `<provider>/<id>` gravado no `model` do `opencode.json` e usado no `opencode run`. */
+export const NIO_OPERATOR_MODEL = `${NIO_AI_PROVIDER}/${NIO_AI_MODEL_ID}`;
+
+/**
+ * baseURL do backend de IA (OpenAI-compatível, `/v1`) que o provider dedicado consome —
+ * o SDK anexa `/chat/completions`. Default = vLLM interno; override via `NIO_AI_BASE_URL`.
+ */
+export const NIO_AI_BASE_URL = env('AI_BASE_URL')?.trim() || 'http://192.168.0.140:8001/v1';
+
+/** Lê um env numérico (`NIO_<name>`); vazio/ausente/inválido → `dflt`. `0` é honrado. */
+function envNum(name: string, dflt: number): number {
+  const raw = env(name)?.trim();
+  if (!raw) return dflt;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : dflt;
+}
+
+/**
+ * Janela de contexto (tokens) do modelo do backend de IA, **declarada** no provider
+ * (`provider.opencode.models.<id>.limit`). O OpenCode só aceita/orça um modelo fora
+ * do catálogo Zen se ele estiver declarado — sem isto, um id de vLLM/local vira
+ * "Model not found". Default 65536 (o vLLM local); override `NIO_AI_CONTEXT`.
+ * `NIO_AI_CONTEXT=0` desativa a declaração (usa o catálogo do provider).
+ */
+export const NIO_AI_CONTEXT = envNum('AI_CONTEXT', 65536);
+
+/** Teto de tokens de saída reservados dentro da janela. Override `NIO_AI_OUTPUT`. */
+export const NIO_AI_OUTPUT = envNum('AI_OUTPUT', 2048);
+
+/**
+ * Teto de tokens de **input** por prompt (hard cap). Prompts acima disso são
+ * recusados antes do `fetch` (ver `qwenComplete`) — com schemas de MCP pesados,
+ * o boot do `nio ai` estourava os 65536 da janela mesmo com output baixo.
+ * Override `NIO_AI_MAX_INPUT`. `0` desativa a trava.
+ */
+export const NIO_AI_MAX_INPUT = envNum('AI_MAX_INPUT', 32000);
+
+/**
+ * Compaction automática do OpenCode: com a janela apertada (64K num backend local +
+ * schemas de MCP pesados), deixa o motor compactar/podar o histórico sozinho,
+ * reservando `reserved` tokens pro resumo. Só semeado se ausente (não sobrescreve).
+ */
+export const DEFAULT_OPENCODE_COMPACTION: Record<string, unknown> = {
+  auto: true,
+  prune: true,
+  reserved: 8000,
+};
+
+/** Watcher: ignora dirs volumosos (não dispara reindex/eventos à toa). Só se ausente. */
+export const DEFAULT_OPENCODE_WATCHER: Record<string, unknown> = {
+  ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**', 'coverage/**'],
+};
 
 /**
  * Defaults de permissão do `opencode.json` (Sprint 7.5 de UI/UX). Libera os
@@ -295,36 +276,66 @@ function opencodeMcpOk(spec: McpSpec, cur?: OpencodeServerEntry): boolean {
   return spec.url ? cur.url === spec.url : cur.command?.[0] === spec.command?.[0];
 }
 
+interface OpencodeModelEntry {
+  name?: string;
+  limit?: { context?: number; output?: number };
+  [k: string]: unknown;
+}
+
 interface OpencodeProviderEntry {
+  npm?: string;
+  name?: string;
   options?: Record<string, unknown>;
+  models?: Record<string, OpencodeModelEntry | undefined>;
 }
 
 /**
- * Aponta o `baseURL` do provider `opencode` (OpenCode Zen) pro Headroom (ADR 0007),
- * preservando qualquer outro campo de `provider`. Pura, sem IO.
+ * Semeia o **provider dedicado** do motor de IA da CLI (`provider.<id>`, OpenAI-compatível
+ * via `@ai-sdk/openai-compatible`) apontando DIRETO no backend (`baseURL`) e declarando o
+ * modelo (`modelId`) com seu limite de contexto. Isto **não** toca o provider `opencode` —
+ * ele fica no default (big-pickle), fora do motor da CLI. Preserva campos/modelos já
+ * presentes no provider. Pura, sem IO.
  */
-export function planOpencodeProvider(
+export function planNioAiProvider(
   existing: Record<string, unknown>,
+  provider: string,
   baseURL: string,
+  modelId: string,
+  context: number,
+  output: number,
 ): Record<string, unknown> {
-  const providers = (existing.provider ?? {}) as Record<string, OpencodeProviderEntry | undefined>;
-  const cur = providers.opencode ?? {};
-  return {
-    ...existing,
-    provider: {
-      ...providers,
-      opencode: { ...cur, options: { ...cur.options, baseURL } },
-    },
+  const providers = { ...((existing.provider ?? {}) as Record<string, OpencodeProviderEntry | undefined>) };
+  const cur = providers[provider] ?? {};
+  const models = { ...(cur.models ?? {}) } as Record<string, OpencodeModelEntry>;
+  const limit = context > 0 ? { ...models[modelId]?.limit, context, output } : models[modelId]?.limit;
+  models[modelId] = { name: 'NIO local (vLLM)', ...models[modelId], ...(limit ? { limit } : {}) };
+  providers[provider] = {
+    ...cur,
+    npm: cur.npm ?? '@ai-sdk/openai-compatible',
+    name: cur.name ?? 'NIO local (vLLM)',
+    options: { ...cur.options, baseURL, apiKey: (cur.options?.apiKey as string | undefined) ?? 'local' },
+    models,
   };
+  return { ...existing, provider: providers };
 }
 
-/** O provider `opencode` já aponta pro `baseURL` do Headroom? */
-function opencodeProviderOk(existing: Record<string, unknown>, baseURL: string): boolean {
-  const p = (existing.provider as { opencode?: OpencodeProviderEntry } | undefined)?.opencode;
-  return p?.options?.baseURL === baseURL;
+/** O provider dedicado já está OK? (existe, baseURL bate, e o modelo tem o limite pedido). */
+function nioAiProviderOk(
+  existing: Record<string, unknown>,
+  provider: string,
+  baseURL: string,
+  modelId: string,
+  context: number,
+  output: number,
+): boolean {
+  const p = (existing.provider as Record<string, OpencodeProviderEntry | undefined> | undefined)?.[provider];
+  if (!p || p.options?.baseURL !== baseURL) return false;
+  if (context <= 0) return Boolean(p.models?.[modelId]);
+  const lim = p.models?.[modelId]?.limit;
+  return lim?.context === context && lim?.output === output;
 }
 
-/** Tem um `baseURL` de provider `opencode` gravado? (Headroom DESATIVADO → não deve ter). */
+/** Tem um `baseURL` de provider `opencode` gravado? (legado do hijack — não deve mais ter). */
 function opencodeHasBaseURL(existing: Record<string, unknown>): boolean {
   const p = (existing.provider as { opencode?: OpencodeProviderEntry } | undefined)?.opencode;
   return p?.options?.baseURL !== undefined;
@@ -348,17 +359,16 @@ export function clearOpencodeProviderBaseURL(existing: Record<string, unknown>):
 
 /**
  * Decide se o `nio` (+ os MCPs do perfil) já estão OK no `opencode.json` e monta
- * o próximo objeto se precisar atualizar (pura, sem IO). Mesmo padrão de
- * `planCodexUpdate`, mas o OpenCode usa `mcp` (não `mcpServers`/`mcp_servers`),
- * `command` como array (binário + args juntos) e `environment` (não `env`).
- * Também garante o `model` default (`NIO_OPERATOR_MODEL`) no nível raiz.
- * 
+ * o próximo objeto se precisar atualizar (pura, sem IO). O OpenCode usa `mcp`
+ * (não `mcpServers`/`mcp_servers`), `command` como array (binário + args juntos)
+ * e `environment` (não `env`). Também garante o `model` default
+ * (`NIO_OPERATOR_MODEL`) no nível raiz.
  */
 export function planOpencodeUpdate(
   existing: Record<string, unknown>,
   nioEntry: { command: string[]; environment: Record<string, string> },
   profileMcps: McpSpec[] = [],
-  headroomUrl?: string,
+  baseURL?: string,
 ): { alreadyConfigured: boolean; next: Record<string, unknown> } {
   const servers = (existing.mcp ?? {}) as Record<string, OpencodeServerEntry | undefined>;
   const current = servers[brand.mcpServerKey];
@@ -370,16 +380,20 @@ export function planOpencodeUpdate(
       current.enabled !== false,
   );
   const mcpsOk = profileMcps.every((spec) => opencodeMcpOk(spec, servers[spec.id]));
-  // Headroom DESATIVADO: sem headroomUrl, o provider NÃO deve ter baseURL (direto no Zen).
-  const providerOk = headroomUrl
-    ? opencodeProviderOk(existing, headroomUrl)
+  // Motor = provider dedicado (NIO_AI_PROVIDER) direto no backend. Com baseURL, ele
+  // precisa existir com o modelo+limite declarados; sem baseURL, o opencode não deve
+  // ter baseURL de hijack legado (fica no default big-pickle).
+  const providerOk = baseURL
+    ? nioAiProviderOk(existing, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_CONTEXT, NIO_AI_OUTPUT)
     : !opencodeHasBaseURL(existing);
   const alreadyConfigured =
     nioOk &&
     existing.model === NIO_OPERATOR_MODEL &&
     mcpsOk &&
     providerOk &&
-    Boolean(existing.permission);
+    Boolean(existing.permission) &&
+    Boolean(existing.compaction) &&
+    Boolean(existing.watcher);
 
   const nextMcp: Record<string, OpencodeServerEntry> = {
     ...(servers as Record<string, OpencodeServerEntry>),
@@ -397,7 +411,10 @@ export function planOpencodeUpdate(
 
   let next: Record<string, unknown> = { ...existing, model: NIO_OPERATOR_MODEL, mcp: nextMcp };
   if (!existing.permission) next.permission = DEFAULT_OPENCODE_PERMISSION; // Sprint 7.5 — nunca sobrescreve
-  next = headroomUrl ? planOpencodeProvider(next, headroomUrl) : clearOpencodeProviderBaseURL(next);
+  if (!existing.compaction) next.compaction = DEFAULT_OPENCODE_COMPACTION; // janela apertada — nunca sobrescreve
+  if (!existing.watcher) next.watcher = DEFAULT_OPENCODE_WATCHER; // nunca sobrescreve
+  next = clearOpencodeProviderBaseURL(next); // limpa qualquer hijack legado no provider `opencode`
+  if (baseURL) next = planNioAiProvider(next, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_CONTEXT, NIO_AI_OUTPUT);
   return { alreadyConfigured, next };
 }
 
@@ -409,26 +426,30 @@ export function opencodeGlobalPath(): string {
 /**
  * `~/.config/opencode/opencode.json` — registro global do MCP `nio` + os MCPs do
  * perfil (`profileMcps`, do `EnvironmentBuilder`). Sem perfil, escreve só o `nio`
- * (comportamento anterior preservado). `path` é seam opcional (default = global)
+ * (comportamento anterior preservado). Semeia o provider dedicado `NIO_AI_PROVIDER`
+ * apontando pro backend de IA direto (`baseURL`, default `NIO_AI_BASE_URL`) e grava
+ * `model: NIO_OPERATOR_MODEL` no nível raiz — o `opencode` vira só o runtime, não o
+ * motor (ver `docs/arch/ARQUITETURA-CLIENTE-IA.md`). Passe `''` pra não semear
+ * provider (fica no default big-pickle). `path` é seam opcional (default = global)
  * pra teste não tocar no arquivo real do usuário.
  */
 export function installOpencodeGlobal(
   profileMcps: McpSpec[] = [],
   path = opencodeGlobalPath(),
-  headroomUrl?: string,
+  baseURL: string | undefined = NIO_AI_BASE_URL,
 ): InstallResult {
   // `NIO_CLIENT=opencode` avisa o servidor MCP a (1) provisionar/auto-pull pra
   // `~/.config/opencode` e (2) filtrar os docs pelo surface `opencode`.
   const nioEntry = { command: [MCP_COMMAND], environment: { [envName('CLIENT')]: 'opencode' } };
 
   if (!existsSync(path)) {
-    const { next } = planOpencodeUpdate({}, nioEntry, profileMcps, headroomUrl);
+    const { next } = planOpencodeUpdate({}, nioEntry, profileMcps, baseURL);
     writeJson(path, next);
     return { status: 'created', path };
   }
 
   const existing = readJsonSafe(path) ?? {};
-  const { alreadyConfigured, next } = planOpencodeUpdate(existing, nioEntry, profileMcps, headroomUrl);
+  const { alreadyConfigured, next } = planOpencodeUpdate(existing, nioEntry, profileMcps, baseURL);
   if (alreadyConfigured) return { status: 'already_configured', path };
 
   const backup = backupFile(path);
@@ -468,35 +489,5 @@ export function upsertOpencodeMcp(
 
   const backup = backupFile(path);
   writeJson(path, { ...existing, mcp: servers });
-  return { status: 'updated', path, backup };
-}
-
-export function installCodexGlobal(): InstallResult {
-  const path = join(homedir(), '.codex', 'config.toml');
-
-  // `NIO_CLIENT=codex` avisa o servidor MCP a (1) provisionar/auto-pull pra
-  // `~/.codex` (skills + prompts) e (2) filtrar os docs pelo surface `codex`.
-  const nioEntry = { command: MCP_COMMAND, env: { [envName('CLIENT')]: 'codex' } };
-
-  if (!existsSync(path)) {
-    writeToml(path, { mcp_servers: { [brand.mcpServerKey]: nioEntry } });
-    return { status: 'created', path };
-  }
-
-  let existing: Record<string, unknown>;
-  try {
-    existing = (readToml(path) ?? {}) as Record<string, unknown>;
-  } catch (err) {
-    throw new Error(
-      `Arquivo ${path} contém TOML inválido (${(err as Error).message}). ` +
-        `Conserte ou apague antes de rodar de novo.`,
-    );
-  }
-
-  const { alreadyConfigured, next } = planCodexUpdate(existing, nioEntry);
-  if (alreadyConfigured) return { status: 'already_configured', path };
-
-  const backup = backupFile(path);
-  writeToml(path, next);
   return { status: 'updated', path, backup };
 }

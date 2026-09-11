@@ -6,6 +6,7 @@
 import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { brand, homePath } from '../../brand.js';
+import { NIO_AI_BASE_URL, NIO_AI_MODEL_ID } from '../clients/client-configs.js';
 import { closePool, ping } from '../../adapters/pg/client.js';
 import { generateJwtSecret, jwtSecretWeakness } from '../../gateway/config.js';
 import { input, password, confirm } from '../prompts.js';
@@ -111,6 +112,46 @@ export async function checkConfig(): Promise<ConfigProblem[]> {
     }
   }
   return problems;
+}
+
+export interface AiBackendStatus {
+  ok: boolean;
+  models: string[];
+  detail: string;
+}
+
+/**
+ * Sonda o backend de IA (`GET <base>/models`): precisa estar no ar **e** servir
+ * o `NIO_AI_MODEL_ID`. Consultivo — `nio config check` avisa sem reprovar, e o
+ * `ensureConfig` não bloqueia por isso (comandos sem IA seguem funcionando).
+ * `baseURL` é seam pra teste (default = `NIO_AI_BASE_URL`).
+ */
+export async function probeAiBackend(
+  timeoutMs = 8000,
+  baseURL: string = NIO_AI_BASE_URL,
+): Promise<AiBackendStatus> {
+  const base = baseURL.replace(/\/+$/, '');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${base}/models`, { signal: controller.signal });
+    if (!res.ok) return { ok: false, models: [], detail: `HTTP ${res.status}` };
+    const data = (await res.json()) as { data?: Array<{ id?: unknown }> };
+    const models = (data.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string');
+    if (!models.includes(NIO_AI_MODEL_ID)) {
+      return {
+        ok: false,
+        models,
+        detail: `no ar, mas não serve ${NIO_AI_MODEL_ID} (serve: ${models.join(', ') || 'nada'})`,
+      };
+    }
+    return { ok: true, models, detail: `no ar e serve ${NIO_AI_MODEL_ID}` };
+  } catch (e) {
+    const cause = e instanceof Error ? e.message : String(e);
+    return { ok: false, models: [], detail: `inacessível (${cause})` };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 interface WizardValues {

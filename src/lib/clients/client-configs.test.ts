@@ -1,14 +1,16 @@
-import { test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { test, expect } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  readCoAuthoredBy,
-  disableCoAuthoredBy,
   planOpencodeUpdate,
-  planOpencodeProvider,
+  planNioAiProvider,
   upsertOpencodeMcp,
+  installOpencodeGlobal,
   NIO_OPERATOR_MODEL,
+  NIO_AI_BASE_URL,
+  NIO_AI_PROVIDER,
+  NIO_AI_MODEL_ID,
 } from './client-configs.js';
 import type { McpSpec } from '../../core/environment.js';
 
@@ -22,29 +24,36 @@ const PG_MCP: McpSpec = {
 test('planOpencodeUpdate: grava model + mcp.nio + MCPs do perfil num config vazio', () => {
   const { next } = planOpencodeUpdate({}, NIO_ENTRY, [PG_MCP]);
   expect(next.model).toBe(NIO_OPERATOR_MODEL);
-  const mcp = next.mcp as Record<string, { command: string[]; enabled?: boolean }>;
+  const mcp = next.mcp as any;
   expect(mcp.nio.command).toEqual(['nio-cli']);
   expect(mcp.postgres.command).toEqual(PG_MCP.command);
   expect(mcp.postgres.enabled).toBe(true);
 });
 
-test('planOpencodeProvider: aponta provider.opencode.options.baseURL, preserva o resto', () => {
-  const out = planOpencodeProvider(
-    { model: 'x', provider: { anthropic: { options: { foo: 1 } }, opencode: { options: { bar: 2 } } } },
-    'http://127.0.0.1:8787/v1',
+test('planNioAiProvider: cria provider dedicado (npm openai-compatible + baseURL + modelo/limite), preserva o resto', () => {
+  const out = planNioAiProvider(
+    { model: 'x', provider: { anthropic: { options: { foo: 1 } } } },
+    'nio-local',
+    'http://192.168.0.140:8001/v1',
+    'RedHatAI/Qwen3.8-27B-INT4',
+    65536,
+    20000,
   );
-  const p = out.provider as Record<string, { options: Record<string, unknown> }>;
-  expect(p.opencode.options.baseURL).toBe('http://127.0.0.1:8787/v1');
-  expect(p.opencode.options.bar).toBe(2); // não perdeu opção existente
+  const p = out.provider as Record<string, any>;
+  expect(p['nio-local'].npm).toBe('@ai-sdk/openai-compatible');
+  expect(p['nio-local'].options.baseURL).toBe('http://192.168.0.140:8001/v1');
+  expect(p['nio-local'].models['RedHatAI/Qwen3.8-27B-INT4'].limit).toEqual({ context: 65536, output: 20000 });
   expect(p.anthropic.options.foo).toBe(1); // não mexeu noutro provider
   expect(out.model).toBe('x');
 });
 
-test('planOpencodeUpdate: com headroomUrl → grava provider.baseURL e só marca alreadyConfigured se bater', () => {
-  const url = 'http://127.0.0.1:8787/v1';
+test('planOpencodeUpdate: com baseURL → semeia o provider dedicado, NÃO toca o opencode, alreadyConfigured idempotente', () => {
+  const url = 'http://192.168.0.140:8001/v1';
   const first = planOpencodeUpdate({}, NIO_ENTRY, [], url);
-  const p = first.next.provider as { opencode: { options: { baseURL: string } } };
-  expect(p.opencode.options.baseURL).toBe(url);
+  const p = first.next.provider as Record<string, any>;
+  expect(p[NIO_AI_PROVIDER].options.baseURL).toBe(url);
+  expect(p[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(65536);
+  expect(p.opencode).toBeUndefined(); // opencode fica no default, sem hijack
 
   const seeded = first.next;
   expect(planOpencodeUpdate(seeded, NIO_ENTRY, [], url).alreadyConfigured).toBe(true);
@@ -70,10 +79,24 @@ test('planOpencodeUpdate: preserva mcp.nio e chaves não-nio do usuário', () =>
   };
   const { next } = planOpencodeUpdate(existing, NIO_ENTRY, [PG_MCP]);
   expect(next.theme).toBe('dark');
-  const mcp = next.mcp as Record<string, { command: string[] }>;
+  const mcp = next.mcp as any;
   expect(mcp.custom.command).toEqual(['meu-mcp']); // chave do usuário intacta
   expect(mcp.nio.command).toEqual(['nio-cli']);
   expect(mcp.postgres.command).toEqual(PG_MCP.command);
+});
+
+test('installOpencodeGlobal: aponta o provider pro backend de IA (NIO_AI_BASE_URL) por padrão', () => {
+  const d = mkdtempSync(join(tmpdir(), 'nio-ai-'));
+  const p = join(d, 'opencode.json');
+
+  installOpencodeGlobal([], p); // sem baseURL explícito → herda o default (NIO_AI_BASE_URL)
+  const cfg = JSON.parse(readFileSync(p, 'utf8'));
+  expect(cfg.provider[NIO_AI_PROVIDER].options.baseURL).toBe(NIO_AI_BASE_URL);
+  expect(cfg.provider[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(65536);
+  expect(cfg.model).toBe(NIO_OPERATOR_MODEL);
+  expect(cfg.provider.opencode).toBeUndefined(); // opencode fica no default (big-pickle)
+
+  rmSync(d, { recursive: true, force: true });
 });
 
 test('upsertOpencodeMcp: registra um MCP remoto (type: remote + url), preserva o resto', () => {
@@ -107,50 +130,4 @@ test('upsertOpencodeMcp: cria o arquivo se não existe', () => {
   const r = upsertOpencodeMcp({ id: 'docker', url: 'http://x/mcp' }, { path: p });
   expect(['created', 'updated']).toContain(r.status);
   rmSync(d, { recursive: true, force: true });
-});
-
-// os.homedir() ignora $HOME no macOS, então passamos o path do settings.json
-// explicitamente (o seam opcional) em vez de tentar sequestrar o home.
-let dir: string;
-let settings: string;
-
-function writeSettings(obj: unknown) {
-  writeFileSync(settings, JSON.stringify(obj));
-}
-
-beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'nio-co-'));
-  settings = join(dir, 'settings.json');
-});
-afterEach(() => rmSync(dir, { recursive: true, force: true }));
-
-test('sem settings.json → assume ligado (default do Claude Code)', () => {
-  expect(readCoAuthoredBy(settings).enabled).toBe(true);
-});
-
-test('includeCoAuthoredBy ausente → ligado', () => {
-  writeSettings({ mcpServers: {} });
-  expect(readCoAuthoredBy(settings).enabled).toBe(true);
-});
-
-test('includeCoAuthoredBy=true → ligado', () => {
-  writeSettings({ includeCoAuthoredBy: true });
-  expect(readCoAuthoredBy(settings).enabled).toBe(true);
-});
-
-test('includeCoAuthoredBy=false → desligado (não nagueia)', () => {
-  writeSettings({ includeCoAuthoredBy: false });
-  expect(readCoAuthoredBy(settings).enabled).toBe(false);
-});
-
-test('disable preserva chaves existentes, faz backup e seta false', () => {
-  writeSettings({ mcpServers: { nio: { command: 'nio-cli' } } });
-  const res = disableCoAuthoredBy(settings);
-  expect(res.status).toBe('updated');
-  expect(res.backup && existsSync(res.backup)).toBeTruthy();
-
-  const written = JSON.parse(readFileSync(res.path, 'utf8'));
-  expect(written.includeCoAuthoredBy).toBe(false);
-  expect(written.mcpServers.nio.command).toBe('nio-cli'); // não perdeu nada
-  expect(readCoAuthoredBy(settings).enabled).toBe(false);
 });

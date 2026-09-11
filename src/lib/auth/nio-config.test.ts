@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseEnvFile, readConfigFile, writeConfigFile, validateConfigShape } from './nio-config.js';
+import { parseEnvFile, readConfigFile, writeConfigFile, validateConfigShape, probeAiBackend } from './nio-config.js';
 
 test('parseEnvFile: KEY=value, ignora # e vazio, mantém = no valor', () => {
   const out = parseEnvFile('# comentário\n\nNIO_DATABASE_URL=postgres://u:p@h:5432/d\nJWT_SECRET=a=b=c\n  \n');
@@ -48,4 +48,11 @@ test('validateConfigShape: pega faltando e formato inválido, sem tocar rede', (
   expect(
     validateConfigShape({ NIO_DATABASE_URL: 'postgres://u@h:5432/d', JWT_SECRET: 'a'.repeat(40) }),
   ).toEqual([{ key: 'JWT_SECRET', issue: 'invalid', hint: expect.any(String) }]);
+});
+
+test('probeAiBackend: porta fechada → ok:false sem estourar', async () => {
+  const st = await probeAiBackend(2000, 'http://127.0.0.1:9/v1');
+  expect(st.ok).toBe(false);
+  expect(st.models).toEqual([]);
+  expect(st.detail.length).toBeGreaterThan(0);
 });
