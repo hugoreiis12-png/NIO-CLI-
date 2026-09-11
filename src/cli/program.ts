@@ -12,7 +12,6 @@ import { registerAuthCommands } from "./commands/auth.js";
 import { registerInitCommand } from "./commands/init/index.js";
 import { registerSyncCommand } from "./commands/sync.js";
 import { registerSkillsCommands } from "./commands/skills.js";
-import { registerCleanCommand } from "./commands/clean.js";
 import { registerExecCommand } from "./commands/exec.js";
 import { registerPlanCommand } from "./commands/plan.js";
 import { registerValidatePlanCommand } from "./commands/validate-plan.js";
@@ -46,7 +45,6 @@ export function buildProgram(logoShown: () => boolean = () => false): Command {
   registerInitCommand(program);
   registerSyncCommand(program);
   registerSkillsCommands(program);
-  registerCleanCommand(program);
   registerExecCommand(program);
   registerPlanCommand(program);
   registerValidatePlanCommand(program);

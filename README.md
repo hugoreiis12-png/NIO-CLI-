@@ -316,14 +316,13 @@ Operações do CLI, **sem o binário na frente** (declarado no cabeçalho da tab
 Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --help`.
 
 <!-- COMMANDS:START -->
-<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 61 comandos. -->
+<!-- gerado por `bun run gen:docs` — não edite à mão. binário `nio`, 60 comandos. -->
 
 | Comando | Descrição |
 | --- | --- |
 | `agents` | Lista os agentes disponíveis |
 | `ai` | Abre a interface NIO da sessão ativa (opencode serve headless + chat Ink) |
 | `ai status` | Estado do Headroom (proxy de compressão — desativado por ADR 0010, dormente) |
-| `clean-legacy` | Remove commands/skills legados (substituídos) de ~/.claude e ~/.codex |
 | `command [name]` | Cria um comando personalizado pro operador de IA |
 | `completion [shell]` | Imprime o script de autocomplete (bash\|zsh\|fish). |
 | `config` | Config compartilhada da equipe (~/.nio/config.env) |
@@ -354,7 +353,7 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | `docker toolkit status` | Estado dos containers + health dos endpoints |
 | `docker toolkit up` | Sobe a infra e registra o gateway no opencode.json |
 | `docs` | Documentação completa da CLI (terminal ou página com --html) |
-| `exec` | Delega a implementação a um agente headless num worktree e aguarda. |
+| `exec` | Delega a implementação ao Qwen (vLLM local) num worktree e aguarda. |
 | `exec-status <jobId>` | Estado de um job de execução (`nio exec`), em JSON |
 | `init` | Cria nio.json no diretório atual e materializa o ambiente da sessão |
 | `lang` | Conhecimento/config das linguagens (nio-lang) |
@@ -362,7 +361,7 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | `login` | Autentica via nio-gateway (túnel HTTP) e salva a sessão localmente (JWT) |
 | `logout` | Encerra a sessão local e revoga a auth_session no banco |
 | `open` | Abre a IDE da sessão ativa na pasta do projeto |
-| `plan` | Roda o engine pensante sobre o projeto e escreve/refina o plan.md da raiz. |
+| `plan` | Roda o Qwen (vLLM local) sobre o projeto e escreve/refina o plan.md da raiz. |
 | `register` | Cria um novo usuário via nio-gateway e já entra (login) |
 | `security` | Senha e 2º fator do login (WhatsApp OTP + códigos de backup) |
 | `security change-password` | Troca a senha (exige a senha atual) e encerra todas as sessões |
@@ -379,7 +378,7 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | `skills status` | Lista os docs do repo de skills (cache local ~/.nio/skills) |
 | `start` | Conduz a esteira: config → gateway → login → sessão → OpenCode |
 | `sync` | Instala/atualiza skills, commands e agents nos clientes configurados, a partir do bundle (idempotente); checa atualização do pacote |
-| `validate-plan` | Lê o plan.md da raiz e roda o engine pensante para julgar se o plano precisa de uma spec antes de implementar. |
+| `validate-plan` | Lê o plan.md da raiz e roda o Qwen (vLLM local) para julgar se o plano precisa de uma spec antes de implementar. |
 | `whoami` | Mostra o usuário autenticado |
 <!-- COMMANDS:END -->
 
@@ -442,16 +441,16 @@ O servidor `nio-cli` expõe as tools de ambiente v2 (todas passam pelo
 
 | Operação | O que faz |
 | --- | --- |
-| `delegate_exec` | Delega a IMPLEMENTAÇÃO a um agente de execução novo (codex ou claude local, na assinatura — sem API) num worktree já criado pelo /implement. |
+| `delegate_exec` | Delega a IMPLEMENTAÇÃO ao Qwen (vLLM local, via API — sem assinatura nem binário externo) num worktree já criado pelo /implement. |
 | `env_detect_deps` | Roda UM ciclo do watcher de dependências sobre a pasta da sessão: escaneia os manifests (package.json, requirements.txt, Cargo.toml), detecta o que está declarado mas não instalado e registra um evento por dependência nova (idempotente). |
 | `env_materialize` | Re-materializa o ambiente de uma sessão existente a partir do seu perfil: garante os toolchains de novo, re-resolve os MCPs e reescreve o `config` em `sessions.config`. |
 | `exec_status` | Estado de uma execução delegada (`nio_delegate_exec`): running \| done \| failed, com o resumo do agente, os arquivos alterados e os checks determinísticos (tamanho, lint, build, testes). |
-| `plan` | Roda o engine PENSANTE (claude ou codex local, na assinatura — sem API) sobre a raiz do projeto e escreve/refina o `plan.md` de rascunho pré-SDD. |
+| `plan` | Roda o Qwen (vLLM local, via API) sobre a raiz do projeto e escreve/refina o `plan.md` de rascunho pré-SDD. |
 | `profile_get` | Consulta o catálogo de perfis de ambiente (hardcoded na CLI). |
 | `session_activate` | Ativa uma sessão de ambiente do usuário por id (o prefixo do UUID basta). |
 | `session_create` | Cria uma sessão de ambiente pro usuário autenticado e materializa o perfil escolhido: garante os toolchains, resolve os MCPs e persiste o `config` em `sessions.config`. |
 | `session_list` | Lista as sessões de ambiente do usuário autenticado (mais recentes primeiro), com id, nome, perfil, status e o `config` materializado. |
-| `validate_plan` | Lê o `plan.md` da raiz do projeto e roda o engine PENSANTE (claude ou codex local, na assinatura — sem API) para julgar se o plano é complexo o bastante para virar uma spec SDD antes de implementar. |
+| `validate_plan` | Lê o `plan.md` da raiz do projeto e roda o Qwen (vLLM local, via API) para julgar se o plano é complexo o bastante para virar uma spec SDD antes de implementar. |
 <!-- TOOLS:END -->
 
 ### Recipes de ambiente (repo NIO-SKILLS)
@@ -467,13 +466,13 @@ união em linguagens/frameworks/MCPs).
 
 ## Skills, commands e dependências
 
-Além das tools, o nio entrega skills/commands/agents/hooks pros clientes. O conteúdo
+Além das tools, o nio entrega **skills, commands e agents** pros clientes. O conteúdo
 vive num **repo aberto** — [`hugoreiis12-png/NIO-SKILLS-`](https://github.com/hugoreiis12-png/NIO-SKILLS-) —
 e **não** é um pacote npm. O CLI baixa o repo (zipball do GitHub, sem precisar de `git`)
 pra um cache local em **`~/.nio/skills`** e lê de lá. `nio sync` **atualiza o cache**
 (pull da branch) toda vez, então as skills evoluem sem republicar o CLI; e **auto-detecta**
-quais clientes têm o nio configurado, provisionando pra cada um conforme a seleção de
-perfil/área do `nio.json`.
+se o OpenCode tem o conector `nio` configurado, provisionando pra ele conforme a seleção
+de perfil/área do `nio.json`.
 
 Overrides por ambiente:
 
@@ -487,13 +486,8 @@ Cada cliente recebe no formato que entende:
 
 | Cliente         | Onde                          | Formato                                                                 |
 | --------------- | ----------------------------- | ----------------------------------------------------------------------- |
-| Claude Code     | `~/.claude/{commands,skills,agents}` | arquivos nativos — slash-commands e skills                       |
-| Codex CLI       | `~/.codex/`                   | **dual-write**: cada command/skill vira uma **skill** (`skills/<id>/SKILL.md`, auto-selecionada) **e** um **custom prompt** (`prompts/<id>.md`, no menu `/prompts:<id>`) |
-| Cowork/Desktop  | —                             | via **MCP prompts** + resources, servidos ao vivo (ignora `~/.claude`)  |
-
-> Configurar o Codex grava `NIO_CLIENT=codex` no `config.toml`, o que faz o servidor
-> provisionar pra `~/.codex` e filtrar os docs pelo surface `codex`. Reinicie o cliente
-> depois do sync pra carregar skills/prompts novos.
+| OpenCode        | `~/.config/opencode/`         | MCP `nio` registrado no `opencode.json`; skills/commands no layout cru do pacote (`skills/<id>/SKILL.md`) |
+| Cowork/Desktop  | —                             | via **MCP prompts** + resources, servidos ao vivo                       |
 
 > **Como aparecem no Cowork/Claude Desktop.** Lá as skills chegam como **prompts MCP**,
 > que o app expõe como **slash-commands** no menu de conectores/"+" (ex.: digite `/` e
@@ -506,12 +500,12 @@ Cada cliente recebe no formato que entende:
 Um doc pode ser restrito a clientes específicos via frontmatter:
 
 ```yaml
-clients: claude-code, cowork   # vazio/ausente = todos os clientes
+clients: cowork, opencode   # vazio/ausente = todos os clientes
 ```
 
-Valores: `claude-code`, `codex`, `cowork`. O MCP filtra por esse campo, então um skill
-marcado `cowork` não é provisionado pro `~/.claude`, e um `claude-code` não aparece como
-prompt no Cowork.
+Valores: `cowork`, `opencode`. O MCP filtra por esse campo, então um skill
+marcado `cowork` só aparece como prompt no Cowork/Desktop, e um `opencode` só
+nos docs provisionados ao operador OpenCode.
 
 ### Dependências externas
 
@@ -521,8 +515,8 @@ Commands/skills podem depender de libs externas, declaradas como arquivos em
 
 - **instalador estruturado** (`npm:`, `skills:` = `npx skills add`, `git:`) → oferece
   rodar com `[y/N]` (comando montado a partir do campo validado, **sem shell**);
-- **`manual:`** (plugin de marketplace, passos no cliente, UI) → imprime os passos por
-  cliente, com os comandos destacados.
+- **`manual:`** (sem instalador automatizável — checagem/UI no cliente) → imprime os
+  passos, com os comandos destacados.
 
 A string `install:` (se houver) é **só exibição** — nunca é executada. A CLI **detecta
 o que já está instalado** e mostra um selo `✓ instalada` (via `npm ls -g`, dir de
@@ -532,15 +526,14 @@ destino, ou o `detect:` do frontmatter).
 
 ## Claude Desktop / Cowork
 
-Selecione **Cowork** na lista de clientes do `nio init`. Com o app instalado e você
-logado (`nio login`), a CLI **ativa o conector direto** — escreve o `nio` no
-`claude_desktop_config.json` com caminhos absolutos (`node` + `dist/mcp-server.js`)
-e `NIO_CLIENT=cowork`. Reinicie o Claude Desktop pra carregar. O `nio sync` reafirma
-esse config.
-
-**Fallback `.mcpb`:** se a escrita direta falhar, a CLI gera
-`~/Downloads/nio-cli-<versão>.mcpb` e mostra os passos — Configurações → Extensões →
-Configurações avançadas → "Extension Developer" → "Install Extension…".
+O Cowork/Claude Desktop é um cliente de **chat** via MCP — as skills chegam como
+**prompts MCP** servidos ao vivo, e o conector vive no `claude_desktop_config.json`
+com caminhos absolutos (`node` + `dist/mcp-server.js`) e `NIO_CLIENT=cowork`. Ele
+**não** é mais um alvo do `nio init` (o checkbox só oferece OpenCode): o setup
+inicial do conector é manual. O `nio sync` **reafirma** esse config quando o conector
+já existe — com o app instalado e você logado (`nio login`), ele reescreve o entry
+com paths atuais (merge não-destrutivo + backup). Reinicie o Claude Desktop pra
+carregar prompts novos depois do sync.
 
 ---
 
@@ -569,10 +562,8 @@ background em qualquer comando (`update-notifier`).
 | `nio ai` diz `precisa de um terminal interativo` | você está num pipe/CI — rode num terminal de verdade |
 | `nio ai` travado em "processando" | `Esc` aborta o turno; o motor recupera permissão perdida sozinho em ~4s. Persistiu? `NIO_DEBUG=1 nio ai` e veja `~/.nio/tui.log` |
 | `nio ai` cai na TUI do OpenCode | falta o binário `opencode` no PATH — `npm i -g opencode-ai` |
-| Tools não aparecem no Claude Code | reinicie o cliente depois do `nio init`; cheque com `/mcp` |
 | Skills não aparecem no Cowork | chegam como **prompts MCP** (slash-commands), não skills autônomas. Cmd+Q e reabra; confirme o conector |
 | `Conteúdo de skills não encontrado` | cache `~/.nio/skills` vazio — rode `nio sync` com rede, ou `NIO_SKILLS_DIR` pra um checkout local |
-| Sobraram comandos antigos | `nio clean-legacy` (`--dry-run` pra revisar antes) |
 
 Sempre: `nio debug` mostra o estado de tudo com uma dica por item. E
 `NIO_DEBUG=1 nio <cmd>` liga log verboso (`[nio:debug]` em stderr): `.env`

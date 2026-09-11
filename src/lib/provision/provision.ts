@@ -1,13 +1,13 @@
 import { existsSync } from "node:fs";
 import { brand } from "../../brand.js";
-import { claudeTarget, type ProvisionTarget } from "../clients/targets.js";
+import { opencodeTarget, type ProvisionTarget } from "../clients/targets.js";
 import { filterDocsForSurface, skillsDir } from "../skills/skills.js";
 import { filterForSelection, flattenSelection, type Selection } from "../skills/sections.js";
 import { collectSkillFiles } from "./provision-collect.js";
 import { applyProvision, type ProvisionOptions, type ProvisionResult } from "./provision-apply.js";
 
 /**
- * Provisiona skills/commands/agents do nio (o MCP não grava em `~/.claude`; a CLI
+ * Provisiona skills/commands/agents do nio (o MCP não grava em `~/.config/opencode`; a CLI
  * `sync`/`init` chama `provision()`). Idempotente via manifesto. Coleta em
  * `provision-collect.ts`, motor em `provision-apply.ts` — ambos reexportados daqui.
  */
@@ -19,7 +19,7 @@ import { applyProvision, type ProvisionOptions, type ProvisionResult } from "./p
 export function provision(
   options: ProvisionOptions & { target?: ProvisionTarget; selection?: Selection } = {},
 ): ProvisionResult {
-  const target = options.target ?? claudeTarget;
+  const target = options.target ?? opencodeTarget;
   const dir = options.skillsDir ?? skillsDir();
   if (!existsSync(dir)) {
     throw new Error(
@@ -34,7 +34,7 @@ export function provision(
   // Todos os paths on-disk possíveis do bundle (sem o filtro de seleção). O prune só
   // remove o que NÃO está aqui — o que saiu do bundle de verdade —, nunca o que foi só
   // filtrado pela seleção deste run. Sem isso o auto-pull de um repo com seleção estreita
-  // apagava `/implement` & cia. do `~/.claude` global.
+  // apagava `/implement` & cia. do `~/.config/opencode` global.
   const keep = new Set(
     target
       .mapDocs(filterDocsForSurface(flattenSelection(rawDocs), target.surface))

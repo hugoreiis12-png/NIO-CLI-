@@ -9,7 +9,6 @@ import {
   planMissingError,
   suggestSlug,
 } from './validate-plan-delegate.js';
-import { PLAN_ENGINE, DEFAULT_ENGINE, parseEngine } from './exec-engines.js';
 
 const dirs: string[] = [];
 function project(plan?: string): string {
@@ -67,15 +66,6 @@ test('veredito ambíguo (sem VERDICT) vira erro, não um chute', () => {
 
 test('veredito sem justificativa vira erro', () => {
   expect(() => parseVerdict('VERDICT: yes')).toThrow();
-});
-
-test('o default da triagem é o engine pensante, não o do exec', () => {
-  expect(parseEngine(undefined, PLAN_ENGINE)).toBe(PLAN_ENGINE);
-  expect(PLAN_ENGINE).not.toBe(DEFAULT_ENGINE);
-});
-
-test('engine inválido continua null mesmo com fallback pensante', () => {
-  expect(parseEngine('gemini', PLAN_ENGINE)).toBeNull();
 });
 
 test('planMissingError nomeia o projeto e aponta o nio plan', () => {

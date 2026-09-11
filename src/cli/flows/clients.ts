@@ -6,8 +6,8 @@ import { flowsCopy, fmt } from "../copy.js";
 
 /**
  * Verificação inicial do `init`: confere o **OpenCode** e, se faltar, oferece
- * `npm i -g` [y/N]. Best-effort, nunca bloqueia. (Claude Code/Codex/VS Code
- * saíram da superfície ativa em 2026-07-27; config deles fica em client-configs.)
+ * `npm i -g` [y/N]. Best-effort, nunca bloqueia. (Claude Code/Codex saíram de
+ * vez da superfície ativa em 2026-07-27 — o config deles foi removido.)
  */
 export async function ensureCoreClients(opts: {
   interactive: boolean;

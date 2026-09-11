@@ -24,8 +24,7 @@ import {
   buildSkillPrompt,
 } from './lib/skills/skill-serve.js';
 import { provision } from './lib/provision/provision.js';
-import { provisionHooks } from './lib/clients/hooks.js';
-import { claudeTarget, type ProvisionTarget } from './lib/clients/targets.js';
+import { type ProvisionTarget } from './lib/clients/targets.js';
 import { ensureSkillsCache, skillsMinCliWarning } from './lib/skills/skills-cache.js';
 import { shouldRunAutoPull, pickProvisionTarget } from './lib/clients/autopull.js';
 import { brand, env } from './brand.js';
@@ -99,7 +98,7 @@ async function authenticateSession(): Promise<UserCli | null> {
 }
 
 /** Surface deste worker (pra filtro de visibilidade `clients:`). Cowork seta
- * NIO_CLIENT=cowork; Claude Code costuma deixar vazio → sem filtro (mostra tudo). */
+ * NIO_CLIENT=cowork; o OpenCode seta NIO_CLIENT=opencode; vazio → sem filtro (mostra tudo). */
 function resolveSurface(): string | null {
   return env('CLIENT') || null;
 }
@@ -159,8 +158,8 @@ function registerResourceHandlers(server: Server, surface: string | null): void 
   });
 }
 
-// Prompts: commands/skills como prompts invocáveis. Funciona no Claude Code E no
-// Cowork (que não lê `~/.claude`) — é o caminho de slash-command lá.
+// Prompts: commands/skills como prompts invocáveis. Funciona no OpenCode E no
+// Cowork (que não lê `~/.config/opencode`) — é o caminho de slash-command lá.
 function registerPromptHandlers(server: Server, surface: string | null): void {
   server.setRequestHandler(ListPromptsRequestSchema, async () => {
     try {
@@ -186,21 +185,6 @@ function registerPromptHandlers(server: Server, surface: string | null): void {
   });
 }
 
-// Hooks (só Claude Code): re-registra os gatilhos no settings.json.
-function reinstallHooksIfClaude(target: ProvisionTarget, projectConfig: ProjectConfig | null): void {
-  if (target !== claudeTarget) return;
-  const h = provisionHooks({
-    surface: claudeTarget.surface,
-    selection: projectConfig?.selection,
-  });
-  if (h.installed.length > 0 || h.prunedScripts.length > 0) {
-    console.error(
-      `[${brand.mcpBinName}] auto-pull: ${h.installed.length} hooks, ` +
-        `${h.prunedScripts.length} removidos em ${h.settingsPath}.`,
-    );
-  }
-}
-
 // Auto-pull: a cada start, refresca os arquivos nativos (idempotente via manifesto;
 // desliga com NIO_AUTO_PULL=0). No Cowork as skills chegam por resources/prompts,
 // não por arquivo nativo — então pulamos.
@@ -209,7 +193,7 @@ async function runAutoPull(projectConfig: ProjectConfig | null): Promise<void> {
   const autoPull = env('AUTO_PULL');
   if (!shouldRunAutoPull(client, autoPull)) return;
 
-  const target = pickProvisionTarget(client);
+  const target: ProvisionTarget = pickProvisionTarget(client);
   try {
     const result = provision({ target, selection: projectConfig?.selection });
     const changed = result.files.filter((f) => f.action === 'create' || f.action === 'update');
@@ -220,7 +204,6 @@ async function runAutoPull(projectConfig: ProjectConfig | null): Promise<void> {
           `${pruned.length} removidos em ${result.targetDir}. Reinicie o cliente pra carregar.`,
       );
     }
-    reinstallHooksIfClaude(target, projectConfig);
   } catch (err) {
     console.error(`[${brand.mcpBinName}] auto-pull pulou: ${(err as Error).message}`);
   }

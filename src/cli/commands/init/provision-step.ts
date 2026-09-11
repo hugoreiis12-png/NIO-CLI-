@@ -1,10 +1,9 @@
-import { claudeTarget, opencodeTarget, type ProvisionTarget } from "../../../lib/clients/targets.js";
+import { opencodeTarget, type ProvisionTarget } from "../../../lib/clients/targets.js";
 import { provision } from "../../../lib/provision/provision.js";
-import { provisionHooks } from "../../../lib/clients/hooks.js";
 import { fetchSkills } from "../../../lib/skills/skills-cache.js";
 import { c } from "../../../lib/colors.js";
 import { startSpinner } from "../../../lib/spinner.js";
-import { printProvisionResult, printHookResult } from "../../ui/render.js";
+import { printProvisionResult } from "../../ui/render.js";
 import { SyncReport, summarizeProvision } from "../../ui/report.js";
 import { track, provisionedItems } from "../../../lib/telemetry.js";
 import { VERSION } from "../../../version.js";
@@ -79,29 +78,5 @@ export function provisionTargetsStep(
         lines: [`    ${c.dim((err as Error).message)}`],
       });
     }
-  }
-}
-
-/** Hooks (só Claude Code): registra os gatilhos no ~/.claude/settings.json. */
-export function provisionHooksStep(
-  targets: Set<ProvisionTarget>,
-  config: ProjectConfig,
-  report: SyncReport,
-): void {
-  if (!targets.has(claudeTarget)) return;
-  try {
-    const h = provisionHooks({ surface: claudeTarget.surface, selection: config.selection });
-    report.addCaptured(
-      { id: "hooks", title: "Hooks", status: "ok", summary: `${h.installed.length} hooks` },
-      () => printHookResult(h),
-    );
-  } catch (err) {
-    report.add({
-      id: "hooks",
-      title: "Hooks",
-      status: "warn",
-      summary: "pulado",
-      lines: [`    ${c.dim((err as Error).message)}`],
-    });
   }
 }

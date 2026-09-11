@@ -2,11 +2,6 @@ import type { Command } from "commander";
 import { brand } from "../../brand.js";
 import { existsSync } from "node:fs";
 import { runExec, getJob } from "../../lib/exec/exec-delegate.js";
-import {
-  ENGINES,
-  DEFAULT_ENGINE,
-  parseEngine,
-} from "../../lib/exec/exec-engines.js";
 
 /**
  * Superfície de CLI da delegação headless — o que o nio Studio (Tauri) chama.
@@ -21,7 +16,7 @@ export function registerExecCommand(program: Command): void {
   program
     .command("exec")
     .description(
-      "Delega a implementação a um agente headless num worktree e aguarda. " +
+      "Delega a implementação ao Qwen (vLLM local) num worktree e aguarda. " +
         "stdout = JSON do resultado; stderr = log ao vivo.",
     )
     .requiredOption(
@@ -32,27 +27,13 @@ export function registerExecCommand(program: Command): void {
       "--instruction <texto>",
       "o que implementar (ticket + critérios)",
     )
-    .option(
-      "--engine <engine>",
-      `agente de execução (${ENGINES.join(" | ")})`,
-      DEFAULT_ENGINE,
-    )
     .option("--quiet", "não streama o log do agente no stderr")
     .action(
       async (opts: {
         worktree: string;
         instruction: string;
-        engine?: string;
         quiet?: boolean;
       }) => {
-        const engine = parseEngine(opts.engine);
-        if (!engine) {
-          emit({
-            error: `engine inválido: ${opts.engine} — suportados: ${ENGINES.join(", ")}`,
-          });
-          process.exitCode = 1;
-          return;
-        }
         if (!existsSync(opts.worktree)) {
           emit({ error: `worktree não encontrado: ${opts.worktree}` });
           process.exitCode = 1;
@@ -62,7 +43,6 @@ export function registerExecCommand(program: Command): void {
         const job = await runExec({
           worktree: opts.worktree,
           instruction: opts.instruction,
-          engine,
           echo: opts.quiet !== true,
         });
 

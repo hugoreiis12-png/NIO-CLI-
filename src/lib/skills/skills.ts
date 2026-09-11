@@ -34,7 +34,7 @@ export interface SkillDoc {
   content: string;
   /**
    * Clientes de IA pros quais este doc é servido (do frontmatter `clients:`).
-   * `null` = todos. Valores: `claude-code` | `codex` | `cowork`.
+   * `null` = todos. Valores: `cowork` | `opencode`.
    */
   clients: string[] | null;
 }
@@ -149,7 +149,7 @@ export function parseFrontmatter(raw: string): { frontmatter: Record<string, str
 }
 
 /** Clientes de IA reconhecidos pra visibilidade de docs. */
-export const KNOWN_CLIENTS = ['claude-code', 'codex', 'cowork', 'opencode'] as const;
+export const KNOWN_CLIENTS = ['cowork', 'opencode'] as const;
 const KNOWN_CLIENTS_SET = new Set<string>(KNOWN_CLIENTS);
 
 /**

@@ -1,28 +1,22 @@
-import { spawn } from 'node:child_process';
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  PLAN_ENGINE,
-  engineArgs,
-  engineMissingError,
-  resolveEngineBin,
-  type Engine,
-} from './exec-engines.js';
+import { QWEN_ENGINE, qwenComplete } from './qwen-client.js';
 import { HARNESS_RULES_REL } from '../clients/harness.js';
 
 /**
- * Planejamento headless: roda o engine pensante sobre a raiz do projeto e escreve um
- * `plan.md` de rascunho pré-SDD. Não cria worktree, não toca código, não roda checks.
+ * Planejamento headless: roda o **Qwen vLLM local** (API direta, sem binário externo)
+ * sobre a raiz do projeto e escreve um `plan.md` de rascunho pré-SDD. Não cria
+ * worktree, não toca código, não roda checks.
  */
 
 export interface PlanResult {
   ok: boolean;
   path: string;
-  engine: Engine;
+  engine: string;
   error?: string;
 }
 
-/** Semente pré-SDD: estrutura mínima pro engine preencher na primeira rodada. */
+/** Semente pré-SDD: estrutura mínima pro Qwen preencher na primeira rodada. */
 export const PLAN_TEMPLATE = [
   '# Plano',
   '',
@@ -73,7 +67,7 @@ export function buildPlanPrompt(instruction: string, base: string): string {
   ].join('\n');
 }
 
-/** O engine às vezes embrulha a resposta em ```markdown — o arquivo não quer a cerca. */
+/** O Qwen às vezes embrulha a resposta em ```markdown — o arquivo não quer a cerca. */
 export function stripFence(text: string): string {
   const t = text.trim();
   const m = /^```[a-zA-Z]*\n([\s\S]*?)\n?```$/.exec(t);
@@ -89,52 +83,36 @@ function writeAtomic(project: string, content: string): string {
   return target;
 }
 
-function spawnPlan(
-  bin: string,
-  engine: Engine,
-  prompt: string,
-  project: string,
-  echo: boolean,
-): Promise<PlanResult> {
-  return new Promise((resolve) => {
-    const child = spawn(bin, engineArgs(engine, prompt), {
-      cwd: project,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let markdown = '';
-    child.stdout.on('data', (d: Buffer) => (markdown += d.toString()));
-    child.stderr.on('data', (d: Buffer) => echo && process.stderr.write(d.toString()));
-
-    const fail = (error: string): void => {
-      resolve({ ok: false, path: planPath(project), engine, error });
+async function apiPlan(prompt: string, project: string, echo: boolean): Promise<PlanResult> {
+  try {
+    const markdown = await qwenComplete(prompt);
+    if (echo) process.stderr.write(markdown);
+    const content = stripFence(markdown);
+    if (!content) {
+      return {
+        ok: false,
+        path: planPath(project),
+        engine: QWEN_ENGINE,
+        error: 'engine não devolveu markdown',
+      };
+    }
+    return { ok: true, path: writeAtomic(project, content), engine: QWEN_ENGINE };
+  } catch (e) {
+    return {
+      ok: false,
+      path: planPath(project),
+      engine: QWEN_ENGINE,
+      error: (e as Error).message,
     };
-    child.on('error', (e) => fail(e.message));
-    child.on('close', (code) => {
-      if (code !== 0) return fail(`engine ${engine} falhou (exit ${code})`);
-      const content = stripFence(markdown);
-      if (!content) return fail(`engine ${engine} não devolveu markdown`);
-      resolve({ ok: true, path: writeAtomic(project, content), engine });
-    });
-  });
+  }
 }
 
-/** Bloqueante: roda o engine pensante e escreve o `plan.md`. `echo` streama log no stderr. */
+/** Bloqueante: roda o Qwen e escreve o `plan.md`. `echo` streama log no stderr. */
 export function runPlan(opts: {
   project: string;
   instruction: string;
-  engine?: Engine;
   echo?: boolean;
 }): Promise<PlanResult> {
-  const engine = opts.engine ?? PLAN_ENGINE;
-  const bin = resolveEngineBin(engine);
-  if (!bin) {
-    return Promise.resolve({
-      ok: false,
-      path: planPath(opts.project),
-      engine,
-      error: engineMissingError(engine),
-    });
-  }
   const prompt = buildPlanPrompt(opts.instruction, planBase(opts.project));
-  return spawnPlan(bin, engine, prompt, opts.project, opts.echo === true);
+  return apiPlan(prompt, opts.project, opts.echo === true);
 }

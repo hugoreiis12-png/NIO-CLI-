@@ -1,13 +1,14 @@
 /**
- * Client de IA — OpenCode DIRETO. O **Headroom foi DESATIVADO** (decisão pós-mapeamento
- * 2026-09-04 — amenda ADR 0007+0009): o client fala direto no OpenCode Zen, sem proxy de
- * compressão. `ensureHeadroomAndWire` só garante o `opencode.json` pronto — provider
- * `opencode` **sem** baseURL (direto) + o model default (`big-pickle`) + os MCPs —, sem
- * subir container nem usar `NIO_HEADROOM_URL`. `launchAiClient` é **headless**
- * (`opencode run`, pro `nio docker …`); o interativo é `launchNioTui`.
+ * Client de IA — motor = **provider dedicado** (`NIO_AI_PROVIDER`, OpenAI-compatível)
+ * falando DIRETO no backend (`NIO_AI_BASE_URL`). O provider `opencode` (Zen) NÃO é mais
+ * o motor: fica no default dele (big-pickle), sem competência sobre a CLI — o OpenCode
+ * vira só o runtime (serve/TUI/SDK). Headroom segue DORMENTE (ADR 0010).
+ * `ensureHeadroomAndWire` só garante o `opencode.json` pronto (provider + model + MCPs).
+ * `launchAiClient` é **headless** (`opencode run`, pro `nio docker …`); o interativo
+ * é `launchNioTui`.
  */
 import { spawn } from 'node:child_process';
-import { installOpencodeGlobal, NIO_OPERATOR_MODEL } from '../lib/clients/client-configs.js';
+import { installOpencodeGlobal, NIO_OPERATOR_MODEL, NIO_AI_BASE_URL } from '../lib/clients/client-configs.js';
 import { isBinaryInstalled } from '../lib/clients/client-install.js';
 import { c, sym } from '../lib/colors.js';
 import { dlog } from '../lib/debug.js';
@@ -32,14 +33,13 @@ export interface LaunchAiDeps {
 
 /**
  * Garante o `opencode.json` pronto pro client de IA (reusado pela TUI): provider
- * `opencode` **sem** baseURL (direto no OpenCode Zen — Headroom desativado) + model
- * default + MCPs. `installOpencodeGlobal` sem `headroomUrl` já **limpa** qualquer
- * baseURL de Headroom que tenha sobrado. Nunca bloqueia.
+ * dedicado apontando pro `NIO_AI_BASE_URL` + model default + MCPs. O provider
+ * `opencode` não é tocado. `installOpencodeGlobal` já semeia tudo. Nunca bloqueia.
  */
 export async function ensureHeadroomAndWire(): Promise<void> {
   try {
-    installOpencodeGlobal([]); // sem headroomUrl → provider direto (sem baseURL) + model
-    dlog('opencode.json: provider direto (Headroom desativado), model =', NIO_OPERATOR_MODEL);
+    installOpencodeGlobal([]); // semeia o provider dedicado (NIO_AI_BASE_URL) + model + MCPs
+    dlog('opencode.json: motor →', NIO_AI_BASE_URL, ', model =', NIO_OPERATOR_MODEL);
   } catch (err) {
     console.warn(`  ${c.yellow(sym.warn)} não gravei o opencode.json: ${(err as Error).message}`);
   }

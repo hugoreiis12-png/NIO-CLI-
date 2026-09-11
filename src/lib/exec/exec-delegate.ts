@@ -1,22 +1,20 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { skillsDir } from '../skills/skills.js';
 import { homePath } from '../../brand.js';
 import { HARNESS_RULES_REL, HARNESS_PATTERNS_REL } from '../clients/harness.js';
 import {
-  DEFAULT_ENGINE,
-  engineArgs,
-  engineMissingError,
-  resolveEngineBin,
-  type Engine,
-} from './exec-engines.js';
+  QWEN_ENGINE,
+  qwenComplete,
+  parseFileBlocks,
+} from './qwen-client.js';
 
 /**
- * Delegação de execução: roda o agente local escolhido (assinatura, sem API) num worktree já
- * criado pelo `/implement` e **mede** o resultado (tamanho + lint/build/testes). O
- * julgamento fica com o Opus — este módulo só executa e reporta fatos.
+ * Delegação de execução: roda o **Qwen vLLM local** (API direta, sem binário externo)
+ * num worktree já criado pelo `/implement` e **mede** o resultado (tamanho + lint/build/testes).
+ * O julgamento fica com o Opus — este módulo só executa e reporta fatos.
  */
 
 export type JobState = 'running' | 'done' | 'failed';
@@ -30,7 +28,7 @@ export interface ExecJob {
   id: string;
   state: JobState;
   worktree: string;
-  engine: Engine;
+  engine: string;
   exitCode: number | null;
   summary: string;
   checks: Record<string, CheckResult>;
@@ -72,15 +70,25 @@ export function getJob(id: string): ExecJob | null {
   }
 }
 
-/** Preâmbulo que ancora o agente de execução no harness do repo. */
+/** Preâmbulo que ancora o Qwen no harness e pede os arquivos em blocos parseáveis. */
 function buildPrompt(instruction: string): string {
   return [
-    'Implemente a tarefa abaixo NESTE worktree.',
+    'Implemente a tarefa abaixo NESTE worktree (pastas e arquivos relativos à raiz do trabalho).',
     `Antes de codar: leia AGENTS.md, ${HARNESS_RULES_REL} e ${HARNESS_PATTERNS_REL} e SIGA-OS.`,
     'Regras: mudança mínima; nada de libs/estilos fora do harness.',
     'Limites: arquivo <300 linhas, função <30 linhas, comentário <=1 linha.',
     'Rode lint/build/testes do repo. NÃO commite — deixe o trabalho staged.',
     '',
+    'Você NÃO tem acesso ao filesystem: devolva APENAS os arquivos a criar/alterar, cada um ' +
+      'neste formato exato, nessa ordem (sem texto fora dos blocos, sem cercas de código):',
+    '',
+    '<<<FILE caminho/relativo.ext>>>',
+    '<conteúdo completo do arquivo>',
+    '<<<END_FILE>>>',
+    '',
+    'Se a tarefa não exigir código, responda com texto puro explicando o porquê.',
+    '',
+    '## Tarefa',
     instruction,
   ].join('\n');
 }
@@ -142,47 +150,69 @@ function finish(job: ExecJob): ExecJob {
   return save({ ...job, finishedAt: new Date().toISOString() });
 }
 
-interface SpawnOpts {
+/** Caminho seguro dentro do worktree: recusa subir além da raiz. */
+function resolveRel(worktree: string, rel: string): string {
+  const dest = resolve(worktree, rel);
+  if (dest !== worktree && !dest.startsWith(worktree + sep)) {
+    throw new Error(`caminho fora do worktree: ${rel}`);
+  }
+  return dest;
+}
+
+/** Aplica os blocos `<<<FILE>>>` da resposta no worktree. Devolve os paths escritos. */
+function applyBlocks(worktree: string, text: string): string[] {
+  const blocks = parseFileBlocks(text);
+  if (blocks.length === 0) {
+    throw new Error('resposta sem blocos <<<FILE>>> — nada aplicado');
+  }
+  const written: string[] = [];
+  for (const b of blocks) {
+    const dest = resolveRel(worktree, b.path);
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, b.content, 'utf8');
+    written.push(b.path);
+  }
+  return written;
+}
+
+interface EngineOpts {
   echo?: boolean;
   onDone?: (job: ExecJob) => void;
 }
 
-function spawnEngine(job: ExecJob, bin: string, prompt: string, opts: SpawnOpts = {}): void {
-  const child = spawn(bin, engineArgs(job.engine, prompt), {
-    cwd: job.worktree,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-
-  let out = '';
-  const collect = (d: Buffer): void => {
-    const s = d.toString();
-    out += s;
-    if (opts.echo) process.stderr.write(s); // stdout fica pro JSON final
-  };
-  child.stdout.on('data', collect);
-  child.stderr.on('data', collect);
-
-  child.on('error', (e) => opts.onDone?.(finish({ ...job, state: 'failed', error: e.message })));
-  child.on('close', (code) =>
-    opts.onDone?.(
-      finish({
-        ...job,
-        state: code === 0 ? 'done' : 'failed',
-        exitCode: code,
-        summary: out.trim().slice(-2000),
-        checks: runChecks(job.worktree),
-        changed: changedFiles(job.worktree),
-      }),
-    ),
-  );
+async function runEngine(job: ExecJob, prompt: string, opts: EngineOpts = {}): Promise<ExecJob> {
+  try {
+    const text = await qwenComplete(prompt);
+    if (opts.echo) process.stderr.write(text);
+    applyBlocks(job.worktree, text);
+    const done = finish({
+      ...job,
+      state: 'done',
+      exitCode: 0,
+      summary: text.trim().slice(-2000),
+      checks: runChecks(job.worktree),
+      changed: changedFiles(job.worktree),
+    });
+    opts.onDone?.(done);
+    return done;
+  } catch (e) {
+    const failed = finish({
+      ...job,
+      state: 'failed',
+      exitCode: 1,
+      error: (e as Error).message,
+    });
+    opts.onDone?.(failed);
+    return failed;
+  }
 }
 
-function newJob(worktree: string, engine: Engine): ExecJob {
+function newJob(worktree: string): ExecJob {
   return {
     id: randomUUID().slice(0, 8),
     state: 'running',
     worktree,
-    engine,
+    engine: QWEN_ENGINE,
     exitCode: null,
     summary: '',
     checks: {},
@@ -191,38 +221,22 @@ function newJob(worktree: string, engine: Engine): ExecJob {
   };
 }
 
-/** Prepara o job: resolve o binário e persiste. Devolve o job já falho se não achar. */
-function prepare(worktree: string, engine: Engine): { job: ExecJob; bin: string } | ExecJob {
-  const job = newJob(worktree, engine);
-  const bin = resolveEngineBin(engine);
-  if (!bin) {
-    return finish({ ...job, state: 'failed', error: engineMissingError(engine) });
-  }
-  return { job, bin: save(job) && bin };
-}
-
 /** Background: devolve na hora (uso do MCP, que é processo longo). */
 export function startExec(opts: {
   worktree: string;
   instruction: string;
-  engine?: Engine;
 }): ExecJob {
-  const p = prepare(opts.worktree, opts.engine ?? DEFAULT_ENGINE);
-  if ('state' in p) return p;
-  spawnEngine(p.job, p.bin, buildPrompt(opts.instruction), { onDone: () => undefined });
-  return p.job;
+  const job = save(newJob(opts.worktree));
+  void runEngine(job, buildPrompt(opts.instruction));
+  return job;
 }
 
 /** Bloqueante: aguarda o fim (uso do CLI, que é processo curto). `echo` streama pro stderr. */
 export function runExec(opts: {
   worktree: string;
   instruction: string;
-  engine?: Engine;
   echo?: boolean;
 }): Promise<ExecJob> {
-  return new Promise((resolve) => {
-    const p = prepare(opts.worktree, opts.engine ?? DEFAULT_ENGINE);
-    if ('state' in p) return resolve(p);
-    spawnEngine(p.job, p.bin, buildPrompt(opts.instruction), { echo: opts.echo, onDone: resolve });
-  });
+  const job = save(newJob(opts.worktree));
+  return runEngine(job, buildPrompt(opts.instruction), { echo: opts.echo });
 }

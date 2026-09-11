@@ -7,7 +7,6 @@ import { SessionManager } from "../../app/session-manager.js";
 import { loadProjectConfig } from "../../config.js";
 import { checkForUpdate } from "../../lib/version-check.js";
 import { uninstallProvision, provision } from "../../lib/provision/provision.js";
-import { provisionHooks, uninstallHooks } from "../../lib/clients/hooks.js";
 import { readDependencies, skillIdMap } from "../../lib/skills/skills.js";
 import { fetchSkills, skillsMinCliWarning } from "../../lib/skills/skills-cache.js";
 import { concatenateRules, collectRuleSkills } from "../../lib/skills/rules.js";
@@ -18,10 +17,10 @@ import { ensureUserConfig } from "../flows/user-config.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { track, provisionedItems, flushTelemetry } from "../../lib/telemetry.js";
 import { VERSION } from "../../version.js";
-import { claudeTarget, opencodeTarget, detectConfiguredTargets } from "../../lib/clients/targets.js";
+import { opencodeTarget, detectConfiguredTargets } from "../../lib/clients/targets.js";
 import { coworkConfigured, installCoworkGlobal } from "../../lib/clients/client-configs.js";
 import { c, sym, cmd, box, sectionTitle, clearScreen } from "../../lib/colors.js";
-import { printProvisionResult, printHookResult, printHarnessResult } from "../ui/render.js";
+import { printProvisionResult, printHarnessResult } from "../ui/render.js";
 import {
   SyncReport,
   renderReport,
@@ -194,15 +193,10 @@ export function registerSyncCommand(program: Command): void {
               for (const rel of result.removed) console.log(`  [-] ${rel}`);
               for (const rel of result.kept)
                 console.log(`  [!] ${rel} (modificado localmente — mantido)`);
-              const prefix = result.dryRun ? "[dry-run] " : "";
+const prefix = result.dryRun ? "[dry-run] " : "";
               console.log(
                 `${prefix}${result.removed.length} removidos · ${result.kept.length} preservados → ${result.targetDir}`,
               );
-              if (target === claudeTarget) {
-                const h = uninstallHooks({ dryRun: opts.dryRun });
-                if (h.removedScripts.length > 0)
-                  console.log(`  [-] hooks: ${h.removedScripts.join(", ")}`);
-              }
             }
             return;
           }
@@ -248,19 +242,6 @@ export function registerSyncCommand(program: Command): void {
               items: provisionedItems(result.files, uidByName),
               version: VERSION,
             });
-
-            // Hooks (só Claude Code): registra os gatilhos no settings.json.
-            if (target === claudeTarget) {
-              const h = provisionHooks({
-                surface: claudeTarget.surface,
-                selection,
-                dryRun: opts.dryRun,
-              });
-              report.addCaptured(
-                { id: "hooks", title: "Hooks", status: "ok", summary: `${h.installed.length} hooks` },
-                () => printHookResult(h),
-              );
-            }
           }
 
           // Reafirma o config do Cowork (idempotente).
@@ -328,13 +309,13 @@ export function registerSyncCommand(program: Command): void {
               if (!approved && interactive) {
                 approved = await confirm({
                   message:
-                    "Analisar o repo agora e gerar docs/_patterns.md? (roda claude/codex headless)",
+                    "Analisar o repo agora e gerar docs/_patterns.md? (roda Qwen via vLLM local)",
                   default: true,
                 });
               }
               if (approved) {
                 console.log(`  ${c.dim(`${sym.gear} analisando patterns…`)}`);
-                const out = runPatternsAnalysis(cwd);
+                const out = await runPatternsAnalysis(cwd);
                 if (!out.ran) {
                   console.log(`  ${c.yellow(sym.warn)} ${c.dim(out.reason ?? "análise não rodou")}`);
                 } else {

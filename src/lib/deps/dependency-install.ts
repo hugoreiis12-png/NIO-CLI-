@@ -33,9 +33,7 @@ export function recordDependencyInstalled(dep: ResolvedDependency): void {
       ? plan.pkg
       : plan.kind === 'skills'
         ? plan.repo
-        : plan.kind === 'git'
-          ? plan.url
-          : plan.plugin; // claude-plugin
+        : plan.url; // git
   const marker = readMarker();
   marker[dep.id] = { kind: plan.kind, ref, at: new Date().toISOString() };
   try {
@@ -120,12 +118,7 @@ function childDirs(base: string): string[] {
 /** Probe de locais conhecidos onde `npx skills add` costuma instalar. */
 function skillInstalledElsewhere(repo: string): boolean {
   const name = repo.split('/').pop() ?? repo;
-  return [
-    join(homedir(), '.claude', 'skills', name),
-    join(homedir(), '.codex', 'skills', name),
-    join(process.cwd(), '.claude', 'skills', name),
-    join(process.cwd(), 'skills', name),
-  ].some((p) => existsSync(p));
+  return [join(process.cwd(), 'skills', name)].some((p) => existsSync(p));
 }
 
 /**
@@ -144,12 +137,9 @@ export function isDependencyInstalled(dep: ResolvedDependency): boolean {
     const res = spawnSyncPortable('npm', ['ls', '-g', plan.pkg, '--depth=0'], { stdio: 'ignore' });
     return res.status === 0;
   }
-  if (plan.kind === 'skills') {
-    return Boolean(readMarker()[dep.id]) || skillInstalledElsewhere(plan.repo);
-  }
-  // claude-plugin: sem local padrão universal — o `detect:` (acima) é o sinal
-  // primário; o marcador cobre o caso de já termos instalado nesta máquina.
-  return Boolean(readMarker()[dep.id]);
+  // skills: sem local padrão universal — combinamos o marcador do nio (instalado
+  // por esta CLI) com o probe de dirs conhecidos (instalado à mão via `npx skills add`).
+  return Boolean(readMarker()[dep.id]) || skillInstalledElsewhere(plan.repo);
 }
 
 export interface InstallOutcome {
@@ -164,16 +154,6 @@ export interface InstallOutcome {
  * nunca texto livre do usuário — o quoting do helper é seguro pra essa origem.
  */
 export function runDependencyInstall(plan: DependencyPlan): InstallOutcome {
-  // claude-plugin: vários passos sequenciais (`marketplace add` → `install`).
-  if (plan.kind === 'claude-plugin') {
-    for (const step of plan.steps) {
-      const res = spawnSyncPortable(step.program, step.args, { stdio: 'inherit' });
-      if (res.error) return { ok: false, code: null, error: res.error.message };
-      if (res.status !== 0) return { ok: false, code: res.status };
-    }
-    return { ok: true, code: 0 };
-  }
-
   if (plan.kind === 'git') mkdirSync(dirname(plan.dest), { recursive: true });
   const res = spawnSyncPortable(plan.program, plan.args, { stdio: 'inherit' });
   if (res.error) return { ok: false, code: null, error: res.error.message };

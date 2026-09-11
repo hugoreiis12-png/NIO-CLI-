@@ -93,24 +93,6 @@ test('git: URL github válida → dest em ~/.nio/deps/<id>; URL não-github → 
   expect(invalid.reason).toBe('URL git não permitida (só https://github.com/…): "http://example.com/x"');
 });
 
-test('claude-plugin: "<owner/repo> <plugin@marketplace>" válido → 2 passos; sem plugin → motivo', () => {
-  const dep = resolveDependency(makeDoc({ 'claude-plugin': 'owner/repo plugin@marketplace' }));
-  expect(dep.plan).toEqual({
-    kind: 'claude-plugin',
-    marketplace: 'owner/repo',
-    plugin: 'plugin@marketplace',
-    steps: [
-      { program: 'claude', args: ['plugin', 'marketplace', 'add', 'owner/repo'] },
-      { program: 'claude', args: ['plugin', 'install', 'plugin@marketplace'] },
-    ],
-    command: 'claude plugin marketplace add owner/repo && claude plugin install plugin@marketplace',
-  });
-
-  const invalid = resolveDependency(makeDoc({ 'claude-plugin': 'owner/repo' }));
-  expect(invalid.plan).toBeNull();
-  expect(invalid.reason).toBe('claude-plugin inválido (esperado "<owner/repo> <plugin@marketplace>"): "owner/repo"');
-});
-
 test('manual: sem instalador automatizável, mas com manual: → manual + motivo fixo', () => {
   const dep = resolveDependency(makeDoc({ manual: 'Install via App Store' }));
   expect(dep.plan).toBeNull();
@@ -118,7 +100,7 @@ test('manual: sem instalador automatizável, mas com manual: → manual + motivo
   expect(dep.reason).toBe('instalação manual');
 });
 
-test('nada: sem npm/skills/git/claude-plugin/manual → motivo genérico', () => {
+test('nada: sem npm/skills/git/manual → motivo genérico', () => {
   const dep = resolveDependency(makeDoc({}));
   expect(dep.plan).toBeNull();
   expect(dep.reason).toBe('sem instalador estruturado (npm:/skills:/git:/manual:) — instale manualmente');
@@ -194,10 +176,10 @@ test('npm: pacote definitivamente não instalado → false (via npm ls -g real)'
 
 test('runDependencyInstall — git cria dirname(dest); exit!=0 preserva code; program inexistente → error', () => {
   const dest = join(dir, 'newclone', 'nested');
-  const okPlan: DependencyPlan = { kind: 'git', url: 'https://github.com/o/r', dest, program: 'true', args: [], command: '' };
+  const okPlan: DependencyPlan = { kind: 'git', url: 'https://github.com/o/r', dest, program: 'node', args: ['-e', 'process.exit(0)'], command: '' };
   expect(runDependencyInstall(okPlan)).toEqual({ ok: true, code: 0 });
 
-  const failPlan: DependencyPlan = { kind: 'npm', pkg: 'x', program: 'false', args: [], command: '' };
+  const failPlan: DependencyPlan = { kind: 'npm', pkg: 'x', program: 'node', args: ['-e', 'process.exit(1)'], command: '' };
   expect(runDependencyInstall(failPlan)).toEqual({ ok: false, code: 1 });
 
   const errPlan: DependencyPlan = { kind: 'npm', pkg: 'x', program: 'this-binary-does-not-exist-xyz', args: [], command: '' };
@@ -212,24 +194,4 @@ test('runDependencyInstall — git cria dirname(dest); exit!=0 preserva code; pr
     expect(res.code).toBeNull();
     expect((res.error ?? '').length).toBeGreaterThan(0);
   }
-});
-
-test('runDependencyInstall — claude-plugin: para no 1º passo que falha; ok se todos passam', () => {
-  const firstFails: DependencyPlan = {
-    kind: 'claude-plugin',
-    marketplace: 'm',
-    plugin: 'p',
-    steps: [{ program: 'false', args: [] }, { program: 'true', args: [] }],
-    command: '',
-  };
-  expect(runDependencyInstall(firstFails)).toEqual({ ok: false, code: 1 });
-
-  const allOk: DependencyPlan = {
-    kind: 'claude-plugin',
-    marketplace: 'm',
-    plugin: 'p',
-    steps: [{ program: 'true', args: [] }, { program: 'true', args: [] }],
-    command: '',
-  };
-  expect(runDependencyInstall(allOk)).toEqual({ ok: true, code: 0 });
 });

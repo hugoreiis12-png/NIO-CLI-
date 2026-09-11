@@ -57,13 +57,6 @@ export async function offerDependencyInstall(
       interactive: opts.interactive,
       assumeYes: opts.assumeYes,
     });
-
-    // Plugin de marketplace: o Claude Code é automatizado acima, mas Codex/Desktop
-    // não — então ainda mostramos os passos manuais deles, se houver.
-    if (dep.plan.kind === "claude-plugin" && dep.manual) {
-      console.log(`    ${c.dim("outros clientes (Codex/Desktop) — manual:")}`);
-      printManualSteps(dep.manual);
-    }
   }
   console.log("");
 }

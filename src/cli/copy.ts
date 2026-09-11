@@ -40,7 +40,6 @@ export interface FlowsCopy {
   installDep: string;
   installClient: string;
   coworkManual: string;
-  disableCoAuthored: string;
 }
 
 export const authCopy = loadCopy<AuthCopy>("auth");

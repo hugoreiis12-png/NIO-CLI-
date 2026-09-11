@@ -17,22 +17,10 @@ const GIT_URL_RE = /^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+(?:\
 /** Slug pro `npx skills add`: `owner/repo` ou `owner/repo/skill` (skill específica). */
 const SKILLS_REPO_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)?$/;
 
-/** Id de plugin do Claude Code: `plugin@marketplace`. */
-const PLUGIN_ID_RE = /^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+$/;
-
 export type DependencyPlan =
   | { kind: 'npm'; pkg: string; program: string; args: string[]; command: string }
   | { kind: 'skills'; repo: string; program: string; args: string[]; command: string }
-  | { kind: 'git'; url: string; dest: string; program: string; args: string[]; command: string }
-  // Plugin de marketplace do Claude Code — instalável de forma NÃO-interativa via o
-  // CLI `claude plugin` (marketplace add + install). Vários passos sequenciais.
-  | {
-      kind: 'claude-plugin';
-      marketplace: string;
-      plugin: string;
-      steps: { program: string; args: string[] }[];
-      command: string;
-    };
+  | { kind: 'git'; url: string; dest: string; program: string; args: string[]; command: string };
 
 export interface ResolvedDependency {
   id: string;
@@ -45,8 +33,8 @@ export interface ResolvedDependency {
   plan: DependencyPlan | null;
   /**
    * Instrução de instalação **manual** (`manual:` do frontmatter) — pra deps que a
-   * CLI não consegue automatizar (ex.: plugins de marketplace do Claude/Codex,
-   * passos de `/hooks`, instalação por UI). Impressa, nunca executada.
+   * CLI não consegue automatizar (passos de `/hooks`, instalação por UI).
+   * Impressa, nunca executada.
    */
   manual?: string;
   /** Motivo quando `plan` é null — mostrado como instrução. */
@@ -120,29 +108,6 @@ function resolveGitPlan(git: string, id: string): PlanOrReason {
   };
 }
 
-// Plugin do Claude Code: `claude-plugin: <owner/repo> <plugin@marketplace>`.
-function resolveClaudePluginPlan(claudePlugin: string): PlanOrReason {
-  const [marketplace, plugin] = claudePlugin.split(/\s+/);
-  if (marketplace && plugin && SKILLS_REPO_RE.test(marketplace) && PLUGIN_ID_RE.test(plugin)) {
-    return {
-      plan: {
-        kind: 'claude-plugin',
-        marketplace,
-        plugin,
-        steps: [
-          { program: 'claude', args: ['plugin', 'marketplace', 'add', marketplace] },
-          { program: 'claude', args: ['plugin', 'install', plugin] },
-        ],
-        command: `claude plugin marketplace add ${marketplace} && claude plugin install ${plugin}`,
-      },
-    };
-  }
-  return {
-    plan: null,
-    reason: `claude-plugin inválido (esperado "<owner/repo> <plugin@marketplace>"): "${claudePlugin}"`,
-  };
-}
-
 function applyPlanResult(base: ResolvedDependency, r: PlanOrReason): ResolvedDependency {
   return r.plan ? { ...base, plan: r.plan } : { ...base, reason: r.reason };
 }
@@ -150,9 +115,8 @@ function applyPlanResult(base: ResolvedDependency, r: PlanOrReason): ResolvedDep
 /**
  * Resolve um doc `dependency` num plano de instalação a partir de campos
  * estruturados. Precedência: `npm:` > `skills:` > `git:`. Sem campo válido → `plan: null`.
- * Passos manuais ficam disponíveis mesmo com plano automatizável (ex.: um plugin
- * `claude-plugin` que o Claude Code instala sozinho mas o Codex/Desktop não); sem
- * nenhum instalador automatizável, cai pra instrução manual (plugin/marketplace/UI).
+ * Sem nenhum instalador automatizável, cai pra instrução manual (passos de
+ * `/hooks`, instalação por UI, etc).
  */
 export function resolveDependency(node: SkillDoc): ResolvedDependency {
   const fm = node.frontmatter;
@@ -175,9 +139,6 @@ export function resolveDependency(node: SkillDoc): ResolvedDependency {
 
   const git = fm.git?.trim();
   if (git) return applyPlanResult(base, resolveGitPlan(git, node.id));
-
-  const claudePlugin = fm['claude-plugin']?.trim();
-  if (claudePlugin) return applyPlanResult(base, resolveClaudePluginPlan(claudePlugin));
 
   const manual = fm.manual?.trim();
   if (manual) return { ...base, manual, reason: 'instalação manual' };

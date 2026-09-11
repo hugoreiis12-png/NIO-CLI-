@@ -16,9 +16,9 @@ export interface ClientInfo {
   url: string;
 }
 
-// Só OpenCode por enquanto (decisão de 2026-07-27) — Claude Code/Codex/VS
-// Code/Cowork saem da superfície ativa. O motor de config de cada um
-// continua em client-configs.ts (não apagado), só não é mais oferecido.
+// Só OpenCode por enquanto (decisão de 2026-07-27) — Claude Code/Codex saem da
+// superfície ativa (o config deles foi removido). O VS Code segue via
+// client-configs (`installVSCodeRepo`), o Cowork via Claude Desktop.
 export const CLIENTS: Record<string, ClientInfo> = {
   opencode: {
     id: 'opencode',

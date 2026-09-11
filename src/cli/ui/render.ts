@@ -10,7 +10,6 @@ import {
 import { brand } from "../../brand.js";
 import { type InstallResult } from "../../lib/clients/client-configs.js";
 import { type ProvisionResult } from "../../lib/provision/provision.js";
-import { type HookProvisionResult } from "../../lib/clients/hooks.js";
 import { type ResolvedDependency } from "../../lib/deps/dependencies.js";
 import { HARNESS_RULES_REL } from "../../lib/clients/harness.js";
 
@@ -170,39 +169,6 @@ export function printHarnessResult(result: {
   console.log(`    ${tag(result.rules)} ${HARNESS_RULES_REL} ${c.dim(`(${result.rules})`)}`);
   console.log(`    ${tag(result.agents)} AGENTS.md ${c.dim(`(${result.agents})`)}`);
   console.log(`    ${tag(result.claude)} CLAUDE.md ${c.dim(`(${result.claude})`)}`);
-}
-
-export function printHookResult(result: HookProvisionResult): void {
-  const prefix = result.dryRun ? c.dim("[dry-run] ") : "";
-  if (result.installed.length === 0 && result.prunedScripts.length === 0) {
-    console.log(`    ${prefix}${c.dim("nenhum hook aplicável")}`);
-    return;
-  }
-  for (const h of result.installed) {
-    const on = h.matcher ? `${h.event}/${h.matcher}` : h.event;
-    console.log(
-      `    ${c.green("+")} ${c.bold(h.script)} ${c.dim(`(${on})`)}`,
-    );
-    if (h.description) console.log(`      ${c.dim(h.description)}`);
-  }
-  for (const p of result.prunedScripts) {
-    console.log(`    ${c.red("-")} ${c.dim(p)}`);
-  }
-  const parts = [
-    result.installed.length > 0
-      ? c.green(`${result.installed.length} hooks`)
-      : c.dim("0 hooks"),
-  ];
-  if (result.prunedScripts.length > 0)
-    parts.push(c.red(`${result.prunedScripts.length} removidos`));
-  console.log(
-    `    ${prefix}${parts.join(c.dim(" · "))} ${c.dim(sym.arrow)} ${c.dim(result.settingsPath)}`,
-  );
-  if (!result.dryRun && result.installed.length > 0) {
-    console.log(
-      `    ${c.dim("registrados no settings.json — reinicie o Claude Code pra ativar.")}`,
-    );
-  }
 }
 
 export function depBadge(dep: ResolvedDependency): string {

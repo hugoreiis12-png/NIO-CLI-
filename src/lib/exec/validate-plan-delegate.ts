@@ -1,19 +1,13 @@
-import { spawn } from 'node:child_process';
 import { brand } from '../../brand.js';
 import { readFileSync } from 'node:fs';
 import { planPath, stripFence } from './plan-delegate.js';
-import {
-  PLAN_ENGINE,
-  engineArgs,
-  engineMissingError,
-  resolveEngineBin,
-  type Engine,
-} from './exec-engines.js';
+import { QWEN_ENGINE, qwenComplete } from './qwen-client.js';
 import { HARNESS_RULES_REL } from '../clients/harness.js';
 
 /**
- * Triagem headless: roda o engine pensante sobre o `plan.md` + o repo e devolve um
- * sim/não sobre precisar de spec SDD antes de implementar. Não escreve spec nem código.
+ * Triagem headless: roda o **Qwen vLLM local** (API direta, sem binário externo)
+ * sobre o `plan.md` + o repo e devolve um sim/não sobre precisar de spec SDD antes
+ * de implementar. Não escreve spec nem código.
  */
 
 export interface ValidateResult {
@@ -21,7 +15,7 @@ export interface ValidateResult {
   needsSpec?: boolean;
   reason?: string;
   suggestedSlug?: string;
-  engine: Engine;
+  engine: string;
   error?: string;
 }
 
@@ -72,7 +66,7 @@ export function buildValidatePrompt(plan: string): string {
   ].join('\n');
 }
 
-/** Normaliza a resposta do engine em `{ needsSpec, reason }`; ambíguo → dispara. */
+/** Normaliza a resposta do Qwen em `{ needsSpec, reason }`; ambíguo → dispara. */
 export function parseVerdict(text: string): { needsSpec: boolean; reason: string } {
   const clean = stripFence(text);
   const m = /^[ \t]*VERDICT:[ \t]*(yes|no)\b[ \t]*(.*)$/im.exec(clean);
@@ -87,51 +81,28 @@ export function parseVerdict(text: string): { needsSpec: boolean; reason: string
   return { needsSpec, reason };
 }
 
-function spawnValidate(
-  bin: string,
-  engine: Engine,
-  prompt: string,
-  project: string,
-  echo: boolean,
-): Promise<ValidateResult> {
-  return new Promise((resolve) => {
-    const child = spawn(bin, engineArgs(engine, prompt), {
-      cwd: project,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let out = '';
-    child.stdout.on('data', (d: Buffer) => (out += d.toString()));
-    child.stderr.on('data', (d: Buffer) => echo && process.stderr.write(d.toString()));
-
-    const fail = (error: string): void => resolve({ ok: false, engine, error });
-    child.on('error', (e) => fail(e.message));
-    child.on('close', (code) => {
-      if (code !== 0) return fail(`engine ${engine} falhou (exit ${code})`);
-      try {
-        resolve({ ok: true, engine, ...parseVerdict(out) });
-      } catch (e) {
-        fail((e as Error).message);
-      }
-    });
-  });
+async function apiValidate(prompt: string, project: string, echo: boolean): Promise<ValidateResult> {
+  try {
+    const out = await qwenComplete(prompt);
+    if (echo) process.stderr.write(out);
+    return { ok: true, engine: QWEN_ENGINE, ...parseVerdict(out) };
+  } catch (e) {
+    return { ok: false, engine: QWEN_ENGINE, error: (e as Error).message };
+  }
 }
 
-/** Bloqueante: lê o plano, roda o engine pensante e devolve o veredito. `echo` streama log. */
+/** Bloqueante: lê o plano, roda o Qwen e devolve o veredito. `echo` streama log. */
 export async function runValidatePlan(opts: {
   project: string;
-  engine?: Engine;
   echo?: boolean;
 }): Promise<ValidateResult> {
-  const engine = opts.engine ?? PLAN_ENGINE;
   let plan: string;
   try {
     plan = readPlan(opts.project);
   } catch {
-    return { ok: false, engine, error: planMissingError(opts.project) };
+    return { ok: false, engine: QWEN_ENGINE, error: planMissingError(opts.project) };
   }
-  const bin = resolveEngineBin(engine);
-  if (!bin) return { ok: false, engine, error: engineMissingError(engine) };
-  const result = await spawnValidate(bin, engine, buildValidatePrompt(plan), opts.project, opts.echo === true);
+  const result = await apiValidate(buildValidatePrompt(plan), opts.project, opts.echo === true);
   if (result.ok && result.needsSpec) result.suggestedSlug = suggestSlug(plan);
   return result;
 }

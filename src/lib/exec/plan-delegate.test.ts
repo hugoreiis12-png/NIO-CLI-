@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PLAN_TEMPLATE, buildPlanPrompt, planBase, stripFence } from './plan-delegate.js';
-import { PLAN_ENGINE, DEFAULT_ENGINE, parseEngine } from './exec-engines.js';
 
 const dirs: string[] = [];
 function project(plan?: string): string {
@@ -40,13 +39,4 @@ test('o prompt ancora no harness, proíbe código e carrega o plano atual', () =
 test('cerca de código volta como markdown limpo', () => {
   expect(stripFence('```markdown\n# Plano\n```')).toBe('# Plano');
   expect(stripFence('# Plano\n')).toBe('# Plano');
-});
-
-test('o default do plan é o engine pensante, não o do exec', () => {
-  expect(parseEngine(undefined, PLAN_ENGINE)).toBe(PLAN_ENGINE);
-  expect(PLAN_ENGINE).not.toBe(DEFAULT_ENGINE);
-});
-
-test('engine inválido continua null mesmo com fallback pensante', () => {
-  expect(parseEngine('gemini', PLAN_ENGINE)).toBeNull();
 });

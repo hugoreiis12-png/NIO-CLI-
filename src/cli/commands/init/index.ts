@@ -38,7 +38,6 @@ import {
   resolveProvisionTargets,
   fetchSkillsStep,
   provisionTargetsStep,
-  provisionHooksStep,
 } from "./provision-step.js";
 import { promptSelection } from "../../flows/sections.js";
 import { handoffToOperator } from "./handoff.js";
@@ -193,7 +192,7 @@ async function resolveSessionSetup(
   return { config, session, mcps };
 }
 
-/** Escolha e instalação dos clientes de IA + provisionamento de skills/commands/hooks. */
+/** Escolha e instalação dos clientes de IA + provisionamento de skills/commands. */
 async function installAndProvisionClients(
   config: ProjectConfig,
   profileMcps: McpSpec[],
@@ -210,7 +209,6 @@ async function installAndProvisionClients(
   const report = new SyncReport();
   await fetchSkillsStep(report);
   provisionTargetsStep(provisionTargets, config, skillIdMap(), report);
-  provisionHooksStep(provisionTargets, config, report);
 
   const mode = resolveReportMode({});
   renderReport(report, mode);

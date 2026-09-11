@@ -24,5 +24,5 @@ test('shouldRunAutoPull: roda pra qualquer client com flag diferente de 0/false'
 test('pickProvisionTarget: só OpenCode por enquanto — qualquer client (ou undefined) cai nele', () => {
   expect(pickProvisionTarget(undefined)).toBe(opencodeTarget);
   expect(pickProvisionTarget('opencode')).toBe(opencodeTarget);
-  expect(pickProvisionTarget('codex')).toBe(opencodeTarget);
+  expect(pickProvisionTarget('cowork')).toBe(opencodeTarget);
 });
