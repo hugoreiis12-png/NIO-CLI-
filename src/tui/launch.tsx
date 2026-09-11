@@ -1,7 +1,7 @@
 /**
  * Launch da interface TUI do NIO (Ink + React). Se não houver terminal interativo, ou se o Opencode não estiver no PATH
  */
-import { spawn } from 'node:child_process';
+import { spawnPortable } from '../lib/proc.js';
 import React from 'react';
 import { render } from 'ink';
 import { ensureHeadroomAndWire } from '../app/ai-client.js';
@@ -27,7 +27,7 @@ async function resolveSessionMeta(): Promise<{ name: string; profile: string; id
 function fallbackToOpencodeTui(cwd: string): Promise<number> {
   console.log(c.dim('  (interface NIO indisponível — abrindo a TUI do OpenCode)'));
   return new Promise((resolve) => {
-    const child = spawn('opencode', [], { stdio: 'inherit', cwd });
+    const child = spawnPortable('opencode', [], { stdio: 'inherit', cwd });
     child.on('exit', (code) => resolve(code ?? 0));
     child.on('error', () => resolve(127));
   });

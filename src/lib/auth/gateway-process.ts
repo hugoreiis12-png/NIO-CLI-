@@ -3,7 +3,8 @@
  * `nio login` sobem o gateway sozinhos quando ele está fora do ar, em vez de
  * mandar o usuário abrir outra janela. Deixa o processo rodando (é serviço).
  */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { spawnPortable } from '../proc.js';
 import { existsSync, openSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { GATEWAY_URL } from '../../gateway/config.js';
@@ -97,13 +98,22 @@ export async function ensureGatewayRunning(): Promise<GatewayEnsureResult> {
   // SP-1a (ADR 0012): stdout/stderr do gateway vão pra `~/.nio/gateway.log`, não
   // pro /dev/null — senão a trilha de auth (stderr) some no modo host.
   const logChild = openGatewayLog();
-  const child = spawn(command.cmd, command.args, {
+  // `spawnPortable`: no Windows os bins npm são shims `.cmd`/`.ps1` — `spawn`
+  // cru dá ENOENT (crash com 'error' sem listener). O listener converte falha
+  // de spawn em retorno graceful (o loop de /health só não acha nada).
+  const child = spawnPortable(command.cmd, command.args, {
     detached: true,
     stdio: logChild ? ['ignore', logChild, logChild] : 'ignore',
+  });
+  let spawnFailed = false;
+  child.on('error', (err) => {
+    dlog(`spawn do gateway falhou: ${(err as Error).message}`);
+    spawnFailed = true;
   });
   child.unref();
 
   for (let i = 0; i < 40; i++) {
+    if (spawnFailed) break;
     await sleep(300);
     if (await gatewayHealth()) {
       console.log(

@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { spawn } from 'node:child_process';
+import { spawnPortable } from '../lib/proc.js';
 import { theme, sym } from './theme.js';
 import { permGroupLabel, type PermissionReq } from './state.js';
 import type { PaletteItem } from './palette-source.js';
@@ -45,9 +45,9 @@ export function CommandRunner({
   useEffect(() => {
     if (!confirmed) return;
     const parts = item.name.split(' ');
-    const child = spawn('nio', parts, { cwd });
-    child.stdout.on('data', (d) => setOut((o) => (o + d).slice(-4000)));
-    child.stderr.on('data', (d) => setOut((o) => (o + d).slice(-4000)));
+    const child = spawnPortable('nio', parts, { cwd });
+    child.stdout?.on('data', (d) => setOut((o) => (o + d).slice(-4000)));
+    child.stderr?.on('data', (d) => setOut((o) => (o + d).slice(-4000)));
     child.on('exit', (code) => setDone(code ?? 1));
     child.on('error', (e) => { setOut((o) => o + '\n' + e.message); setDone(127); });
     return () => {
