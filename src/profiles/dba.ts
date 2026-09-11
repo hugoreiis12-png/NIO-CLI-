@@ -1,5 +1,6 @@
 import type { ProfileDefinition } from '../core/environment.js';
 import { postgresMcp } from './mcps.js';
+import { postgresqlClientToolchain } from './toolchains.js';
 
 /**
  * Perfil DBA — administração de banco. Primeira definição de ponta a ponta
@@ -15,18 +16,7 @@ import { postgresMcp } from './mcps.js';
 export const dbaProfile: ProfileDefinition = {
   profile: 'dba',
   languages: ['sql'],
-  toolchains: [
-    {
-      id: 'postgresql-client',
-      detect: [
-        '/usr/bin/psql',
-        '/usr/local/bin/psql',
-        '/opt/homebrew/bin/psql',
-        'C:/Program Files/PostgreSQL/**/bin/psql.exe',
-      ],
-      // Sem `install` universal (varia muito por SO) — detectável, orienta se faltar.
-    },
-  ],
+  toolchains: [postgresqlClientToolchain],
   frameworks: [],
   mcps: [postgresMcp],
   envVars: { PGCLIENTENCODING: 'UTF8' },

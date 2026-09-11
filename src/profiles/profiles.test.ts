@@ -39,3 +39,15 @@ test('ProfileCatalog.get: perfil inexistente lança erro claro', () => {
   const catalog = createProfileCatalog();
   expect(() => catalog.get('inexistente' as Profile)).toThrow(/ainda não tem ambiente definido/);
 });
+
+test('bi materializa toolchains locais (psql + Power BI Desktop)', () => {
+  const catalog = createProfileCatalog();
+  const ids = catalog.get('bi').toolchains.map((t) => t.id);
+  expect(ids).toEqual(['postgresql-client', 'powerbi-desktop']);
+});
+
+test('dba reusa o postgresql-client centralizado', () => {
+  const catalog = createProfileCatalog();
+  const ids = catalog.get('dba').toolchains.map((t) => t.id);
+  expect(ids).toContain('postgresql-client');
+});
