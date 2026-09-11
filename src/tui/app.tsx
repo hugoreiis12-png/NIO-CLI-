@@ -72,6 +72,10 @@ function useTerminalSize(): { rows: number; columns: number } {
 
 export function App({ handle, program, cwd, session, splashMs = 1200, model }: AppProps): React.ReactElement {
   const { rows, columns } = useTerminalSize();
+  // Rótulos do modelo (só exibição) — refletem o modelo REAL passado pela TUI;
+  // fallback só quando nenhum `model` foi injetado (testes/probe).
+  const engineLabel = model ? `${model.providerID}/${model.modelID}` : 'opencode/big-pickle';
+  const modelLabel = model ? model.modelID : 'big-pickle';
   const [chat, setChat] = useState<ChatState>(emptyChat);
   const [overlay, setOverlay] = useState<Overlay>({ kind: 'none' });
   const [draft, setDraft] = useState(''); // rascunho do input — no App pra sobreviver a overlays (Sprint 6)
@@ -303,7 +307,7 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     return (
       <Box flexDirection="column" alignItems="center" paddingY={1}>
         <Text>{renderMatrixLogo({ width: Math.min(70, columns), height: 16 })}</Text>
-        <Text color={theme.accent}>operador NIO · opencode/big-pickle</Text>
+        <Text color={theme.accent}>operador NIO · {engineLabel}</Text>
       </Box>
     );
   }
@@ -377,7 +381,7 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
       ) : null}
 
       <Footer
-        model="big-pickle"
+        model={modelLabel}
         cwd={cwd}
         session={session}
         mode={mode}

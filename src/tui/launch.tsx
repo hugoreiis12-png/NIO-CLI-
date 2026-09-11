@@ -5,6 +5,7 @@ import { spawnPortable } from '../lib/proc.js';
 import React from 'react';
 import { render } from 'ink';
 import { ensureHeadroomAndWire } from '../app/ai-client.js';
+import { NIO_AI_PROVIDER, NIO_AI_MODEL_ID } from '../lib/clients/client-configs.js';
 import { isBinaryInstalled, opencodeVersionSkew } from '../lib/clients/client-install.js';
 import { loadSession } from '../lib/auth/session-store.js';
 import { createSessionRepository } from '../adapters/pg/session-repository.js';
@@ -62,7 +63,11 @@ export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
 
   const program = buildProgram();
   const session = await resolveSessionMeta();
-  const app = render(<App handle={handle} program={program} cwd={cwd} session={session} />, {
+  // Modelo EXPLÍCITO: sem isto o `session.prompt` ia com `model: undefined` e o
+  // opencode caía no default dele (`opencode/big-pickle`, Zen/Console, rate-limitado)
+  // em vez do provider dedicado `nio-local` gravado no opencode.json.
+  const model = { providerID: NIO_AI_PROVIDER, modelID: NIO_AI_MODEL_ID };
+  const app = render(<App handle={handle} program={program} cwd={cwd} session={session} model={model} />, {
     patchConsole: false, // nada de console fora do controle do Ink
     exitOnCtrlC: true,
   });

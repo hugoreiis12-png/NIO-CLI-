@@ -216,6 +216,19 @@ export const NIO_AI_OUTPUT = envNum('AI_OUTPUT', 2048);
 export const NIO_AI_MAX_INPUT = envNum('AI_MAX_INPUT', 32000);
 
 /**
+ * Janela de contexto **efetiva** declarada ao opencode (`limit.context`). O opencode
+ * orça o prompt por esse valor (reserva `output`, enche o input com o resto), então
+ * declarar os 65536 crus fazia a TUI empacotar ~63k de input e estourar a janela.
+ * Rebaixamos pra `NIO_AI_MAX_INPUT + NIO_AI_OUTPUT` — assim o teto de input vale
+ * também no caminho da TUI (não só no headless), sem passar do contexto real do
+ * modelo. `NIO_AI_MAX_INPUT=0` (trava off) ou `NIO_AI_CONTEXT=0` mantêm o cru.
+ */
+export const NIO_AI_EFFECTIVE_CONTEXT =
+  NIO_AI_CONTEXT > 0 && NIO_AI_MAX_INPUT > 0
+    ? Math.min(NIO_AI_CONTEXT, NIO_AI_MAX_INPUT + NIO_AI_OUTPUT)
+    : NIO_AI_CONTEXT;
+
+/**
  * Compaction automática do OpenCode: com a janela apertada (64K num backend local +
  * schemas de MCP pesados), deixa o motor compactar/podar o histórico sozinho,
  * reservando `reserved` tokens pro resumo. Só semeado se ausente (não sobrescreve).
@@ -384,7 +397,7 @@ export function planOpencodeUpdate(
   // precisa existir com o modelo+limite declarados; sem baseURL, o opencode não deve
   // ter baseURL de hijack legado (fica no default big-pickle).
   const providerOk = baseURL
-    ? nioAiProviderOk(existing, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_CONTEXT, NIO_AI_OUTPUT)
+    ? nioAiProviderOk(existing, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_EFFECTIVE_CONTEXT, NIO_AI_OUTPUT)
     : !opencodeHasBaseURL(existing);
   const alreadyConfigured =
     nioOk &&
@@ -414,7 +427,7 @@ export function planOpencodeUpdate(
   if (!existing.compaction) next.compaction = DEFAULT_OPENCODE_COMPACTION; // janela apertada — nunca sobrescreve
   if (!existing.watcher) next.watcher = DEFAULT_OPENCODE_WATCHER; // nunca sobrescreve
   next = clearOpencodeProviderBaseURL(next); // limpa qualquer hijack legado no provider `opencode`
-  if (baseURL) next = planNioAiProvider(next, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_CONTEXT, NIO_AI_OUTPUT);
+  if (baseURL) next = planNioAiProvider(next, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_EFFECTIVE_CONTEXT, NIO_AI_OUTPUT);
   return { alreadyConfigured, next };
 }
 

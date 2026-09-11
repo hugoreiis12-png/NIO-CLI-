@@ -11,6 +11,7 @@ import {
   NIO_AI_BASE_URL,
   NIO_AI_PROVIDER,
   NIO_AI_MODEL_ID,
+  NIO_AI_EFFECTIVE_CONTEXT,
 } from './client-configs.js';
 import type { McpSpec } from '../../core/environment.js';
 
@@ -52,7 +53,8 @@ test('planOpencodeUpdate: com baseURL → semeia o provider dedicado, NÃO toca 
   const first = planOpencodeUpdate({}, NIO_ENTRY, [], url);
   const p = first.next.provider as Record<string, any>;
   expect(p[NIO_AI_PROVIDER].options.baseURL).toBe(url);
-  expect(p[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(65536);
+  // Contexto EFETIVO (rebaixado p/ caber NIO_AI_MAX_INPUT), não o cru do modelo.
+  expect(p[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(NIO_AI_EFFECTIVE_CONTEXT);
   expect(p.opencode).toBeUndefined(); // opencode fica no default, sem hijack
 
   const seeded = first.next;
@@ -92,7 +94,7 @@ test('installOpencodeGlobal: aponta o provider pro backend de IA (NIO_AI_BASE_UR
   installOpencodeGlobal([], p); // sem baseURL explícito → herda o default (NIO_AI_BASE_URL)
   const cfg = JSON.parse(readFileSync(p, 'utf8'));
   expect(cfg.provider[NIO_AI_PROVIDER].options.baseURL).toBe(NIO_AI_BASE_URL);
-  expect(cfg.provider[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(65536);
+  expect(cfg.provider[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(NIO_AI_EFFECTIVE_CONTEXT);
   expect(cfg.model).toBe(NIO_OPERATOR_MODEL);
   expect(cfg.provider.opencode).toBeUndefined(); // opencode fica no default (big-pickle)
 
@@ -130,4 +132,11 @@ test('upsertOpencodeMcp: cria o arquivo se não existe', () => {
   const r = upsertOpencodeMcp({ id: 'docker', url: 'http://x/mcp' }, { path: p });
   expect(['created', 'updated']).toContain(r.status);
   rmSync(d, { recursive: true, force: true });
+});
+
+test('NIO_AI_EFFECTIVE_CONTEXT: cabe input + output, sem passar do contexto real', () => {
+  // Com os defaults (max_input 32000, output 2048), a janela declarada rebaixa
+  // pra 34048 — o opencode passa a orçar o input em ~32000, não nos 65536 crus.
+  expect(NIO_AI_EFFECTIVE_CONTEXT).toBeLessThanOrEqual(65536);
+  expect(NIO_AI_EFFECTIVE_CONTEXT).toBeGreaterThan(0);
 });
