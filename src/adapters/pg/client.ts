@@ -7,7 +7,9 @@
  *
  * Config exclusivamente por ambiente:
  *  - `NIO_DATABASE_URL`      (obrigatória) — `postgres://user:pass@host:5432/nio_cli`
- *  - `NIO_DATABASE_SSL`      (opcional)    — `true`/`1` liga TLS **com verificação de cert**
+ *  - `NIO_DATABASE_SSL`      (opcional)    — força TLS on (`true`/`1`) ou off (`false`/`0`).
+ *                                            Ausente → TLS **ligado por padrão**, exceto banco
+ *                                            em loopback (dev local). Ligado = verifica o cert.
  *  - `NIO_DATABASE_CA`       (opcional)    — path pra um PEM de CA privada (provedores gerenciados)
  *  - `NIO_DATABASE_SSL_INSECURE` (opcional)— `1` desliga a verificação de cert (MITM!) — só último recurso
  *
@@ -40,18 +42,43 @@ function envFlag(name: string): boolean {
   return v === 'true' || v === '1';
 }
 
+/** Flag env tri-estado: `true` (true/1/yes/on), `false` (false/0/no/off), ou `undefined` se ausente/ilegível. */
+function envTriState(name: string): boolean | undefined {
+  const v = process.env[name]?.trim().toLowerCase();
+  if (!v) return undefined;
+  if (v === 'true' || v === '1' || v === 'yes' || v === 'on') return true;
+  if (v === 'false' || v === '0' || v === 'no' || v === 'off') return false;
+  return undefined;
+}
+
+/** Hosts de banco em loopback — TLS não é o default aí (dev local, sem cert). */
+const LOOPBACK_DB_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/** `true` se a URL aponta pra um Postgres em loopback. URL ilegível → `false` (prefere TLS). */
+function isLoopbackDbHost(url: string): boolean {
+  try {
+    return LOOPBACK_DB_HOSTS.has(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 /** Opção `ssl` do `pg.Pool` a partir do ambiente. Pura o suficiente pra testar. */
 export type PgSslOption = boolean | { rejectUnauthorized: boolean; ca?: string };
 
 /**
- * TLS só quando explicitamente ligado (`NIO_DATABASE_SSL`). Quando ligado, o
- * certificado do servidor **é verificado** (`rejectUnauthorized: true`) — a versão
- * antiga aceitava qualquer cert, o que permitia MITM justamente no cenário
- * gerenciado/nuvem. `NIO_DATABASE_CA` aponta um PEM de CA privada; só
- * `NIO_DATABASE_SSL_INSECURE=1` desliga a verificação, e isso grita no log.
+ * TLS **ligado por padrão** — só fica off em banco loopback (dev local) ou com
+ * opt-out explícito (`NIO_DATABASE_SSL=false`). A versão antiga exigia opt-in, o
+ * que deixava a senha do banco e todo o tráfego em texto claro por descuido de
+ * config no cenário remoto/nuvem (MITM). Quando ligado, o certificado do servidor
+ * **é verificado** (`rejectUnauthorized: true`). `NIO_DATABASE_CA` aponta um PEM
+ * de CA privada; só `NIO_DATABASE_SSL_INSECURE=1` desliga a verificação, e isso
+ * grita no log.
  */
-export function readSslOption(): PgSslOption | undefined {
-  if (!envFlag('NIO_DATABASE_SSL')) return undefined;
+export function readSslOption(url: string = process.env.NIO_DATABASE_URL?.trim() ?? ''): PgSslOption | undefined {
+  const explicit = envTriState('NIO_DATABASE_SSL');
+  const enabled = explicit ?? !isLoopbackDbHost(url);
+  if (!enabled) return undefined;
 
   if (envFlag('NIO_DATABASE_SSL_INSECURE')) {
     console.error(
@@ -89,9 +116,10 @@ export function getPool(): Pool {
   // devolvem o prompt 30s depois de terminar. Ver `closePoolIfOpen`.
   (globalThis as Record<string, unknown>).__nioPgPoolOpen = true;
 
+  const connectionString = readDatabaseUrl();
   pool = new Pool({
-    connectionString: readDatabaseUrl(),
-    ssl: readSslOption(),
+    connectionString,
+    ssl: readSslOption(connectionString),
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,

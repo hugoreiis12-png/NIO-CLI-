@@ -43,15 +43,30 @@ test('getPool é singleton com uma URL válida', () => {
 
 // --- H-2: TLS do Postgres com verificação de certificado ---
 
-test('readSslOption: sem NIO_DATABASE_SSL → undefined (sem TLS)', () => {
+const REMOTE_URL = 'postgres://user:pass@db.example.com:5432/nio_cli';
+const LOOPBACK_URL = 'postgres://user:pass@localhost:5432/nio_cli';
+
+test('readSslOption: default (sem flag) → TLS ligado com verificação em host remoto', () => {
   for (const k of SSL_KEYS) delete process.env[k];
-  expect(readSslOption()).toBeUndefined();
+  expect(readSslOption(REMOTE_URL)).toEqual({ rejectUnauthorized: true });
 });
 
-test('readSslOption: NIO_DATABASE_SSL=true → verifica o cert (rejectUnauthorized: true)', () => {
+test('readSslOption: default (sem flag) → sem TLS em banco loopback (dev local)', () => {
+  for (const k of SSL_KEYS) delete process.env[k];
+  expect(readSslOption(LOOPBACK_URL)).toBeUndefined();
+  expect(readSslOption('postgres://user:pass@127.0.0.1:5432/nio_cli')).toBeUndefined();
+});
+
+test('readSslOption: NIO_DATABASE_SSL=false → opt-out explícito mesmo em host remoto', () => {
+  for (const k of SSL_KEYS) delete process.env[k];
+  process.env.NIO_DATABASE_SSL = 'false';
+  expect(readSslOption(REMOTE_URL)).toBeUndefined();
+});
+
+test('readSslOption: NIO_DATABASE_SSL=true → força TLS mesmo em loopback', () => {
   for (const k of SSL_KEYS) delete process.env[k];
   process.env.NIO_DATABASE_SSL = 'true';
-  expect(readSslOption()).toEqual({ rejectUnauthorized: true });
+  expect(readSslOption(LOOPBACK_URL)).toEqual({ rejectUnauthorized: true });
 });
 
 test('readSslOption: NIO_DATABASE_CA → carrega o PEM e mantém a verificação', () => {
@@ -61,7 +76,7 @@ test('readSslOption: NIO_DATABASE_CA → carrega o PEM e mantém a verificação
   writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\n');
   process.env.NIO_DATABASE_SSL = '1';
   process.env.NIO_DATABASE_CA = caPath;
-  expect(readSslOption()).toEqual({
+  expect(readSslOption(REMOTE_URL)).toEqual({
     rejectUnauthorized: true,
     ca: '-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\n',
   });
@@ -71,14 +86,14 @@ test('readSslOption: NIO_DATABASE_CA ilegível → lança', () => {
   for (const k of SSL_KEYS) delete process.env[k];
   process.env.NIO_DATABASE_SSL = 'true';
   process.env.NIO_DATABASE_CA = join(tmpdir(), 'nao-existe-' + Date.now() + '.pem');
-  expect(() => readSslOption()).toThrow(/NIO_DATABASE_CA/);
+  expect(() => readSslOption(REMOTE_URL)).toThrow(/NIO_DATABASE_CA/);
 });
 
 test('readSslOption: NIO_DATABASE_SSL_INSECURE=1 → desliga a verificação (opt-in explícito)', () => {
   for (const k of SSL_KEYS) delete process.env[k];
   process.env.NIO_DATABASE_SSL = 'true';
   process.env.NIO_DATABASE_SSL_INSECURE = '1';
-  expect(readSslOption()).toEqual({ rejectUnauthorized: false });
+  expect(readSslOption(REMOTE_URL)).toEqual({ rejectUnauthorized: false });
 });
 
 test('isUuid: aceita UUID (qualquer caixa), rejeita o resto', () => {
