@@ -19,6 +19,49 @@ networks:
 volumes:
   nio_headroom_cache: { name: nio_headroom_cache }
 
+# Config declarativa do Kong embutida INLINE (não bind-mount de ./kong.yml). No
+# Portainer (stack Git) o mount relativo virava diretório vazio → Kong caía em loop
+# ("/kong/kong.yml: is a directory"). `content` embute o arquivo no compose e o
+# Docker o materializa — independe de path/clone. Fonte-espelho: docker/kong.yml.
+configs:
+  kong_declarative:
+    content: |
+      _format_version: "3.0"
+      services:
+        - name: nio-gateway
+          url: http://nio-gateway:3000
+          routes:
+            - name: nio-gateway-register
+              paths: [ /register ]
+              strip_path: false
+              plugins:
+                - name: rate-limiting
+                  config: { minute: 5, policy: local }
+            - name: nio-gateway-login
+              paths: [ /login ]
+              strip_path: false
+              plugins:
+                - name: rate-limiting
+                  config: { minute: 20, policy: local }
+            - name: nio-gateway-logout
+              paths: [ /logout ]
+              strip_path: false
+            - name: nio-gateway-verify-2fa
+              paths: [ /verify-2fa ]
+              strip_path: false
+              plugins:
+                - name: rate-limiting
+                  config: { minute: 10, policy: local }
+            - name: nio-gateway-security
+              paths: [ /security ]
+              strip_path: false
+              plugins:
+                - name: rate-limiting
+                  config: { minute: 10, policy: local }
+            - name: nio-gateway-health
+              paths: [ /health ]
+              strip_path: false
+
 services:
   nio-gateway:
     image: ghcr.io/hugoreiis12-png/nio-gateway:v0.10.1  # bumped by .github/workflows/image.yml
@@ -81,10 +124,11 @@ services:
       # Admin API desligada (auditoria M-7) — config é declarativa, nada chama o
       # admin em runtime. Antes só era loopback; agora nem isso.
       KONG_ADMIN_LISTEN: "off"
-    # Path relativo à pasta do compose (docker/) → docker/kong.yml. Se o container
-    # subir com "/kong/kong.yml: is a directory", é diretório-fantasma de um deploy
-    # antigo: recrie a stack (clone limpo), não mude este path.
-    volumes: [ "./kong.yml:/kong/kong.yml:ro" ]
+    # Config declarativa vem do bloco `configs` inline (topo do arquivo) — sem
+    # bind-mount de arquivo do host (que a Portainer transformava em diretório).
+    configs:
+      - source: kong_declarative
+        target: /kong/kong.yml
     ports:
       # INGRESSO na LAN — porta do host configurável (NIO_KONG_PROXY_PORT), pois :8000
       # pode estar ocupada no host. Default 8000; neste host use 8080.
