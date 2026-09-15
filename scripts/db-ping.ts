@@ -5,7 +5,7 @@
  * Em caso de falha, imprime a causa real (código + mensagem do pg) para
  * diagnóstico — diferente do `ping()` do adapter, que nunca lança.
  */
-import { getPool, closePool } from '../src/adapters/pg/client.js';
+import { getPool, closePool, classifyDbError } from '../src/adapters/pg/client.js';
 
 const url = process.env.NIO_DATABASE_URL;
 
@@ -34,12 +34,21 @@ try {
 } catch (err) {
   const e = err as { code?: string; message?: string };
   console.error(`✗ Falha ao conectar. [${e.code ?? 'sem código'}] ${e.message ?? err}`);
-  console.error(
-    '  Dicas: ECONNREFUSED = Postgres não está rodando / host:porta errados;\n' +
-      '  "password authentication failed" = usuário/senha errados;\n' +
-      '  "database ... does not exist" = nome do banco errado;\n' +
-      '  erro de SSL/TLS = adicione NIO_DATABASE_SSL=true no .env.',
-  );
+  const kind = classifyDbError(e.code, e.message);
+  const tip =
+    kind === 'tls-self-signed'
+      ? '  cert self-signed/CA privada: NIO_DATABASE_CA=/caminho/ca.crt (ou NIO_DATABASE_SSL_INSECURE=1 temporário,\n' +
+        '  ou NIO_DATABASE_SSL=false se a LAN permite sem TLS).'
+      : kind === 'tls-expired'
+        ? '  cert vencido: renove no servidor (scripts/db-tls-setup.sh server <host>).'
+        : kind === 'tls-server-off'
+          ? '  servidor sem TLS: NIO_DATABASE_SSL=false no .env.'
+          : kind === 'tls-required'
+            ? '  servidor exige TLS (hostssl): NIO_DATABASE_SSL=true + NIO_DATABASE_CA (Sem TLS não conecta aqui).'
+            : '  Dicas: ECONNREFUSED = Postgres não está rodando / host:porta errados;\n' +
+              '  "password authentication failed" = usuário/senha errados;\n' +
+              '  "database ... does not exist" = nome do banco errado.';
+  console.error(tip);
   await closePool();
   process.exit(1);
 }

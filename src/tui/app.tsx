@@ -39,6 +39,7 @@ import {
   fetchPendingPermissions,
   type OpencodeHandle,
 } from './opencode.js';
+import { NIO_AI_NO_THINK, withNoThink } from '../lib/clients/client-configs.js';
 
 type Overlay =
   | { kind: 'none' }
@@ -205,8 +206,9 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     if (!sessionId.current) return;
     setDraft('');
     setChat((prev) => pushUserMessage(prev, text));
+    const wire = NIO_AI_NO_THINK ? withNoThink(text) : text;
     handle.client.session
-      .prompt({ path: { id: sessionId.current }, body: { model, agent: mode, parts: [{ type: 'text', text }] } })
+      .prompt({ path: { id: sessionId.current }, body: { model, agent: mode, parts: [{ type: 'text', text: wire }] } })
       .catch((err) => tlog('prompt falhou', (err as Error).message));
   };
 

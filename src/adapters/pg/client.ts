@@ -212,9 +212,42 @@ export function isTlsCertError(code?: string, message?: string): boolean {
   return /self[- ]signed certificate|unable to verify|certificate/i.test(message ?? '');
 }
 
+/**
+ * Causa raiz da falha de conexão, para retomada guiada (wizard `nio config
+ * setup`, `db:ping`). `unknown` = mantém o comportamento legado (hint genérico
+ * de rede) — fallback seguro quando nada específico casa.
+ */
+export type DbFailKind =
+  | 'tls-self-signed'
+  | 'tls-expired'
+  | 'tls-server-off'
+  | 'tls-required'
+  | 'unknown';
+
+/** Servidor sem SSL e o cliente forçou TLS (`NIO_DATABASE_SSL=true` à toa). */
+const SERVER_NO_SSL_RE = /does not support SSL|SSL (is not enabled|connections are not)/i;
+
+/** Servidor exige TLS (`hostssl` no pg_hba) e o cliente foi sem TLS. */
+const SERVER_REQUIRES_SSL_RE = /SSL off/i;
+
+/**
+ * Classifica o erro do pg. Pura (testável), não lança. `isTlsCertError`
+ * continua existindo (compat) — o `kind` só refina qual ação sugerir.
+ */
+export function classifyDbError(code?: string, message?: string): DbFailKind {
+  const msg = message ?? '';
+  if (code === 'CERT_HAS_EXPIRED' || /certificate has expired/i.test(msg)) return 'tls-expired';
+  if (SERVER_NO_SSL_RE.test(msg)) return 'tls-server-off';
+  if (code === '28000' && SERVER_REQUIRES_SSL_RE.test(msg)) return 'tls-required';
+  if (isTlsCertError(code, msg)) return 'tls-self-signed';
+  return 'unknown';
+}
+
 export interface PingResult {
   ok: boolean;
   tlsCertError?: boolean;
+  /** Refinamento de `tlsCertError` — prefira-o para hints/retomada. */
+  tlsKind?: DbFailKind;
   code?: string;
   message?: string;
 }
@@ -229,7 +262,13 @@ export async function pingDetailed(): Promise<PingResult> {
     return { ok: res.rows[0]?.ok === 1 };
   } catch (err) {
     const e = err as { code?: string; message?: string };
-    return { ok: false, tlsCertError: isTlsCertError(e.code, e.message), code: e.code, message: e.message };
+    return {
+      ok: false,
+      tlsCertError: isTlsCertError(e.code, e.message),
+      tlsKind: classifyDbError(e.code, e.message),
+      code: e.code,
+      message: e.message,
+    };
   }
 }
 

@@ -46,6 +46,9 @@ configs:
             - name: nio-gateway-logout
               paths: [ /logout ]
               strip_path: false
+            - name: nio-gateway-logout-all
+              paths: [ /logout-all ]
+              strip_path: false
             - name: nio-gateway-verify-2fa
               paths: [ /verify-2fa ]
               strip_path: false

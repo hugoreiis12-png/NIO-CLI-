@@ -29,6 +29,10 @@ services:
         paths:
           - /logout
         strip_path: false
+      - name: nio-gateway-logout-all
+        paths:
+          - /logout-all
+        strip_path: false
       # /verify-2fa e /security/* — OTP + gerência do 2º fator (spec 0004).
       # cada SMS custa; brute-force de OTP de 6 dígitos → limite mais baixo.
       - name: nio-gateway-verify-2fa

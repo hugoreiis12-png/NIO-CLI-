@@ -1,3 +1,4 @@
+// Versão da CLI e do SDK, para nio-version 
 import { test, expect } from 'bun:test';
 import { VERSION, OPENCODE_SDK_VERSION, semverGt } from './version.js';
 

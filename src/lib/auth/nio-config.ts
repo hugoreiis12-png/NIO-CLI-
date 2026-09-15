@@ -6,6 +6,7 @@
 import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { brand, homePath } from '../../brand.js';
+import { shutdown } from '../shutdown.js';
 import { NIO_AI_BASE_URL, NIO_AI_MODEL_ID } from '../clients/client-configs.js';
 import { closePool, pingDetailed, type PingResult } from '../../adapters/pg/client.js';
 import { generateJwtSecret, jwtSecretWeakness } from '../../gateway/config.js';
@@ -25,7 +26,37 @@ export interface ConfigProblem {
 
 type SslMode = 'off' | 'verify' | 'insecure';
 const TLS_CERT_HINT = 'TLS rejeitou o certificado (self-signed?). Escolha "Sem TLS" na LAN, ou informe uma CA em NIO_DATABASE_CA.';
+const TLS_EXPIRED_HINT = 'Certificado do Postgres vencido — renove no servidor (scripts/db-tls-setup.sh server <host>) e rode de novo.';
+const TLS_SERVER_OFF_HINT = 'Servidor sem TLS e cliente forçando TLS — escolha "Sem TLS" (NIO_DATABASE_SSL=false).';
+const TLS_REQUIRED_HINT = 'Servidor exige TLS (hostssl) — "Sem TLS" não conecta aqui. Use "TLS com verificação + CA" ou "insecure" temporário.';
 const CONN_HINT = 'Confira o endereço/credencial e a rede/VPN, e rode de novo.';
+
+export interface PingFailureHelp {
+  hint: string;
+  /** Erro que o wizard resolve → `ensureConfig` reabre o setup em TTY. */
+  fixable: boolean;
+}
+
+/**
+ * Hint + retomada a partir do `PingResult`. Pura (testável). `unknown` sem o
+ * sinal legado cai no hint genérico — fallback idêntico ao comportamento antigo.
+ */
+export function describePingFailure(res: PingResult): PingFailureHelp {
+  switch (res.tlsKind) {
+    case 'tls-self-signed':
+      return { fixable: true, hint: TLS_CERT_HINT };
+    case 'tls-expired':
+      return { fixable: true, hint: TLS_EXPIRED_HINT };
+    case 'tls-server-off':
+      return { fixable: true, hint: TLS_SERVER_OFF_HINT };
+    case 'tls-required':
+      return { fixable: true, hint: TLS_REQUIRED_HINT };
+    default:
+      return res.tlsCertError
+        ? { fixable: true, hint: TLS_CERT_HINT }
+        : { fixable: false, hint: CONN_HINT };
+  }
+}
 
 /** Parse simples de `KEY=value` (ignora `#` comentário e linha vazia). */
 export function parseEnvFile(text: string): Record<string, string> {
@@ -109,13 +140,12 @@ export async function checkConfig(): Promise<ConfigProblem[]> {
     const res = await pingDetailed();
     dlog('config: SELECT 1 =>', res.ok ? 'ok' : `FALHOU ${res.code ?? res.message ?? ''}`);
     if (!res.ok) {
+      const help = describePingFailure(res);
       problems.push({
         key: 'NIO_DATABASE_URL',
         issue: 'unreachable',
-        fixable: res.tlsCertError,
-        hint: res.tlsCertError
-          ? 'TLS rejeitou o cert (self-signed?): NIO_DATABASE_SSL=false na LAN, ou NIO_DATABASE_CA=<pem>'
-          : 'não conectou — confira host/porta/credencial e a rede/VPN',
+        fixable: help.fixable,
+        hint: help.hint,
       });
     }
   }
@@ -250,7 +280,7 @@ export async function runConfigWizard(): Promise<boolean> {
   const res = await pingDetailed();
   if (!res.ok) {
     console.log(c.red(sym.err));
-    console.error(`  ${c.red('Não conectei.')} ${res.tlsCertError ? TLS_CERT_HINT : CONN_HINT}`);
+    console.error(`  ${c.red('Não conectei.')} ${describePingFailure(res).hint}`);
     return false;
   }
   console.log(c.green(sym.ok));
@@ -296,5 +326,6 @@ export async function ensureConfig(opts: { interactive: boolean }): Promise<void
   }
 
   console.error(problemsBox(problems));
+  await shutdown(1); // fecha o pool do checkConfig antes de sair (crash libuv no Windows)
   process.exit(1);
 }

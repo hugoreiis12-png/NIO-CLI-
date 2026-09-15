@@ -15,7 +15,8 @@ import {
 } from "../../lib/auth/gateway-client.js";
 import { loadSession, saveSession, clearSession } from "../../lib/auth/session-store.js";
 import { ensureConfig } from "../../lib/auth/nio-config.js";
-import { ensureGatewayRunning } from "../../lib/auth/gateway-process.js";
+import { checkGatewayVersion, ensureGatewayRunning } from "../../lib/auth/gateway-process.js";
+import { shutdown } from "../../lib/shutdown.js";
 import { continueChain } from "../flows/onboarding.js";
 import { box, cmd } from "../../lib/colors.js";
 import { authCopy } from "../copy.js";
@@ -60,25 +61,36 @@ async function resolveSecondFactor(
 }
 
 
-/** Gateway no ar antes do login: sobe sozinho, ou orienta e sai. */
-async function requireGateway(): Promise<void> {
+/** Gateway no ar e compatível antes do login: sobe sozinho, ou orienta e reprova. */
+async function requireGateway(): Promise<boolean> {
   const result = await ensureGatewayRunning();
-  if (result.ok) return;
-  console.error(
-    box(
-      `${c.yellow(sym.warn)} ${c.bold("O nio-gateway não está no ar e não consegui subir sozinho.")}\n` +
-        `${c.dim("abra noutra janela:")} ${cmd("nio-gateway")}\n` +
-        `${c.dim("e tente de novo.")}`,
-      { borderColor: "yellow", title: "Gateway necessário" },
-    ),
-  );
-  process.exit(1);
+  if (!result.ok) {
+    console.error(
+      box(
+        `${c.yellow(sym.warn)} ${c.bold("O nio-gateway não está no ar e não consegui subir sozinho.")}\n` +
+          `${c.dim("abra noutra janela:")} ${cmd("nio-gateway")}\n` +
+          `${c.dim("e tente de novo.")}`,
+        { borderColor: "yellow", title: "Gateway necessário" },
+      ),
+    );
+    return false;
+  }
+  const skew = await checkGatewayVersion();
+  if (skew.status === "block") {
+    console.error(box(`${c.red(sym.err)} ${c.bold("Gateway incompatível.")}\n\n${c.dim(skew.detail)}`, { borderColor: "red", title: "atualize o gateway" }));
+    return false;
+  }
+  if (skew.status === "warn") console.log(`  ${c.yellow(sym.warn)} ${skew.detail}`);
+  return true;
 }
 
 /** Fluxo completo de login: config → gateway → prompt nome/senha → gateway (+2FA) → salva a sessão. */
-export async function runLogin(): Promise<void> {
+export async function runLogin(): Promise<boolean> {
   await ensureConfig({ interactive: true });
-  await requireGateway();
+  if (!(await requireGateway())) {
+    await shutdown(1);
+    return false;
+  }
   const name = await input({ message: authCopy.login.namePrompt });
   const pass = await password({ message: authCopy.login.passwordPrompt, mask: "*" });
 
@@ -88,7 +100,8 @@ export async function runLogin(): Promise<void> {
     const result = await gatewayLogin(name.trim(), pass);
     if (!result) {
       spinner.fail(authCopy.login.invalidCredentials);
-      process.exit(1);
+      await shutdown(1);
+      return false;
     }
     spinner.stop();
 
@@ -101,13 +114,15 @@ export async function runLogin(): Promise<void> {
       });
       if (!s) {
         console.error(`${c.red(sym.err)} 2º fator não concluído.`);
-        process.exit(1);
+        await shutdown(1);
+        return false;
       }
       session = s;
     }
   } catch (err) {
     spinner.fail(`Falha ao autenticar: ${(err as Error).message}`);
-    process.exit(1);
+    await shutdown(1);
+    return false;
   }
 
   await saveSession({
@@ -122,12 +137,16 @@ export async function runLogin(): Promise<void> {
   console.log("[ok] Autenticado!");
   console.log(`Usuário: ${session.name}`);
   console.log(`ID:      ${session.userId}`);
+  return true;
 }
 
 /** Cria o usuário via `nio-gateway` (`POST /register`, argon2id) e cai no login. */
-export async function runRegister(): Promise<void> {
+export async function runRegister(): Promise<boolean> {
   await ensureConfig({ interactive: true });
-  await requireGateway();
+  if (!(await requireGateway())) {
+    await shutdown(1);
+    return false;
+  }
   const name = await input({
     message: authCopy.register.namePrompt,
     validate: (v) => v.trim().length > 0 || authCopy.register.nameInvalid,
@@ -155,11 +174,12 @@ export async function runRegister(): Promise<void> {
     }
   } catch (err) {
     spinner.fail(`Falha ao criar usuário: ${(err as Error).message}`);
-    process.exit(1);
+    await shutdown(1);
+    return false;
   }
 
   console.log(c.dim("\nVamos entrar:"));
-  await runLogin();
+  return runLogin();
 }
 
 function registerRegisterCommand(program: Command): void {
@@ -167,7 +187,7 @@ function registerRegisterCommand(program: Command): void {
     .command("register")
     .description("Cria um novo usuário via nio-gateway e já entra (login)")
     .action(async () => {
-      await runRegister();
+      if (!(await runRegister())) return;
       await continueChain({ from: "command" });
     });
 }
@@ -177,7 +197,7 @@ function registerLoginCommand(program: Command): void {
     .command("login")
     .description("Autentica via nio-gateway (túnel HTTP) e salva a sessão localmente (JWT)")
     .action(async () => {
-      await runLogin();
+      if (!(await runLogin())) return;
       await continueChain({ from: "command" });
     });
 }

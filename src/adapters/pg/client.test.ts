@@ -2,7 +2,7 @@ import { test, expect, afterEach } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getPool, ping, closePool, isUuid, readSslOption, isTlsCertError } from './client.js';
+import { getPool, ping, closePool, isUuid, readSslOption, isTlsCertError, classifyDbError } from './client.js';
 
 const KEY = 'NIO_DATABASE_URL';
 const original = process.env[KEY];
@@ -111,4 +111,46 @@ test('isUuid: aceita UUID (qualquer caixa), rejeita o resto', () => {
   expect(isUuid('x')).toBe(false);
   expect(isUuid('')).toBe(false);
   expect(isUuid('36aa759f-3b92-4ae7-a490-cf8659d362d1 ')).toBe(false);
+});
+
+// --- Retomada TLS: classificação da causa + precedência CA/insecure ---
+
+test('classifyDbError: matriz self-signed / expirado / mismatch / required / unknown', () => {
+  expect(classifyDbError('DEPTH_ZERO_SELF_SIGNED_CERT')).toBe('tls-self-signed');
+  expect(classifyDbError('SELF_SIGNED_CERT_IN_CHAIN')).toBe('tls-self-signed');
+  expect(classifyDbError(undefined, 'self-signed certificate')).toBe('tls-self-signed');
+  expect(classifyDbError('CERT_HAS_EXPIRED')).toBe('tls-expired');
+  expect(classifyDbError(undefined, 'certificate has expired')).toBe('tls-expired');
+  expect(classifyDbError(undefined, 'The server does not support SSL connections')).toBe('tls-server-off');
+  expect(classifyDbError('28000', 'pg_hba.conf rejects connection for host "1.2.3.4", user "u", database "d", SSL off')).toBe(
+    'tls-required',
+  );
+  // Fallback legado: nada específico → unknown (hint genérico, sem wizard forçado)
+  expect(classifyDbError('ECONNREFUSED', 'connection refused')).toBe('unknown');
+  expect(classifyDbError('28P01', 'password authentication failed')).toBe('unknown');
+  expect(classifyDbError()).toBe('unknown');
+  // 28000 sem menção a SSL off não é retomada TLS (ex.: senha/role) → unknown
+  expect(classifyDbError('28000', 'pg_hba.conf rejects connection for host "1.2.3.4"')).toBe('unknown');
+});
+
+test('readSslOption: CA + insecure juntos → CA vence (verificado)', () => {
+  for (const k of SSL_KEYS) delete process.env[k];
+  const dir = mkdtempSync(join(tmpdir(), 'nio-ca-both-'));
+  const caPath = join(dir, 'ca.pem');
+  writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\n');
+  process.env.NIO_DATABASE_SSL = 'true';
+  process.env.NIO_DATABASE_CA = caPath;
+  process.env.NIO_DATABASE_SSL_INSECURE = '1';
+  expect(readSslOption(REMOTE_URL)).toEqual({
+    rejectUnauthorized: true,
+    ca: '-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\n',
+  });
+});
+
+test('readSslOption: CA ilegível + insecure → fallback insecure (não quebra)', () => {
+  for (const k of SSL_KEYS) delete process.env[k];
+  process.env.NIO_DATABASE_SSL = 'true';
+  process.env.NIO_DATABASE_CA = join(tmpdir(), 'nao-existe-' + Date.now() + '.pem');
+  process.env.NIO_DATABASE_SSL_INSECURE = '1';
+  expect(readSslOption(REMOTE_URL)).toEqual({ rejectUnauthorized: false });
 });

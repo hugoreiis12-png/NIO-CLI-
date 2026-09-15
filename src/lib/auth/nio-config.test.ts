@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseEnvFile, readConfigFile, writeConfigFile, validateConfigShape, probeAiBackend } from './nio-config.js';
+import { parseEnvFile, readConfigFile, writeConfigFile, validateConfigShape, probeAiBackend, describePingFailure } from './nio-config.js';
 
 test('parseEnvFile: KEY=value, ignora # e vazio, mantém = no valor', () => {
   const out = parseEnvFile('# comentário\n\nNIO_DATABASE_URL=postgres://u:p@h:5432/d\nJWT_SECRET=a=b=c\n  \n');
@@ -68,4 +68,25 @@ test('probeAiBackend: porta fechada → ok:false sem estourar', async () => {
   expect(st.ok).toBe(false);
   expect(st.models).toEqual([]);
   expect(st.detail.length).toBeGreaterThan(0);
+});
+
+test('describePingFailure: cada kind TLS é fixable com hint próprio; unknown genérico não abre wizard', () => {
+  for (const kind of ['tls-self-signed', 'tls-expired', 'tls-server-off', 'tls-required'] as const) {
+    const h = describePingFailure({ ok: false, tlsKind: kind });
+    expect(h.fixable).toBe(true);
+    expect(h.hint.length).toBeGreaterThan(0);
+  }
+  // hints distintos por causa (não um genérico só)
+  const hints = new Set(
+    (['tls-self-signed', 'tls-expired', 'tls-server-off', 'tls-required'] as const).map(
+      (k) => describePingFailure({ ok: false, tlsKind: k }).hint,
+    ),
+  );
+  expect(hints.size).toBe(4);
+  // fallback legado preservado
+  expect(describePingFailure({ ok: false, tlsKind: 'unknown' })).toEqual({
+    fixable: false,
+    hint: expect.any(String),
+  });
+  expect(describePingFailure({ ok: false, tlsKind: 'unknown', tlsCertError: true }).fixable).toBe(true);
 });

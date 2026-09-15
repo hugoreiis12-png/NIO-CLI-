@@ -5,6 +5,7 @@ import { animateMatrixLogo } from "./matrix-logo.js";
 import { notifyCliIfUpdate } from "./lib/version-check.js";
 import { buildProgram } from "./cli/program.js";
 import { continueChain } from "./cli/flows/onboarding.js";
+import { closeDbIfOpen, shutdown } from "./lib/shutdown.js";
 
 notifyCliIfUpdate();
 
@@ -12,21 +13,10 @@ notifyCliIfUpdate();
 let logoShown = false;
 const program = buildProgram(() => logoShown);
 
-const fail = (err: unknown): never => {
+const fail = async (err: unknown): Promise<void> => {
   if (DEBUG) console.error(err);
   else console.error(`Erro: ${(err as Error).message}\n(rode com NIO_DEBUG=1 pro stack trace completo)`);
-  process.exit(1);
-};
-
-/**
- * Fecha o pool do Postgres se algum comando abriu um — senão o socket ocioso
- * segura o event loop por `idleTimeoutMillis` (30s) e o CLI só devolve o prompt
- * 30s depois de terminar. A flag global é setada em `getPool()`; checá-la aqui
- * evita puxar o `pg` (~13ms) no cold start de `nio --version`/`--help`.
- */
-const closeDbIfOpen = async (): Promise<void> => {
-  if (!(globalThis as Record<string, unknown>).__nioPgPoolOpen) return;
-  await import("./adapters/pg/client.js").then((m) => m.closePool()).catch(() => {});
+  await shutdown(1);
 };
 
 const args = process.argv.slice(2);

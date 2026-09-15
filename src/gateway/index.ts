@@ -29,6 +29,7 @@ import {
   type RequestContext,
 } from './edge-filter.js';
 import { GATEWAY_PORT, GATEWAY_HOST } from './config.js';
+import { VERSION } from '../version.js';
 import { getOrCreateGatewayToken } from '../lib/auth/gateway-token.js';
 
 /** Retenção da auditoria de IP de login (ADR 0011 §F / LGPD). */
@@ -337,7 +338,7 @@ async function main(): Promise<void> {
         if (ctx.method === 'POST' && ctx.path === '/logout') return await handleLogout(req, res, ctx);
         if (ctx.method === 'POST' && ctx.path === '/logout-all') return await handleLogoutAll(req, res, ctx);
         if (ctx.path.startsWith('/security/')) return await handleSecurity(req, res, ctx, ctx.path);
-        if (ctx.method === 'GET' && ctx.path === '/health') return sendJson(res, 200, { ok: true });
+        if (ctx.method === 'GET' && ctx.path === '/health') return sendJson(res, 200, { ok: true, version: VERSION });
         sendJson(res, 404, { error: 'rota desconhecida' });
       } catch (err) {
         logRequest(ctx, { error: (err as Error).message, stack: (err as Error).stack });
@@ -369,6 +370,15 @@ async function main(): Promise<void> {
   };
   void pruneAudit();
   setInterval(() => void pruneAudit(), 24 * 60 * 60_000).unref();
+
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[nio-gateway] porta ${GATEWAY_PORT} ocupada em ${GATEWAY_HOST} — outro gateway rodando (container?)`);
+    } else {
+      console.error(`[nio-gateway] erro no socket: ${err.message}`);
+    }
+    process.exit(1);
+  });
 
   server.listen(GATEWAY_PORT, GATEWAY_HOST, () => {
     console.error(`[nio-gateway] ouvindo em http://${GATEWAY_HOST}:${GATEWAY_PORT}`);

@@ -258,7 +258,9 @@ test('App: pergunta com opções → menu navegável; ↓+Enter manda a opção 
   await new Promise((r) => setTimeout(r, 20));
   stdin.write('\r'); // Enter
   await new Promise((r) => setTimeout(r, 40));
-  expect(sent).toBe('Pelos adapters');
+  expect(sent).toBe('Pelos adapters /no_think'); // /no_think (NIO_AI_NO_THINK) vai no fio…
+  expect(lastFrame() ?? '').toContain('Pelos adapters');
+  expect(lastFrame() ?? '').not.toContain('/no_think'); // …mas o eco local fica limpo
   unmount();
 });
 
