@@ -208,6 +208,14 @@ export const NIO_AI_CONTEXT = envNum('AI_CONTEXT', 65536);
 export const NIO_AI_OUTPUT = envNum('AI_OUTPUT', 2048);
 
 /**
+ * Chain-of-thought (reasoning) do modelo nos caminhos headless (`nio exec`/`plan`/
+ * `validate-plan`). **Off por padrão**: em tarefa determinística o "pensar" só soma
+ * ~2x de latência e pode esvaziar o output (o raciocínio consome o teto antes da
+ * resposta). Reabilite com `NIO_AI_THINK=true`. Não afeta a TUI (roteia pelo opencode).
+ */
+export const NIO_AI_THINK = /^(1|true|yes|on)$/i.test((env('AI_THINK') ?? '').trim());
+
+/**
  * Teto de tokens de **input** por prompt (hard cap). Prompts acima disso são
  * recusados antes do `fetch` (ver `qwenComplete`) — com schemas de MCP pesados,
  * o boot do `nio ai` estourava os 65536 da janela mesmo com output baixo.

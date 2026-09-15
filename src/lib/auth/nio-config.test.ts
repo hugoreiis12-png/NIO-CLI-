@@ -32,6 +32,19 @@ test('readConfigFile: arquivo ausente → {}', () => {
   expect(readConfigFile(join(tmpdir(), 'nao-existe-' + Date.now(), 'x.env'))).toEqual({});
 });
 
+test('writeConfigFile: grava SSL=false explícito e remove flag vazio (troca de modo TLS)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nio-cfg-ssl-'));
+  const path = join(dir, 'config.env');
+  // modo "insecure" antes: SSL on + flag insecure
+  writeConfigFile({ NIO_DATABASE_SSL: 'true', NIO_DATABASE_SSL_INSECURE: '1' }, path);
+  expect(readConfigFile(path).NIO_DATABASE_SSL_INSECURE).toBe('1');
+  // troca pra "off": SSL=false explícito e insecure='' deve SUMIR do arquivo
+  writeConfigFile({ NIO_DATABASE_SSL: 'false', NIO_DATABASE_SSL_INSECURE: '' }, path);
+  const out = readConfigFile(path);
+  expect(out.NIO_DATABASE_SSL).toBe('false');
+  expect('NIO_DATABASE_SSL_INSECURE' in out).toBe(false);
+});
+
 test('validateConfigShape: pega faltando e formato inválido, sem tocar rede', () => {
   expect(validateConfigShape({})).toEqual([
     { key: 'NIO_DATABASE_URL', issue: 'missing', hint: expect.any(String) },

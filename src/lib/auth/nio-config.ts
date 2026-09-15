@@ -7,9 +7,9 @@ import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from 'n
 import { dirname } from 'node:path';
 import { brand, homePath } from '../../brand.js';
 import { NIO_AI_BASE_URL, NIO_AI_MODEL_ID } from '../clients/client-configs.js';
-import { closePool, ping } from '../../adapters/pg/client.js';
+import { closePool, pingDetailed, type PingResult } from '../../adapters/pg/client.js';
 import { generateJwtSecret, jwtSecretWeakness } from '../../gateway/config.js';
-import { input, password, confirm } from '../prompts.js';
+import { input, password, confirm, select } from '../prompts.js';
 import { c, sym, box, cmd } from '../colors.js';
 import { dlog } from '../debug.js';
 
@@ -20,7 +20,12 @@ export interface ConfigProblem {
   key: string;
   issue: 'missing' | 'invalid' | 'unreachable';
   hint: string;
+  fixable?: boolean; // erro que o wizard resolve (ex.: TLS mal configurado) → dispara o setup
 }
+
+type SslMode = 'off' | 'verify' | 'insecure';
+const TLS_CERT_HINT = 'TLS rejeitou o certificado (self-signed?). Escolha "Sem TLS" na LAN, ou informe uma CA em NIO_DATABASE_CA.';
+const CONN_HINT = 'Confira o endereço/credencial e a rede/VPN, e rode de novo.';
 
 /** Parse simples de `KEY=value` (ignora `#` comentário e linha vazia). */
 export function parseEnvFile(text: string): Record<string, string> {
@@ -101,13 +106,16 @@ export async function checkConfig(): Promise<ConfigProblem[]> {
   const problems = validateConfigShape(process.env);
   if (!problems.some((p) => p.key === 'NIO_DATABASE_URL')) {
     await closePool();
-    const ok = await ping();
-    dlog('config: SELECT 1 =>', ok ? 'ok' : 'FALHOU');
-    if (!ok) {
+    const res = await pingDetailed();
+    dlog('config: SELECT 1 =>', res.ok ? 'ok' : `FALHOU ${res.code ?? res.message ?? ''}`);
+    if (!res.ok) {
       problems.push({
         key: 'NIO_DATABASE_URL',
         issue: 'unreachable',
-        hint: 'não conectou — confira host/porta/credencial e a rede/VPN',
+        fixable: res.tlsCertError,
+        hint: res.tlsCertError
+          ? 'TLS rejeitou o cert (self-signed?): NIO_DATABASE_SSL=false na LAN, ou NIO_DATABASE_CA=<pem>'
+          : 'não conectou — confira host/porta/credencial e a rede/VPN',
       });
     }
   }
@@ -156,8 +164,21 @@ export async function probeAiBackend(
 
 interface WizardValues {
   url: string;
-  ssl: boolean;
+  ssl: SslMode;
   jwt: string;
+}
+
+/** Pergunta o modo TLS. Tri-estado — "off" grava `NIO_DATABASE_SSL=false` explícito. */
+async function promptSslMode(): Promise<SslMode> {
+  return select<SslMode>({
+    message: 'TLS/SSL com o Postgres?',
+    default: 'off',
+    choices: [
+      { name: 'Sem TLS — banco interno/LAN (recomendado)', value: 'off' },
+      { name: 'TLS com verificação de certificado — nuvem/gerenciado', value: 'verify' },
+      { name: 'TLS sem verificar cert — self-signed (menos seguro)', value: 'insecure' },
+    ],
+  });
 }
 
 /** Os prompts do wizard (default = valor atual, se houver). */
@@ -170,7 +191,7 @@ async function promptWizard(): Promise<WizardValues> {
       validate: (v) => PG_URL.test(v.trim()) || 'precisa começar com postgres://',
     })
   ).trim();
-  const ssl = await confirm({ message: 'O banco exige TLS/SSL? (gerenciado/nuvem)', default: false });
+  const ssl = await promptSslMode();
   const jwt = await promptJwtSecret(file.JWT_SECRET ?? process.env.JWT_SECRET);
   return { url, ssl, jwt };
 }
@@ -220,19 +241,27 @@ export async function runConfigWizard(): Promise<boolean> {
 
   await closePool();
   process.env.NIO_DATABASE_URL = url;
-  process.env.NIO_DATABASE_SSL = ssl ? 'true' : '';
+  process.env.NIO_DATABASE_SSL = ssl === 'off' ? 'false' : 'true';
+  if (ssl === 'insecure') process.env.NIO_DATABASE_SSL_INSECURE = '1';
+  else delete process.env.NIO_DATABASE_SSL_INSECURE;
   process.env.JWT_SECRET = jwt;
 
   process.stdout.write(c.dim('  testando a conexão com o Postgres… '));
-  if (!(await ping())) {
+  const res = await pingDetailed();
+  if (!res.ok) {
     console.log(c.red(sym.err));
-    console.error(`  ${c.red('Não conectei.')} Confira o endereço/credencial e a rede/VPN, e rode de novo.`);
+    console.error(`  ${c.red('Não conectei.')} ${res.tlsCertError ? TLS_CERT_HINT : CONN_HINT}`);
     return false;
   }
   console.log(c.green(sym.ok));
 
-  const updates: Record<string, string> = { NIO_DATABASE_URL: url, JWT_SECRET: jwt };
-  if (ssl) updates.NIO_DATABASE_SSL = 'true';
+  // Grava SSL explícito; valor vazio some no writeConfigFile (remove flag antigo).
+  const updates: Record<string, string> = {
+    NIO_DATABASE_URL: url,
+    JWT_SECRET: jwt,
+    NIO_DATABASE_SSL: ssl === 'off' ? 'false' : 'true',
+    NIO_DATABASE_SSL_INSECURE: ssl === 'insecure' ? '1' : '',
+  };
   writeConfigFile(updates);
   console.log(`  ${c.green(sym.ok)} salvo em ${cmd(CONFIG_FILE)}`);
   return true;
@@ -260,7 +289,7 @@ export async function ensureConfig(opts: { interactive: boolean }): Promise<void
   let problems = await checkConfig();
   if (problems.length === 0) return;
 
-  const fixable = problems.some((p) => p.issue !== 'unreachable');
+  const fixable = problems.some((p) => p.issue !== 'unreachable' || p.fixable);
   if (opts.interactive && process.stdin.isTTY && fixable && (await runConfigWizard())) {
     problems = await checkConfig();
     if (problems.length === 0) return;

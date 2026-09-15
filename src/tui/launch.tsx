@@ -25,6 +25,8 @@ async function resolveSessionMeta(): Promise<{ name: string; profile: string; id
   }
 }
 
+
+
 function fallbackToOpencodeTui(cwd: string): Promise<number> {
   console.log(c.dim('  (interface NIO indisponível — abrindo a TUI do OpenCode)'));
   return new Promise((resolve) => {

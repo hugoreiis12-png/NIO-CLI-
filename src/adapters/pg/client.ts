@@ -80,7 +80,29 @@ export function readSslOption(url: string = process.env.NIO_DATABASE_URL?.trim()
   const enabled = explicit ?? !isLoopbackDbHost(url);
   if (!enabled) return undefined;
 
-  if (envFlag('NIO_DATABASE_SSL_INSECURE')) {
+  const caPath = process.env.NIO_DATABASE_CA?.trim();
+  const insecure = envFlag('NIO_DATABASE_SSL_INSECURE');
+
+  // CA + insecure juntos: a CA vence (TLS verificado). Se a CA estiver
+  // ilegível, FALLBACK para insecure (não quebra quem já conectava assim) —
+  // com aviso alto pra corrigir o caminho da CA.
+  if (insecure && caPath) {
+    try {
+      const ca = readFileSync(caPath, 'utf8');
+      console.error(
+        '[pg] NIO_DATABASE_CA e NIO_DATABASE_SSL_INSECURE definidos juntos — ' +
+          'usando a CA (TLS verificado). Remova o flag insecure.',
+      );
+      return { rejectUnauthorized: true, ca };
+    } catch {
+      console.error(
+        `[pg] AVISO: NIO_DATABASE_CA ilegível ("${caPath}") — fallback para ` +
+          'INSECURE (TLS sem verificação). Corrija o caminho da CA.',
+      );
+    }
+  }
+
+  if (insecure) {
     console.error(
       '[pg] AVISO: NIO_DATABASE_SSL_INSECURE=1 — TLS sem verificação de certificado. ' +
         'A conexão com o banco fica vulnerável a MITM. Use NIO_DATABASE_CA em vez disso.',
@@ -88,7 +110,6 @@ export function readSslOption(url: string = process.env.NIO_DATABASE_URL?.trim()
     return { rejectUnauthorized: false };
   }
 
-  const caPath = process.env.NIO_DATABASE_CA?.trim();
   if (caPath) {
     try {
       return { rejectUnauthorized: true, ca: readFileSync(caPath, 'utf8') };
@@ -175,18 +196,50 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
   }
 }
 
+/** Códigos de erro TLS por certificado não-confiável (self-signed / CA privada). */
+const TLS_CERT_ERROR_CODES = new Set([
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'CERT_HAS_EXPIRED',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+]);
+
+/** `true` se o erro do pg é rejeição de certificado TLS — não credencial/host/rede. */
+export function isTlsCertError(code?: string, message?: string): boolean {
+  if (code && TLS_CERT_ERROR_CODES.has(code)) return true;
+  return /self[- ]signed certificate|unable to verify|certificate/i.test(message ?? '');
+}
+
+export interface PingResult {
+  ok: boolean;
+  tlsCertError?: boolean;
+  code?: string;
+  message?: string;
+}
+
 /**
- * Healthcheck: `SELECT 1`. Retorna `true` se o banco respondeu. Não lança —
- * transforma qualquer falha (URL ausente, banco fora, credencial ruim) em `false`,
- * para o chamador decidir a mensagem de UI.
+ * Como `ping`, mas expõe a causa (código/mensagem do pg) e sinaliza erro de
+ * certificado TLS — para o chamador escolher a mensagem de UI certa (SSL vs. rede).
  */
-export async function ping(): Promise<boolean> {
+export async function pingDetailed(): Promise<PingResult> {
   try {
     const res = await query<{ ok: number }>('SELECT 1 AS ok');
-    return res.rows[0]?.ok === 1;
-  } catch {
-    return false;
+    return { ok: res.rows[0]?.ok === 1 };
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    return { ok: false, tlsCertError: isTlsCertError(e.code, e.message), code: e.code, message: e.message };
   }
+}
+
+/**
+ * Healthcheck: `SELECT 1`. Retorna `true` se o banco respondeu. Não lança —
+ * transforma qualquer falha (URL ausente, banco fora, credencial ruim) em `false`.
+ * Precisa da causa? Use `pingDetailed`.
+ */
+export async function ping(): Promise<boolean> {
+  return (await pingDetailed()).ok;
 }
 
 /** Encerra o pool (fecha todas as conexões). Chamar no shutdown do processo. */

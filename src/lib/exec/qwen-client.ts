@@ -3,6 +3,7 @@ import {
   NIO_AI_MAX_INPUT,
   NIO_AI_MODEL_ID,
   NIO_AI_OUTPUT,
+  NIO_AI_THINK,
 } from '../clients/client-configs.js';
 
 /**
@@ -39,54 +40,76 @@ export function estimateInputTokens(system: string | undefined, prompt: string):
   return Math.ceil(((system?.length ?? 0) + prompt.length) / 4);
 }
 
+interface ChatCompletion {
+  choices?: Array<{ message?: { content?: unknown }; finish_reason?: string }>;
+}
+
+/** Recusa (fail-fast) prompt acima do teto de input, antes de bater no backend. */
+function guardInputSize(system: string | undefined, prompt: string): void {
+  if (NIO_AI_MAX_INPUT <= 0) return;
+  const est = estimateInputTokens(system, prompt);
+  if (est <= NIO_AI_MAX_INPUT) return;
+  throw new QwenError(
+    `Prompt com ~${est} tokens de input excede o teto NIO_AI_MAX_INPUT=${NIO_AI_MAX_INPUT}. ` +
+      `Enxugue o prompt (menos MCPs/skills no contexto) ou suba o teto via NIO_AI_MAX_INPUT.`,
+  );
+}
+
+/**
+ * Corpo da request `/chat/completions`. Com reasoning off (default nos caminhos
+ * headless), manda `chat_template_kwargs` pro vLLM não gastar tokens/latência
+ * "pensando" numa tarefa determinística — reabilite via `NIO_AI_THINK`.
+ */
+function buildRequestBody(prompt: string, opts: QwenRequestOpts): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: NIO_AI_MODEL_ID,
+    messages: [
+      ...(opts.system ? [{ role: 'system', content: opts.system }] : []),
+      { role: 'user', content: prompt },
+    ],
+    max_tokens: opts.maxTokens ?? NIO_AI_OUTPUT,
+    temperature: opts.temperature ?? 0.2,
+    stream: false,
+  };
+  if (!NIO_AI_THINK) body.chat_template_kwargs = { enable_thinking: false };
+  return body;
+}
+
+/** Texto de `choices[0].message.content`. Lança — com o porquê — se vier vazio. */
+function extractContent(data: ChatCompletion): string {
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content;
+  if (typeof content === 'string' && content.trim()) return content;
+  if (choice?.finish_reason === 'length') {
+    throw new QwenError(
+      `vLLM cortou no limite de saída (NIO_AI_OUTPUT=${NIO_AI_OUTPUT}) antes da resposta. ` +
+        `Suba NIO_AI_OUTPUT ou enxugue o prompt.`,
+    );
+  }
+  throw new QwenError('vLLM devolveu resposta vazia');
+}
+
 /** Roda `prompt` no vLLM e devolve o texto de `choices[0].message.content`. */
 export async function qwenComplete(
   prompt: string,
   opts: QwenRequestOpts = {},
 ): Promise<string> {
-  if (NIO_AI_MAX_INPUT > 0) {
-    const est = estimateInputTokens(opts.system, prompt);
-    if (est > NIO_AI_MAX_INPUT) {
-      throw new QwenError(
-        `Prompt com ~${est} tokens de input excede o teto NIO_AI_MAX_INPUT=${NIO_AI_MAX_INPUT}. ` +
-          `Enxugue o prompt (menos MCPs/skills no contexto) ou suba o teto via NIO_AI_MAX_INPUT.`,
-      );
-    }
-  }
+  guardInputSize(opts.system, prompt);
   const url = `${NIO_AI_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
   const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(),
-    opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-  );
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: NIO_AI_MODEL_ID,
-        messages: [
-          ...(opts.system ? [{ role: 'system', content: opts.system }] : []),
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: opts.maxTokens ?? NIO_AI_OUTPUT,
-        temperature: opts.temperature ?? 0.2,
-        stream: false,
-      }),
+      body: JSON.stringify(buildRequestBody(prompt, opts)),
       signal: controller.signal,
     });
     if (!res.ok) {
       const detail = (await res.text()).slice(0, 500);
       throw new QwenError(`vLLM respondeu ${res.status}: ${detail}`, res.status);
     }
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: unknown } }>;
-    };
-    const content = data.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) {
-      throw new QwenError('vLLM devolveu resposta vazia');
-    }
-    return content;
+    return extractContent((await res.json()) as ChatCompletion);
   } catch (e) {
     if (e instanceof QwenError) throw e;
     const cause = e instanceof Error ? e.message : String(e);

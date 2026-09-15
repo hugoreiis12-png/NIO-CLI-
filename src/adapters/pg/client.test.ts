@@ -2,7 +2,7 @@ import { test, expect, afterEach } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getPool, ping, closePool, isUuid, readSslOption } from './client.js';
+import { getPool, ping, closePool, isUuid, readSslOption, isTlsCertError } from './client.js';
 
 const KEY = 'NIO_DATABASE_URL';
 const original = process.env[KEY];
@@ -94,6 +94,15 @@ test('readSslOption: NIO_DATABASE_SSL_INSECURE=1 → desliga a verificação (op
   process.env.NIO_DATABASE_SSL = 'true';
   process.env.NIO_DATABASE_SSL_INSECURE = '1';
   expect(readSslOption(REMOTE_URL)).toEqual({ rejectUnauthorized: false });
+});
+
+test('isTlsCertError: pega cert self-signed por código e por mensagem, ignora o resto', () => {
+  expect(isTlsCertError('DEPTH_ZERO_SELF_SIGNED_CERT')).toBe(true);
+  expect(isTlsCertError('SELF_SIGNED_CERT_IN_CHAIN')).toBe(true);
+  expect(isTlsCertError(undefined, 'self-signed certificate')).toBe(true);
+  expect(isTlsCertError('ECONNREFUSED', 'connection refused')).toBe(false);
+  expect(isTlsCertError('28P01', 'password authentication failed')).toBe(false);
+  expect(isTlsCertError()).toBe(false);
 });
 
 test('isUuid: aceita UUID (qualquer caixa), rejeita o resto', () => {
