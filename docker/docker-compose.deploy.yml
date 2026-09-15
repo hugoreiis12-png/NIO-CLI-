@@ -81,7 +81,10 @@ services:
       # Admin API desligada (auditoria M-7) — config é declarativa, nada chama o
       # admin em runtime. Antes só era loopback; agora nem isso.
       KONG_ADMIN_LISTEN: "off"
-    volumes: [ "./kong.yml:/kong/kong.yml:ro" ]   # docker/kong.yml no repo
+    # Portainer (stack Git) resolve o path relativo a partir da RAIZ do repo clonado,
+    # não da pasta do compose — então precisa ser ./docker/kong.yml. Com ./kong.yml o
+    # arquivo não existe na raiz e o Docker cria um DIRETÓRIO vazio ("É um diretório").
+    volumes: [ "./docker/kong.yml:/kong/kong.yml:ro" ]
     ports:
       # INGRESSO na LAN — porta do host configurável (NIO_KONG_PROXY_PORT), pois :8000
       # pode estar ocupada no host. Default 8000; neste host use 8080.
