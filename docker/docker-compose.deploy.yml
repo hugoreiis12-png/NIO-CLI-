@@ -28,8 +28,8 @@ services:
       NIO_GATEWAY_HOST: "0.0.0.0"       # ouvir na rede do container
       NIO_GATEWAY_PORT: "3000"
       NIO_DATABASE_URL: "${NIO_DATABASE_URL}"   # env var do stack no Portainer
+      NIO_DATABASE_SSL: "${NIO_DATABASE_SSL:-false}"  # .142 usa cert self-signed → sem TLS na LAN (evita DEPTH_ZERO_SELF_SIGNED_CERT)
       JWT_SECRET: "${JWT_SECRET}"               # env var do stack no Portainer
-      NIO_DATABASE_SSL:  "${NIO_DATABASE_SSL:-false}" # .142 é  self-singed -> sem verify na LAN.
       NIO_GATEWAY_TOKEN: "${NIO_GATEWAY_TOKEN}" # token compartilhado (app externa)
     # SEM publish de porta no host: o gateway é alcançado só pela `nio-net` (Kong o
     # acha por nome). Isso evita conflito de :3000 e força o tráfego pelo Kong (:8000),
