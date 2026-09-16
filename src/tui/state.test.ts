@@ -2,12 +2,15 @@ import { test, expect } from 'bun:test';
 import {
   applyEvent,
   reconcilePendingPermissions,
+  reconcilePendingQuestions,
   pushUserMessage,
   emptyChat,
   summarizeToolInput,
   messageUsage,
   pendingQuestion,
   questionOptions,
+  looksLikeScaffolding,
+  isInternalMessage,
 } from './state.js';
 import type { ChatMessage } from './state.js';
 import type { Event } from '@opencode-ai/sdk';
@@ -175,6 +178,60 @@ test('BATCH PARALELO — 3 permission.asked = 3 na fila (não sobrescreve); resp
   // responde o p1 (via replied vindo do server)
   s = applyEvent(s, ev('permission.replied', { permissionID: 'p1', response: 'once' }));
   expect(s.permissions.map((x) => x.id)).toEqual(['p2', 'p3']);
+});
+
+test('tool question — question.asked entra na fila estruturada; replied remove por requestID', () => {
+  let s = applyEvent(emptyChat, ev('question.asked', {
+    requestID: 'q1', sessionID: 'ses_1',
+    questions: [{ question: 'Qual passo?', header: 'Próximo', options: [{ label: 'Plan', description: 'd' }, { label: 'Review' }] }],
+  }));
+  expect(s.questions).toHaveLength(1);
+  expect(s.questions[0]).toMatchObject({ id: 'q1', sessionId: 'ses_1' });
+  expect(s.questions[0].questions[0].question).toBe('Qual passo?');
+  expect(s.questions[0].questions[0].options.map((o) => o.label)).toEqual(['Plan', 'Review']);
+  // evento repetido do mesmo id → não duplica
+  s = applyEvent(s, ev('question.updated', { requestID: 'q1', sessionID: 'ses_1', questions: [] }));
+  expect(s.questions).toHaveLength(1);
+  // replied remove por requestID
+  s = applyEvent(s, ev('question.replied', { requestID: 'q1', sessionID: 'ses_1' }));
+  expect(s.questions).toEqual([]);
+});
+
+test('reconcilePendingQuestions — recupera a perdida e tira as que sumiram; idempotente', () => {
+  const live = [{ requestID: 'qa', sessionID: 's', questions: [{ question: 'x?', options: [{ label: 'y' }] }] }];
+  const s = reconcilePendingQuestions(emptyChat, live);
+  expect(s.questions.map((q) => q.id)).toEqual(['qa']);
+  expect(reconcilePendingQuestions(s, live)).toBe(s); // idempotente
+  expect(reconcilePendingQuestions(s, []).questions).toEqual([]); // sumiu do server → sai
+});
+
+test('looksLikeScaffolding — detecta o bloco work-state (≥3 headers), ignora prosa normal', () => {
+  const block = '## Objective\n- listar tools\n\n## Work State\nCompleted\n- feito\n\n## Next Move\n1. aguardar';
+  expect(looksLikeScaffolding(block)).toBe(true);
+  expect(looksLikeScaffolding('Aqui está a resposta: os arquivos foram criados com sucesso.')).toBe(false);
+  expect(looksLikeScaffolding('## Objective\nsó um header, não é scaffolding')).toBe(false); // <3
+});
+
+test('isInternalMessage — flag mode:compaction/summary OU texto-scaffolding; resposta normal = false', () => {
+  const scaffold: ChatMessage = {
+    id: 'a', role: 'assistant',
+    parts: [{ id: 't', kind: 'text', text: '## Objective\nx\n## Work State\ny\n## Next Move\nz' }],
+  };
+  expect(isInternalMessage(scaffold)).toBe(true);
+  const compact: ChatMessage = { id: 'b', role: 'assistant', mode: 'compaction', parts: [{ id: 't', kind: 'text', text: 'resumo' }] };
+  expect(isInternalMessage(compact)).toBe(true);
+  const summary: ChatMessage = { id: 'c', role: 'assistant', summary: true, parts: [] };
+  expect(isInternalMessage(summary)).toBe(true);
+  const normal: ChatMessage = { id: 'd', role: 'assistant', parts: [{ id: 't', kind: 'text', text: 'resposta normal ao usuário' }] };
+  expect(isInternalMessage(normal)).toBe(false);
+});
+
+test('message.updated captura mode:compaction/summary na mensagem (→ ofuscada)', () => {
+  const s = applyEvent(emptyChat, ev('message.updated', { info: { id: 'm', role: 'assistant', mode: 'compaction', summary: true } }));
+  const m = s.messages.find((x) => x.id === 'm')!;
+  expect(m.mode).toBe('compaction');
+  expect(m.summary).toBe(true);
+  expect(isInternalMessage(m)).toBe(true);
 });
 
 test('session.status idle também limpa busy', () => {

@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { spawnPortable } from '../lib/proc.js';
 import { theme, sym } from './theme.js';
-import { permGroupLabel, type PermissionReq } from './state.js';
+import { permGroupLabel, type PermissionReq, type QuestionReq } from './state.js';
 import type { PaletteItem } from './palette-source.js';
 
 export function InfoPanel({ item, onClose }: { item: PaletteItem; onClose: () => void }): React.ReactElement {
@@ -131,6 +131,68 @@ export function PermissionModal({
         </Text>
       )}
       <Text color={theme.dim}>[a]/↵ permitir · [s] sempre · [d]/Esc negar</Text>
+    </Box>
+  );
+}
+
+/**
+ * Modal do tool `question` — renderiza as opções ESTRUTURADAS do modelo (não a
+ * heurística de texto) e devolve a resposta. Uma pergunta por vez (avança no ↵);
+ * ao responder a última, envia todas via `onAnswer`. Esc cancela (reject).
+ */
+export function QuestionModal({
+  req,
+  queued,
+  onAnswer,
+  onReject,
+}: {
+  req: QuestionReq;
+  /** total na fila (contando este) — `>1` mostra "+N na fila". */
+  queued: number;
+  onAnswer: (answers: string[][]) => void;
+  onReject: () => void;
+}): React.ReactElement {
+  const [qIdx, setQIdx] = useState(0);
+  const [sel, setSel] = useState(0);
+  const [picked, setPicked] = useState<string[][]>([]);
+  const q = req.questions[qIdx];
+  const opts = q?.options ?? [];
+  const total = req.questions.length;
+
+  useInput((_input, key) => {
+    if (key.escape) return onReject();
+    if (key.upArrow) return setSel((n) => Math.max(0, n - 1));
+    if (key.downArrow) return setSel((n) => Math.min(opts.length - 1, n + 1));
+    if (key.return) {
+      const chosen = [opts[sel]?.label ?? ''];
+      const next = [...picked, chosen];
+      if (qIdx + 1 < total) {
+        setPicked(next);
+        setQIdx(qIdx + 1);
+        setSel(0);
+      } else {
+        onAnswer(next);
+      }
+    }
+  });
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor={theme.accentBright} paddingX={1}>
+      <Text color={theme.accentBright}>
+        {sym.bullet} o nio perguntou
+        {total > 1 ? <Text color={theme.dim}>{`  (${qIdx + 1}/${total})`}</Text> : null}
+        {queued > 1 ? <Text color={theme.dim}>{`  (+${queued - 1} na fila)`}</Text> : null}
+      </Text>
+      {q?.header ? <Text color={theme.dim}>{clip(q.header, 78)}</Text> : null}
+      <Text color={theme.text} wrap="truncate-end">{clip(q?.question ?? '', 78)}</Text>
+      {opts.map((o, i) => (
+        <Text key={i} inverse={i === sel} color={i === sel ? theme.accentBright : undefined} wrap="truncate-end">
+          {' '}
+          {i + 1}. {o.label}
+          {o.description ? <Text color={theme.dim}>{` — ${clip(o.description, 50)}`}</Text> : null}
+        </Text>
+      ))}
+      <Text color={theme.dim}>↑↓ escolher · ↵ responder · Esc cancelar</Text>
     </Box>
   );
 }

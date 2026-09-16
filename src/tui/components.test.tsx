@@ -158,7 +158,30 @@ test('LiveMessage: raciocínio colapsado (padrão) vs expandido — Sprint 3', (
   expect(expanded).toContain('passo de raciocínio 7'); // mostra o fim
 });
 
-test('MessageView: raciocínio no histórico vira resumo colapsado — Sprint 3', () => {
+test('MessageView: mensagem interna (mode:compaction) vira marcador discreto, sem o conteúdo', () => {
+  const msg: ChatMessage = {
+    id: 'a', role: 'assistant', mode: 'compaction',
+    parts: [{ id: 't', kind: 'text', text: '## Objective\nlistar tools\n## Work State\nfeito\n## Next Move\naguardar' }],
+  };
+  const f = render(<MessageView message={msg} />).lastFrame() ?? '';
+  expect(f).toContain('resumo interno ocultado');
+  expect(f).not.toContain('Objective');
+  expect(f).not.toContain('Work State');
+});
+
+test('MessageView: texto-scaffolding (sem flag) também é ofuscado; resposta normal passa', () => {
+  const scaffold: ChatMessage = {
+    id: 'a', role: 'assistant',
+    parts: [{ id: 't', kind: 'text', text: '## Objective\nx\n## Important Details\ny\n## Relevant Files\nz' }],
+  };
+  expect((render(<MessageView message={scaffold} />).lastFrame() ?? '')).toContain('resumo interno ocultado');
+  const normal: ChatMessage = { id: 'b', role: 'assistant', parts: [{ id: 't', kind: 'text', text: 'resposta de verdade' }] };
+  const nf = render(<MessageView message={normal} />).lastFrame() ?? '';
+  expect(nf).toContain('resposta de verdade');
+  expect(nf).not.toContain('resumo interno ocultado');
+});
+
+test('MessageView: raciocínio NÃO vai pro histórico/output (só ao vivo no LiveMessage)', () => {
   const msg: ChatMessage = {
     id: 'a',
     role: 'assistant',
@@ -168,10 +191,9 @@ test('MessageView: raciocínio no histórico vira resumo colapsado — Sprint 3'
     ],
   };
   const f = render(<MessageView message={msg} />).lastFrame() ?? '';
-  expect(f).toContain('✻ raciocínio · 4 linhas');
-  expect(f).toContain('primeira linha');
-  expect(f).toContain('segunda linha');
-  expect(f).not.toContain('quarta linha'); // só as 2 primeiras
+  expect(f).not.toContain('✻ raciocínio'); // sem cabeçalho de raciocínio no output
+  expect(f).not.toContain('primeira linha'); // sem conteúdo do raciocínio
+  expect(f).toContain('resposta'); // o texto final continua no output
 });
 
 test('MessageView: assistant fechado mostra o rodapé de tokens/custo', () => {

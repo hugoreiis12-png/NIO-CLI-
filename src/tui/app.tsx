@@ -20,7 +20,7 @@ import {
   DiffSummary,
   type PaletteAction,
 } from './components.js';
-import { InfoPanel, CommandRunner, PermissionModal } from './palette.js';
+import { InfoPanel, CommandRunner, PermissionModal, QuestionModal } from './palette.js';
 import { buildPalette, type PaletteItem } from './palette-source.js';
 import {
   applyEvent,
@@ -30,6 +30,7 @@ import {
   pushUserMessage,
   syncMessages,
   reconcilePendingPermissions,
+  reconcilePendingQuestions,
   emptyChat,
   type ChatState,
 } from './state.js';
@@ -37,9 +38,9 @@ import {
   listPrimaryAgents,
   subscribeEvents,
   fetchPendingPermissions,
+  fetchPendingQuestions,
   type OpencodeHandle,
 } from './opencode.js';
-import { NIO_AI_NO_THINK, withNoThink } from '../lib/clients/client-configs.js';
 
 type Overlay =
   | { kind: 'none' }
@@ -89,6 +90,7 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   const abortRef = useRef(new AbortController());
   const busyStartedAt = useRef<number>(0); // pro tempo decorrido no StatusLine
   const tuiCommandRef = useRef<(cmd: string) => void>(() => {}); // Sprint 7.2 — closures frescas
+  const userTurnActive = useRef(false); // turno em curso foi pedido pelo usuário? (senão = compactação/emenda → aborta)
 
   const [splash, setSplash] = useState(splashMs > 0);
   useEffect(() => {
@@ -110,15 +112,18 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     const id = sessionId.current;
     if (!id) return;
     try {
-      const [st, msgs, perms] = await Promise.all([
+      const [st, msgs, perms, ques] = await Promise.all([
         handle.client.session.status(),
         handle.client.session.messages({ path: { id } }),
         fetchPendingPermissions(handle.url),
+        fetchPendingQuestions(handle.url, id),
       ]);
       const status = (st as { data?: Record<string, { type?: string }> }).data?.[id]?.type;
       const busy = status === 'busy' || status === 'retry';
       const raw = ((msgs as { data?: unknown[] }).data ?? []) as Parameters<typeof syncMessages>[1];
-      setChat((prev) => reconcilePendingPermissions(syncMessages(prev, raw, busy), perms));
+      setChat((prev) =>
+        reconcilePendingQuestions(reconcilePendingPermissions(syncMessages(prev, raw, busy), perms), ques),
+      );
     } catch (err) {
       tlog('resync falhou', (err as Error).message);
     }
@@ -148,6 +153,21 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
         }
         const et = evt.type as string;
         if (et === 'message.part.delta') continue; // ruído: o snapshot vem em message.part.updated
+        // Sprint — "respondeu = parou": o turno do usuário fecha no idle; se o motor
+        // emenda OUTRO turno (compactação/continuação) sem prompt novo, encerra e fica idle.
+        const props = (evt as { properties?: Record<string, unknown> }).properties ?? {};
+        const stType = (props.status as { type?: string } | undefined)?.type;
+        if (et === 'session.idle' || (et === 'session.status' && stType === 'idle')) {
+          userTurnActive.current = false;
+        }
+        const info = (props.info ?? props) as { mode?: string };
+        // emenda não-solicitada = compactação/resumo que o motor dispara sozinho após
+        // a resposta (o modelo não inicia turno novo por conta própria fora disso).
+        if (et === 'message.updated' && info.mode === 'compaction' && !userTurnActive.current) {
+          if (sessionId.current) handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
+          setChat((prev) => ({ ...prev, busy: false }));
+          continue;
+        }
         // Sprint 7.2 — o motor dirige a TUI (imperativo, fora do ChatState):
         if (et === 'tui.prompt.append') {
           const text = (evt as { properties?: { text?: string } }).properties?.text ?? '';
@@ -197,7 +217,7 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
         setChat((prev) => ({ ...prev, busy: false }));
       }
     },
-    { isActive: overlay.kind === 'none' && chat.permissions.length === 0 },
+    { isActive: overlay.kind === 'none' && chat.permissions.length === 0 && chat.questions.length === 0 },
   );
 
   useEffect(() => () => handle.close(), [handle]);
@@ -205,10 +225,12 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   const send = (text: string) => {
     if (!sessionId.current) return;
     setDraft('');
+    userTurnActive.current = true; // este turno foi pedido pelo usuário → não abortar
     setChat((prev) => pushUserMessage(prev, text));
-    const wire = NIO_AI_NO_THINK ? withNoThink(text) : text;
+    // Sem o antigo sufixo `/no_think` (poluía o contexto). O reasoning do Qwen não é
+    // suprimível via config do opencode (ver client-configs) — a Camada B não o mostra no output.
     handle.client.session
-      .prompt({ path: { id: sessionId.current }, body: { model, agent: mode, parts: [{ type: 'text', text: wire }] } })
+      .prompt({ path: { id: sessionId.current }, body: { model, agent: mode, parts: [{ type: 'text', text }] } })
       .catch((err) => tlog('prompt falhou', (err as Error).message));
   };
 
@@ -277,6 +299,21 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
       });
   };
 
+  // Tool `question` — responde/rejeita via REST (`/session/:id/question/:id/reply|reject`,
+  // o SDK não tipa) e faz shift na fila. Sem isto o turno trava em `running`.
+  const settleQuestion = (path: 'reply' | 'reject', answers?: string[][]) => {
+    const q = chat.questions[0];
+    if (!q) return;
+    setChat((prev) => ({ ...prev, questions: prev.questions.slice(1) }));
+    fetch(new URL(`/session/${q.sessionId}/question/${q.id}/${path}`, handle.url), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: answers ? JSON.stringify({ answers }) : undefined,
+    })
+      .catch((err) => tlog('question respond falhou', (err as Error).message))
+      .finally(() => void resync());
+  };
+
   // histórico (Static) vs. a última mensagem se estiver streamando
   const { finished, live } = useMemo(() => {
     const msgs = chat.messages;
@@ -304,6 +341,16 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   // Sprint 7.4/7.6 — o nio terminou com uma pergunta (e às vezes opções)
   const question = useMemo(() => pendingQuestion(chat), [chat]);
   const options = useMemo(() => questionOptions(chat), [chat]);
+  // total de tokens da sessão — só muda quando chega um `step-finish` (recalcular a
+  // cada frame do spinner era desperdício: o tick do spinner não muda as mensagens).
+  const sessionTokens = useMemo(
+    () =>
+      chat.messages.reduce((n, m) => {
+        const u = messageUsage(m);
+        return n + (u ? u.tokensIn + u.tokensOut : 0);
+      }, 0),
+    [chat.messages],
+  );
 
   if (splash) {
     return (
@@ -316,17 +363,14 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
 
   const disabled = chat.busy || !ready;
   const pendingPerm = chat.permissions[0] ?? null;
-  const overlayUp = overlay.kind !== 'none' || !!pendingPerm;
+  const pendingQ = !pendingPerm ? (chat.questions[0] ?? null) : null; // permissão tem prioridade
+  const overlayUp = overlay.kind !== 'none' || !!pendingPerm || !!pendingQ;
   const paletteOpen = draft.startsWith('/') && !overlayUp;
   // teto da área viva — encolhe quando a droplist `/` abre, pro total (live +
   // status + input + droplist + rodapé) caber e não corromper o Ink.
   const paletteMaxItems = Math.max(3, Math.min(6, rows - 16));
   const liveMax = Math.max(3, Math.floor(rows * 0.45) - (paletteOpen ? paletteMaxItems + 3 : 0));
   const inputActive = !overlayUp;
-  const sessionTokens = chat.messages.reduce((n, m) => {
-    const u = messageUsage(m);
-    return n + (u ? u.tokensIn + u.tokensOut : 0);
-  }, 0);
 
   // layout tipo Claude Code (Sprint 4): fluxo vertical, sem sidebar, rodapé de 1–2 linhas.
   return (
@@ -376,6 +420,13 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
       {/* camada por cima do input — não substitui, só sobrepõe. */}
       {pendingPerm ? (
         <PermissionModal req={pendingPerm} queued={chat.permissions.length} onRespond={respondPermission} />
+      ) : pendingQ ? (
+        <QuestionModal
+          req={pendingQ}
+          queued={chat.questions.length}
+          onAnswer={(answers) => settleQuestion('reply', answers)}
+          onReject={() => settleQuestion('reject')}
+        />
       ) : overlay.kind === 'info' ? (
         <InfoPanel item={overlay.item} onClose={closeOverlay} />
       ) : overlay.kind === 'run' ? (

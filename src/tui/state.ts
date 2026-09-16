@@ -31,6 +31,10 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   parts: ChatPart[];
+  /** `message.info.mode` — `compaction` marca o resumo interno do opencode (ofuscado). */
+  mode?: string;
+  /** `message.info.summary` — `true` = mensagem-resumo (compactação), não é resposta real. */
+  summary?: boolean;
 }
 
 export interface TodoItem {
@@ -56,6 +60,33 @@ export interface PermissionReq {
   /** Os globs que "sempre" salvaria (ex.: `["find *", "sort *"]`). */
   always: string[];
   title: string;
+}
+
+/** Uma opção de uma pergunta estruturada (tool `question` do opencode). */
+export interface QuestionOption {
+  label: string;
+  description?: string;
+}
+
+/** Uma pergunta do tool `question` (o modelo pergunta com opções). */
+export interface QuestionItem {
+  question: string;
+  header?: string;
+  /** `true` = múltipla escolha; senão single-select. */
+  multi?: boolean;
+  options: QuestionOption[];
+}
+
+/**
+ * Pedido do tool `question` (Sprint UX). Fila paralela à de permissões — o opencode
+ * fica `awaiting answer` até a TUI responder via `POST /session/:id/question/:id/reply`
+ * com `{ answers }`. Sem handler, o turno trava em `running` pra sempre.
+ */
+export interface QuestionReq {
+  /** `requestID` do evento — usado no reply/reject. */
+  id: string;
+  sessionId: string;
+  questions: QuestionItem[];
 }
 
 /** Rótulo humano por grupo de permissão. */
@@ -129,6 +160,46 @@ export function reconcilePendingPermissions(
   return { ...prev, permissions: [...kept, ...added] };
 }
 
+/**
+ * Normaliza um pedido de `question` — do evento SSE (`question.asked`/`.updated`) ou
+ * do `GET /session/:id/question` (resync). `requestID` é o id do reply; as perguntas
+ * podem vir no topo (`questions`) ou em `input.questions`. `null` se malformado.
+ */
+export function toQuestionReq(raw: Record<string, unknown>): QuestionReq | null {
+  const r = raw as {
+    id?: string; requestID?: string; sessionID?: string;
+    questions?: Array<Record<string, unknown>>;
+    input?: { questions?: Array<Record<string, unknown>> };
+  };
+  const id = r.requestID ?? r.id;
+  if (!id || !r.sessionID) return null;
+  const rawQs = r.questions ?? r.input?.questions ?? [];
+  const questions: QuestionItem[] = rawQs.map((q) => ({
+    question: String(q.question ?? ''),
+    header: q.header ? String(q.header) : undefined,
+    multi: Boolean(q.multi ?? q.multiple),
+    options: ((q.options as Array<Record<string, unknown>>) ?? []).map((o) => ({
+      label: String(o.label ?? o.value ?? o ?? ''),
+      description: o.description ? String(o.description) : undefined,
+    })),
+  }));
+  return { id: String(id), sessionId: String(r.sessionID), questions };
+}
+
+/** Reconcilia a fila de perguntas com a verdade do server (`GET /session/:id/question`). */
+export function reconcilePendingQuestions(
+  prev: ChatState,
+  rawList: Array<Record<string, unknown>>,
+): ChatState {
+  const live = rawList.map(toQuestionReq).filter((r): r is QuestionReq => r !== null);
+  const liveIds = new Set(live.map((r) => r.id));
+  const kept = prev.questions.filter((r) => liveIds.has(r.id));
+  const known = new Set(kept.map((r) => r.id));
+  const added = live.filter((r) => !known.has(r.id));
+  if (added.length === 0 && kept.length === prev.questions.length) return prev;
+  return { ...prev, questions: [...kept, ...added] };
+}
+
 /** Toast do motor (`tui.toast.show`, Sprint 7.2) — some sozinho em `until`. */
 export interface Toast {
   id: string;
@@ -143,6 +214,8 @@ export interface ChatState {
   busy: boolean;
   /** Fila de pedidos de permissão — mostra `[0]`, ao responder faz shift. */
   permissions: PermissionReq[];
+  /** Fila de perguntas do tool `question` — mostra `[0]`, ao responder faz shift. */
+  questions: QuestionReq[];
   /** Toasts efêmeros do motor (`tui.toast.show`). */
   toasts: Toast[];
   /** Lista de tarefas do modelo nesta volta (`todo.updated`). */
@@ -175,6 +248,7 @@ export const emptyChat: ChatState = {
   messages: [],
   busy: false,
   permissions: [],
+  questions: [],
   toasts: [],
   todos: [],
   files: [],
@@ -184,56 +258,103 @@ export const emptyChat: ChatState = {
 };
 const PENDING_USER = 'pending-user';
 
-function clone(prev: ChatState): ChatState {
-  return {
-    messages: prev.messages.map((m) => ({ ...m, parts: m.parts.map((p) => ({ ...p })) })),
-    busy: prev.busy,
-    permissions: prev.permissions,
-    toasts: prev.toasts,
-    todos: prev.todos,
-    files: prev.files,
-    retry: prev.retry,
-    error: prev.error,
-    diff: prev.diff,
-  };
+/** Part cru vindo do SDK (`message.part.updated` / `session.messages`). */
+interface RawPart {
+  id?: string;
+  messageID?: string;
+  type?: string;
+  text?: string;
+  tool?: string;
+  state?: { status?: string; output?: string; error?: string; title?: string; input?: Record<string, unknown> };
+  tokens?: { input?: number; output?: number };
+  cost?: number;
 }
 
-function upsertMessage(state: ChatState, id: string, role: ChatMessage['role']): ChatMessage {
-  let msg = state.messages.find((m) => m.id === id);
-  if (!msg) {
-    msg = { id, role, parts: [] };
-    state.messages.push(msg);
+/** COW: tira o eco local `pending-user` quando a mensagem real chega. `messages`
+ *  intacto (mesma referência) quando não há eco a remover. */
+function withoutPending(messages: ChatMessage[], realId: string): ChatMessage[] {
+  if (realId === PENDING_USER) return messages;
+  const i = messages.findIndex((m) => m.id === PENDING_USER);
+  if (i < 0) return messages;
+  return [...messages.slice(0, i), ...messages.slice(i + 1)];
+}
+
+/**
+ * COW: array de mensagens com a mensagem `id` transformada (criada como `role` se
+ * ausente). **Só a mensagem tocada é copiada** — as demais mantêm identidade, o que
+ * evita o clone total do histórico a cada evento (era o custo O(N×M) por evento).
+ */
+function withMessage(
+  messages: ChatMessage[],
+  id: string,
+  role: ChatMessage['role'],
+  transform: (parts: ChatPart[]) => ChatPart[],
+  meta?: { mode?: string; summary?: boolean },
+): ChatMessage[] {
+  const i = messages.findIndex((m) => m.id === id);
+  if (i < 0) return [...messages, { id, role, parts: transform([]), ...meta }];
+  const msg = messages[i]!;
+  const parts = transform(msg.parts);
+  const metaChanged =
+    !!meta && ((meta.mode !== undefined && meta.mode !== msg.mode) || (meta.summary !== undefined && meta.summary !== msg.summary));
+  if (parts === msg.parts && !metaChanged) return messages;
+  const next = messages.slice();
+  next[i] = { ...msg, parts, ...meta };
+  return next;
+}
+
+/** Extrai `mode`/`summary` do `info` de um evento/mensagem (só chaves presentes). */
+function metaFromInfo(info: { mode?: unknown; summary?: unknown }): { mode?: string; summary?: boolean } {
+  const meta: { mode?: string; summary?: boolean } = {};
+  if (typeof info.mode === 'string') meta.mode = info.mode;
+  if (typeof info.summary === 'boolean') meta.summary = info.summary;
+  return meta;
+}
+
+/**
+ * Interpreta um part cru do SDK sobre o part anterior (por id) e devolve o novo part
+ * — ou `null` pra ignorar (`step-start`, ou texto ausente sem part prévio). Puro.
+ */
+function computePart(prev: ChatPart | undefined, raw: RawPart): ChatPart | null {
+  const id = raw.id as string;
+  const type = raw.type ?? 'text';
+  if (type === 'step-start') return null;
+  if (type === 'step-finish') {
+    return {
+      id, kind: 'step', text: prev?.text ?? '',
+      step: { tokensIn: raw.tokens?.input ?? 0, tokensOut: raw.tokens?.output ?? 0, cost: raw.cost ?? 0 },
+    };
   }
-  return msg;
-}
-
-function upsertPart(msg: ChatMessage, id: string, kind: ChatPart['kind']): ChatPart {
-  let part = msg.parts.find((p) => p.id === id);
-  if (!part) {
-    part = { id, kind, text: '' };
-    msg.parts.push(part);
+  if (type === 'tool') {
+    return {
+      id, kind: 'tool', text: raw.state?.title ?? raw.tool ?? 'tool',
+      tool: {
+        name: raw.tool ?? 'tool', status: raw.state?.status ?? 'running',
+        input: raw.state?.input, output: String(raw.state?.output ?? raw.state?.error ?? ''),
+      },
+    };
   }
-  part.kind = kind;
-  return part;
+  if (typeof raw.text === 'string') {
+    return { id, kind: type === 'reasoning' ? 'reasoning' : 'text', text: raw.text };
+  }
+  return prev ?? null;
 }
 
-/** Tira o eco local do usuário quando a mensagem real chega. */
-function reconcilePending(state: ChatState, realId: string): void {
-  if (realId === PENDING_USER) return;
-  const i = state.messages.findIndex((m) => m.id === PENDING_USER);
-  if (i >= 0) state.messages.splice(i, 1);
-}
-
-function applyPart(state: ChatState, raw: Record<string, unknown>): void {
-  const messageID = raw.messageID as string | undefined;
-  if (!messageID || !raw.id) return;
-  reconcilePending(state, messageID);
-  applyPartInto(upsertMessage(state, messageID, 'assistant'), raw);
+/** COW: aplica um part cru a `parts` (cria/atualiza por id). `parts` intacto se ignorado. */
+function applyRawPart(parts: ChatPart[], raw: RawPart): ChatPart[] {
+  if (!raw.id) return parts;
+  const i = parts.findIndex((p) => p.id === raw.id);
+  const next = computePart(i < 0 ? undefined : parts[i]!, raw);
+  if (next === null || next === parts[i]) return parts;
+  if (i < 0) return [...parts, next];
+  const arr = parts.slice();
+  arr[i] = next;
+  return arr;
 }
 
 /** Aplica um evento ao estado (o caller passa o `prev`; devolve uma cópia nova). */
 export function applyEvent(prev: ChatState, evt: Event): ChatState {
-  const state = clone(prev);
+  const state: ChatState = { ...prev };
   const p = (evt as { properties?: Record<string, unknown> }).properties ?? {};
   tlog('event', evt.type, JSON.stringify(p).slice(0, 200));
 
@@ -249,18 +370,48 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
     return state;
   }
 
+  // Tool `question` — mesmo padrão de fila que a permissão. Sem isto o turno trava
+  // em `running` esperando a resposta que a TUI nunca enviava.
+  if (etype === 'question.asked' || etype === 'question.updated') {
+    const req = toQuestionReq(p);
+    if (req && !state.questions.some((x) => x.id === req.id)) {
+      state.questions = [...state.questions, req];
+    }
+    return state;
+  }
+  if (etype === 'question.replied' || etype === 'question.answered') {
+    const id = (p.requestID ?? p.questionID) as string | undefined;
+    state.questions = id ? state.questions.filter((x) => x.id !== id) : [];
+    return state;
+  }
+
   switch (evt.type) {
     case 'message.updated': {
-      const info = (p.info ?? p) as { id?: string; role?: string };
+      const info = (p.info ?? p) as { id?: string; role?: string; mode?: unknown; summary?: unknown };
       if (info.id) {
-        reconcilePending(state, info.id);
-        upsertMessage(state, info.id, info.role === 'user' ? 'user' : 'assistant');
+        const role = info.role === 'user' ? 'user' : 'assistant';
+        state.messages = withMessage(
+          withoutPending(state.messages, info.id),
+          info.id,
+          role,
+          (parts) => parts,
+          metaFromInfo(info),
+        );
       }
       break;
     }
-    case 'message.part.updated':
-      applyPart(state, (p.part ?? p) as Record<string, unknown>);
+    case 'message.part.updated': {
+      const raw = (p.part ?? p) as RawPart;
+      if (raw.messageID && raw.id) {
+        state.messages = withMessage(
+          withoutPending(state.messages, raw.messageID),
+          raw.messageID,
+          'assistant',
+          (parts) => applyRawPart(parts, raw),
+        );
+      }
       break;
+    }
     case 'permission.replied': {
       const id = p.permissionID as string | undefined;
       state.permissions = id ? state.permissions.filter((x) => x.id !== id) : [];
@@ -359,72 +510,37 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
  */
 export function syncMessages(
   prev: ChatState,
-  raw: Array<{ info?: { id?: string; role?: string }; parts?: Array<Record<string, unknown>> }>,
+  raw: Array<{ info?: { id?: string; role?: string; mode?: unknown; summary?: unknown }; parts?: Array<Record<string, unknown>> }>,
   busy: boolean,
 ): ChatState {
-  const state: ChatState = {
-    messages: [],
-    busy,
-    permissions: prev.permissions,
-    toasts: prev.toasts,
-    todos: prev.todos,
-    files: prev.files,
-    retry: busy ? prev.retry : null,
-    error: prev.error,
-    diff: prev.diff,
-  };
+  let messages: ChatMessage[] = [];
   for (const m of raw) {
     if (!m.info?.id) continue;
-    const msg = upsertMessage(state, m.info.id, m.info.role === 'user' ? 'user' : 'assistant');
-    for (const raw of m.parts ?? []) applyPartInto(msg, raw);
+    const role = m.info.role === 'user' ? 'user' : 'assistant';
+    const meta = metaFromInfo(m.info);
+    messages = withMessage(
+      messages,
+      m.info.id,
+      role,
+      (parts) => {
+        let acc = parts;
+        for (const rp of m.parts ?? []) acc = applyRawPart(acc, rp as RawPart);
+        return acc;
+      },
+      meta,
+    );
   }
   // se o server ainda não listou a última pergunta, preserva o eco local
   const pending = prev.messages.find((x) => x.id === PENDING_USER);
-  if (pending && !state.messages.some((x) => x.role === 'user' && sameText(x, pending))) {
-    state.messages.push(pending);
+  if (pending && !messages.some((x) => x.role === 'user' && sameText(x, pending))) {
+    messages = [...messages, pending];
   }
-  return state;
+  return { ...prev, messages, busy, retry: busy ? prev.retry : null };
 }
 
 function sameText(a: ChatMessage, b: ChatMessage): boolean {
   const t = (m: ChatMessage) => m.parts.map((p) => p.text).join('').trim();
   return t(a) === t(b);
-}
-
-/** applyPart mas direto num `msg` já resolvido (usado pelo syncMessages). */
-function applyPartInto(msg: ChatMessage, raw: Record<string, unknown>): void {
-  const part = raw as {
-    id?: string; type?: string; text?: string; tool?: string;
-    state?: { status?: string; output?: string; error?: string; title?: string; input?: Record<string, unknown> };
-    tokens?: { input?: number; output?: number };
-    cost?: number;
-  };
-  if (!part.id) return;
-  const type = part.type ?? 'text';
-  if (type === 'step-start') return;
-  if (type === 'step-finish') {
-    const cp = upsertPart(msg, part.id, 'step');
-    cp.step = {
-      tokensIn: part.tokens?.input ?? 0,
-      tokensOut: part.tokens?.output ?? 0,
-      cost: part.cost ?? 0,
-    };
-    return;
-  }
-  if (type === 'tool') {
-    const cp = upsertPart(msg, part.id, 'tool');
-    cp.text = part.state?.title ?? part.tool ?? 'tool';
-    cp.tool = {
-      name: part.tool ?? 'tool',
-      status: part.state?.status ?? 'running',
-      input: part.state?.input,
-      output: String(part.state?.output ?? part.state?.error ?? ''),
-    };
-    return;
-  }
-  if (typeof part.text === 'string') {
-    upsertPart(msg, part.id, type === 'reasoning' ? 'reasoning' : 'text').text = part.text;
-  }
 }
 
 /** Eco imediato da mensagem do usuário + marca busy. Zera todos/arquivos da volta anterior. */
@@ -436,6 +552,7 @@ export function pushUserMessage(prev: ChatState, text: string): ChatState {
     ],
     busy: true,
     permissions: prev.permissions,
+    questions: prev.questions,
     toasts: prev.toasts,
     todos: [],
     files: [],
@@ -446,6 +563,36 @@ export function pushUserMessage(prev: ChatState, text: string): ChatState {
 }
 
 // ─── seletores pra UI (puros) ───────────────────────────────────────────────
+
+/**
+ * Marcadores de seção do scaffolding/resumo interno (formato da compactação do
+ * opencode e de "work-state/handoff"). Token = a keyword; semântica = header de seção.
+ */
+const SCAFFOLD_MARKERS = [
+  'objective', 'important details', 'work state', 'completed',
+  'active', 'blocked', 'next move', 'relevant files',
+];
+
+/** `true` se o texto casa o padrão de scaffolding (≥3 headers de seção). Puro. */
+export function looksLikeScaffolding(text: string): boolean {
+  if (!text) return false;
+  let hits = 0;
+  for (const m of SCAFFOLD_MARKERS) {
+    if (new RegExp(`(^|\\n)\\s*#{0,3}\\s*${m}\\b`, 'i').test(text)) hits++;
+    if (hits >= 3) return true;
+  }
+  return false;
+}
+
+/**
+ * `true` = mensagem interna a OFUSCAR do output: resumo da compactação (flag exata
+ * `mode:compaction`/`summary`) OU texto que casa o scaffolding (rede semântica).
+ */
+export function isInternalMessage(m: ChatMessage): boolean {
+  if (m.mode === 'compaction' || m.summary === true) return true;
+  const text = m.parts.filter((p) => p.kind === 'text').map((p) => p.text).join('\n');
+  return looksLikeScaffolding(text);
+}
 
 /** Resumo curto dos args de uma tool (arquivo / comando / pattern / url…). */
 export function summarizeToolInput(input?: Record<string, unknown>): string {

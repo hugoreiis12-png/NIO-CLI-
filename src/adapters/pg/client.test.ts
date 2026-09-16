@@ -6,7 +6,7 @@ import { getPool, ping, closePool, isUuid, readSslOption, isTlsCertError, classi
 
 const KEY = 'NIO_DATABASE_URL';
 const original = process.env[KEY];
-const SSL_KEYS = ['NIO_DATABASE_SSL', 'NIO_DATABASE_SSL_INSECURE', 'NIO_DATABASE_CA'] as const;
+const SSL_KEYS = ['NIO_DATABASE_SSL', 'NIO_DATABASE_SSL_INSECURE', 'NIO_DATABASE_CA', 'NIO_DATABASE_SSL_SERVERNAME'] as const;
 const sslOriginal = Object.fromEntries(SSL_KEYS.map((k) => [k, process.env[k]]));
 
 afterEach(async () => {
@@ -80,6 +80,24 @@ test('readSslOption: NIO_DATABASE_CA → carrega o PEM e mantém a verificação
     rejectUnauthorized: true,
     ca: '-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\n',
   });
+});
+
+test('readSslOption: NIO_DATABASE_SSL_SERVERNAME → verifica hostname contra o SAN (conexão por IP)', () => {
+  for (const k of SSL_KEYS) delete process.env[k];
+  const dir = mkdtempSync(join(tmpdir(), 'nio-ca-'));
+  const caPath = join(dir, 'ca.pem');
+  writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\npin\n-----END CERTIFICATE-----\n');
+  process.env.NIO_DATABASE_CA = caPath;
+  process.env.NIO_DATABASE_SSL_SERVERNAME = 'vm-debian-db';
+  // cert pinado + servername do SAN → verificação completa mesmo conectando por IP.
+  expect(readSslOption(REMOTE_URL)).toEqual({
+    rejectUnauthorized: true,
+    ca: '-----BEGIN CERTIFICATE-----\npin\n-----END CERTIFICATE-----\n',
+    servername: 'vm-debian-db',
+  });
+  // sem CA, só servername → segue verificado, com o servername aplicado.
+  delete process.env.NIO_DATABASE_CA;
+  expect(readSslOption(REMOTE_URL)).toEqual({ rejectUnauthorized: true, servername: 'vm-debian-db' });
 });
 
 test('readSslOption: NIO_DATABASE_CA ilegível → lança', () => {

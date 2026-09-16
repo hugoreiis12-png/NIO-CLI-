@@ -12,6 +12,7 @@ import { filterPalette, type PaletteItem } from './palette-source.js';
 import {
   messageUsage,
   summarizeToolInput,
+  isInternalMessage,
   type ChatMessage,
   type ChatPart,
   type ChatState,
@@ -249,35 +250,26 @@ function Author({ role }: { role: ChatMessage['role'] }): React.ReactElement {
   );
 }
 
-/** Raciocínio no histórico — colapsado: cabeçalho + as 2 primeiras linhas (Sprint 3). */
-function ReasoningSummary({ text }: { text: string }): React.ReactElement | null {
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-  if (lines.length === 0) return null;
+function Part({ part }: { part: ChatPart }): React.ReactElement | null {
+  if (part.kind === 'step') return null; // agregado no rodapé (UsageFooter)
+  if (part.kind === 'tool') return <ToolBlock part={part} />;
+  // raciocínio é só pra acompanhar AO VIVO (LiveMessage); não entra no histórico/output.
+  if (part.kind === 'reasoning') return null;
+  return part.text.trim() ? <Markdown text={part.text} /> : null;
+}
+
+/** Marcador discreto no lugar de uma mensagem interna ofuscada (resumo/scaffolding). */
+function InternalMarker(): React.ReactElement {
   return (
-    <Box flexDirection="column">
-      <Text color={theme.dim}>
-        {'  ✻ raciocínio'}
-        {lines.length > 2 ? ` · ${lines.length} linhas` : ''}
-      </Text>
-      {lines.slice(0, 2).map((l, i) => (
-        <Text key={i} color={theme.dim} wrap="truncate-end">
-          {'    '}
-          {l}
-        </Text>
-      ))}
+    <Box marginBottom={1} paddingX={1}>
+      <Text color={theme.dim}>{'✂ resumo interno ocultado'}</Text>
     </Box>
   );
 }
 
-function Part({ part }: { part: ChatPart }): React.ReactElement | null {
-  if (part.kind === 'step') return null; // agregado no rodapé (UsageFooter)
-  if (part.kind === 'tool') return <ToolBlock part={part} />;
-  if (part.kind === 'reasoning') return <ReasoningSummary text={part.text} />;
-  return part.text.trim() ? <Markdown text={part.text} /> : null;
-}
-
 /** Uma mensagem completa — vai pro `<Static>`. */
 export function MessageView({ message }: { message: ChatMessage }): React.ReactElement {
+  if (isInternalMessage(message)) return <InternalMarker />;
   return (
     <Box flexDirection="column" marginBottom={1} paddingX={1}>
       <Author role={message.role} />
@@ -310,6 +302,7 @@ export function LiveMessage({
   /** Sprint 3: `true` = mostra o raciocínio inteiro (toggle Ctrl-R no App). */
   expandReasoning?: boolean;
 }): React.ReactElement {
+  if (isInternalMessage(message)) return <InternalMarker />; // resumo/scaffolding: ofusca já ao vivo
   const text = message.parts.filter((p) => p.kind === 'text').map((p) => p.text).join('');
   const reasoningRaw = message.parts
     .filter((p) => p.kind === 'reasoning')

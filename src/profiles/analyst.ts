@@ -4,7 +4,8 @@ import { postgresMcp, powerbiMcp } from './mcps.js';
 
 /**
  * Analyst — análise de dados em Python/SQL. Postgres pro operador consultar +
- * PowerBI Modeling (exclusivo de analyst/bi).
+ * PowerBI Modeling e Excel (perfis analytics: analyst/bi/scientist/dba). O Excel
+ * é herdado da def validada do global do usuário (`inheritGlobalMcpIds`).
  */
 export const analystProfile: ProfileDefinition = {
   profile: 'analyst',
@@ -12,4 +13,5 @@ export const analystProfile: ProfileDefinition = {
   toolchains: [pythonToolchain],
   frameworks: ['pandas', 'jupyter'],
   mcps: [postgresMcp, powerbiMcp],
+  inheritGlobalMcpIds: ['excel'],
 };

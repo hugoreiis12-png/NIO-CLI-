@@ -48,6 +48,12 @@ export interface ProfileDefinition {
   toolchains: ToolchainSpec[];
   frameworks: string[];
   mcps: McpSpec[];
+  /**
+   * IDs de MCP a HERDAR do config global do opencode do usuário — o builder do
+   * config dedicado copia a def validada por esse id (que o NIO não modela). Ex.:
+   * `excel`. Só dados (sem IO aqui); id ausente no global → aviso, ignora.
+   */
+  inheritGlobalMcpIds?: string[];
   envVars?: Record<string, string>;
   aliases?: Record<string, string>;
 }

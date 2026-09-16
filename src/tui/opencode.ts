@@ -65,6 +65,29 @@ export async function fetchPendingPermissions(
 }
 
 /**
+ * Perguntas pendentes do tool `question` (`GET /session/:id/question`) — o `resync`
+ * usa isto pra recuperar um `question.asked` perdido (senão o turno trava em
+ * `running`). Nunca lança: erro/timeout → `[]`.
+ */
+export async function fetchPendingQuestions(
+  baseUrl: string,
+  sessionId: string,
+): Promise<Array<Record<string, unknown>>> {
+  if (!sessionId) return [];
+  try {
+    const res = await fetch(new URL(`/session/${sessionId}/question`, baseUrl), {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!res.ok) return [];
+    const body = (await res.json()) as unknown;
+    return Array.isArray(body) ? (body as Array<Record<string, unknown>>) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Stream de eventos do server. **Nunca para** enquanto `signal` não aborta — se o
  * SSE cai (fim de stream ou erro), reconecta com backoff. Emite `null` a cada
  * (re)conexão pra o caller re-sincronizar o estado.

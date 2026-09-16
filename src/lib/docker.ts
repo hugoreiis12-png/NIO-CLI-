@@ -1,4 +1,4 @@
-/**
+/*
  * Camada Docker da NIO-CLI — config, URLs e health dos serviços de infra
  * (`docker/docker-compose.yml`: Docker MCP Gateway + Portainer) e detecção do
  * `docker` no host. Espelha `src/gateway/config.ts` + `lib/auth/gateway-client.ts`.

@@ -1,5 +1,5 @@
 import type { ProfileDefinition } from '../core/environment.js';
-import { postgresMcp } from './mcps.js';
+import { postgresMcp, powerbiMcp } from './mcps.js';
 import { postgresqlClientToolchain } from './toolchains.js';
 
 /**
@@ -18,7 +18,8 @@ export const dbaProfile: ProfileDefinition = {
   languages: ['sql'],
   toolchains: [postgresqlClientToolchain],
   frameworks: [],
-  mcps: [postgresMcp],
+  mcps: [postgresMcp, powerbiMcp],
+  inheritGlobalMcpIds: ['excel'],
   envVars: { PGCLIENTENCODING: 'UTF8' },
   aliases: { pg: 'psql' },
 };

@@ -12,8 +12,6 @@ import {
   NIO_AI_PROVIDER,
   NIO_AI_MODEL_ID,
   NIO_AI_EFFECTIVE_CONTEXT,
-  NIO_AI_NO_THINK,
-  withNoThink,
 } from './client-configs.js';
 import type { McpSpec } from '../../core/environment.js';
 
@@ -143,11 +141,3 @@ test('NIO_AI_EFFECTIVE_CONTEXT: cabe input + output, sem passar do contexto real
   expect(NIO_AI_EFFECTIVE_CONTEXT).toBeGreaterThan(0);
 });
 
-test('withNoThink: anexa /no_think uma vez; vazio e já-sufixado passam direto', () => {
-  expect(withNoThink('explique o erro')).toBe('explique o erro /no_think');
-  expect(withNoThink('multi\nlinha\n')).toBe('multi\nlinha\n /no_think');
-  expect(withNoThink('já direto /no_think')).toBe('já direto /no_think');
-  expect(withNoThink('')).toBe('');
-  expect(withNoThink('   ')).toBe('   ');
-  expect(typeof NIO_AI_NO_THINK).toBe('boolean');
-});

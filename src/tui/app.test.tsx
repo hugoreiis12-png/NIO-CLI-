@@ -7,11 +7,11 @@ import { buildProgram } from '../cli/program.js';
 import type { OpencodeHandle } from './opencode.js';
 
 /** Handle fake — session.create resolve, event stream não emite nada por padrão. */
-function fakeHandle(over: { onPrompt?: (body: unknown) => void; agents?: unknown[] } = {}): OpencodeHandle {
+function fakeHandle(over: { onPrompt?: (body: unknown) => void; onAbort?: () => void; agents?: unknown[] } = {}): OpencodeHandle {
   const client = {
     session: {
       create: async () => ({ data: { id: 'ses_fake' } }),
-      abort: async () => ({}),
+      abort: async () => { over.onAbort?.(); return {}; },
       prompt: async (opts: { body?: unknown }) => {
         over.onPrompt?.(opts.body);
         return {};
@@ -153,6 +153,24 @@ test('App: Ctrl-R alterna o raciocínio colapsado ⇄ expandido — Sprint 3', a
   unmount();
 });
 
+test('Sprint — emenda de compactação (mode:compaction) sem prompt do usuário → aborta e fica idle', async () => {
+  let aborted = 0;
+  const stream = (async function* () {
+    yield { type: 'message.updated', properties: { info: { id: 'm_c', role: 'assistant', mode: 'compaction', summary: true } } };
+    await new Promise((r) => setTimeout(r, 200));
+  })();
+  const h = fakeHandle({ onAbort: () => { aborted++; } });
+  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe =
+    async () => ({ stream });
+  const { lastFrame, unmount } = render(
+    <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
+  );
+  await new Promise((r) => setTimeout(r, 80));
+  expect(aborted).toBeGreaterThan(0); // encerrou a emenda não-solicitada
+  expect(lastFrame() ?? '').not.toContain('processando'); // não fica "pensando" depois
+  unmount();
+});
+
 test('App: batch de 3 permissões → modal 1/3 → 2/3 → 3/3, cada resposta faz POST (Sprint 7.1)', async () => {
   const posted: string[] = [];
   const stream = (async function* () {
@@ -258,9 +276,10 @@ test('App: pergunta com opções → menu navegável; ↓+Enter manda a opção 
   await new Promise((r) => setTimeout(r, 20));
   stdin.write('\r'); // Enter
   await new Promise((r) => setTimeout(r, 40));
-  expect(sent).toBe('Pelos adapters /no_think'); // /no_think (NIO_AI_NO_THINK) vai no fio…
+  // o thinking é desligado no provider (extraBody), não mais por sufixo textual — o fio vai limpo.
+  expect(sent).toBe('Pelos adapters');
   expect(lastFrame() ?? '').toContain('Pelos adapters');
-  expect(lastFrame() ?? '').not.toContain('/no_think'); // …mas o eco local fica limpo
+  expect(lastFrame() ?? '').not.toContain('/no_think');
   unmount();
 });
 

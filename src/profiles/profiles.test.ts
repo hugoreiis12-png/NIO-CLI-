@@ -19,13 +19,17 @@ test('ProfileCatalog.get: os 6 perfis resolvem e batem o próprio nome', () => {
   }
 });
 
-test('powerbi-modeling é exclusivo de analyst e bi (nunca nos outros)', () => {
+test('powerbi-modeling + excel(herdado) nos perfis analytics; fora de fullstack/qa', () => {
   const catalog = createProfileCatalog();
-  const has = (p: Profile) => catalog.get(p).mcps.some((m) => m.id === 'powerbi-modeling');
-  expect(has('analyst')).toBe(true);
-  expect(has('bi')).toBe(true);
-  for (const p of ['fullstack', 'scientist', 'dba', 'qa'] as Profile[]) {
-    expect(has(p)).toBe(false);
+  const hasPowerbi = (p: Profile) => catalog.get(p).mcps.some((m) => m.id === 'powerbi-modeling');
+  const inheritsExcel = (p: Profile) => (catalog.get(p).inheritGlobalMcpIds ?? []).includes('excel');
+  for (const p of ['analyst', 'bi', 'scientist', 'dba'] as Profile[]) {
+    expect(hasPowerbi(p)).toBe(true);
+    expect(inheritsExcel(p)).toBe(true);
+  }
+  for (const p of ['fullstack', 'qa'] as Profile[]) {
+    expect(hasPowerbi(p)).toBe(false);
+    expect(inheritsExcel(p)).toBe(false);
   }
 });
 

@@ -64,7 +64,20 @@ function isLoopbackDbHost(url: string): boolean {
 }
 
 /** Opção `ssl` do `pg.Pool` a partir do ambiente. Pura o suficiente pra testar. */
-export type PgSslOption = boolean | { rejectUnauthorized: boolean; ca?: string };
+export type PgSslOption = boolean | { rejectUnauthorized: boolean; ca?: string; servername?: string };
+
+/**
+ * Monta a opção TLS **verificada** (`rejectUnauthorized: true`), com CA e servername
+ * opcionais. `NIO_DATABASE_SSL_SERVERNAME` força a verificação de hostname contra ESSE
+ * nome (o do SAN do cert) quando a URL conecta por **IP** — o `pg` só injeta o próprio
+ * host como servername quando é hostname (`net.isIP(host) === 0`), então pra IP o nosso
+ * valor passa intacto ao `tls.connect`. Uso: cert self-signed cujo SAN é um nome, mas o
+ * cliente conecta pelo IP (evita `ERR_TLS_CERT_ALTNAME_INVALID` sem afrouxar a verificação).
+ */
+function verifiedSsl(ca?: string): PgSslOption {
+  const servername = process.env.NIO_DATABASE_SSL_SERVERNAME?.trim() || undefined;
+  return { rejectUnauthorized: true, ...(ca ? { ca } : {}), ...(servername ? { servername } : {}) };
+}
 
 /**
  * TLS **ligado por padrão** — só fica off em banco loopback (dev local) ou com
@@ -93,7 +106,7 @@ export function readSslOption(url: string = process.env.NIO_DATABASE_URL?.trim()
         '[pg] NIO_DATABASE_CA e NIO_DATABASE_SSL_INSECURE definidos juntos — ' +
           'usando a CA (TLS verificado). Remova o flag insecure.',
       );
-      return { rejectUnauthorized: true, ca };
+      return verifiedSsl(ca);
     } catch {
       console.error(
         `[pg] AVISO: NIO_DATABASE_CA ilegível ("${caPath}") — fallback para ` +
@@ -112,14 +125,14 @@ export function readSslOption(url: string = process.env.NIO_DATABASE_URL?.trim()
 
   if (caPath) {
     try {
-      return { rejectUnauthorized: true, ca: readFileSync(caPath, 'utf8') };
+      return verifiedSsl(readFileSync(caPath, 'utf8'));
     } catch (err) {
       throw new Error(
         `NIO_DATABASE_CA não pôde ser lido ("${caPath}"): ${(err as Error).message}`,
       );
     }
   }
-  return { rejectUnauthorized: true };
+  return verifiedSsl();
 }
 
 let pool: Pool | null = null;

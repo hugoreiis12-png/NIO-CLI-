@@ -30,8 +30,9 @@ export const postgresMcp: McpSpec = {
 
 /**
  * PowerBI Modeling MCP (Microsoft) — modelagem/consulta de PowerBI (DAX, tabular).
- * **Exclusivo dos perfis `analyst` e `bi`** (só faz sentido pra quem trabalha com
- * BI). Comando oficial portável (github.com/microsoft/powerbi-modeling-mcp):
+ * **Perfis analytics** (`analyst`, `bi`, `scientist`, `dba`). Comando oficial
+ * portável (github.com/microsoft/powerbi-modeling-mcp) — a spec canônica do NIO
+ * (npx @microsoft), que evita o registro duplicado da extensão do VS Code.
  * `npx -y @microsoft/powerbi-modeling-mcp@latest --start [--skipconfirmation]`.
  * Sem auth para conexão com o Power BI Desktop — basta o modelo aberto no Desktop
  * (auth por env só é necessária p/ service principal/Fabric). `--skipconfirmation`

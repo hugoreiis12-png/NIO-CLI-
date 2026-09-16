@@ -25,7 +25,7 @@ interface McpServerEntry {
  * Lê o JSON do path; se for malformado, lança erro com mensagem clara
  * apontando que o user deve consertar à mão.
  */
-function readJsonSafe(path: string): Record<string, unknown> | null {
+export function readJsonSafe(path: string): Record<string, unknown> | null {
   try {
     return readJson(path) as Record<string, unknown> | null;
   } catch (err) {
@@ -215,19 +215,13 @@ export const NIO_AI_OUTPUT = envNum('AI_OUTPUT', 2048);
  */
 export const NIO_AI_THINK = /^(1|true|yes|on)$/i.test((env('AI_THINK') ?? '').trim());
 
-/**
- * Sufixo `/no_think` do Qwen3 nos envios da TUI — pula o chain-of-thought do
- * turno (resposta direta). **On por padrão**: o think só soma latência/tokens
- * e inunda a área viva; desligue com `NIO_AI_NO_THINK=0` (tarefas que pedem
- * raciocínio longo). Não aparece no eco local, só no que vai pro modelo.
- */
-export const NIO_AI_NO_THINK = !/^(0|false|no|off)$/i.test((env('AI_NO_THINK') ?? '').trim());
-
-/** Anexa `/no_think` ao fim do texto (idempotente; vazio passa direto). Pura. */
-export function withNoThink(text: string): string {
-  if (!text.trim() || text.trimEnd().endsWith('/no_think')) return text;
-  return `${text} /no_think`;
-}
+// Supressão de thinking na TUI: NÃO é viável via config do opencode (1.18.31).
+// Testado (proxy): `provider.options.extraBody` é enviado como campo LITERAL
+// `extraBody`, que o vLLM ignora; e `chat_template_kwargs` direto em `options`
+// quebra o provider (UnknownError). O reasoning do Qwen é tratado no CLIENTE — a
+// Camada B (`tui/components.tsx`) não renderiza reasoning no output (só ao vivo).
+// O headless (`qwen-client.ts`) segue desligando via `chat_template_kwargs` no
+// corpo (ali o NIO monta a request direto, sem o opencode no meio).
 
 /**
  * Teto de tokens de **input** por prompt (hard cap). Prompts acima disso são

@@ -14,4 +14,5 @@ export const biProfile: ProfileDefinition = {
   toolchains: [postgresqlClientToolchain, powerbiDesktopToolchain],
   frameworks: ['powerbi'],
   mcps: [powerbiMcp],
+  inheritGlobalMcpIds: ['excel'],
 };
