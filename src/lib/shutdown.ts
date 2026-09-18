@@ -4,7 +4,14 @@ const FORCE_EXIT_AFTER_MS = 1500;
 export interface ShutdownOpts {
   /** Teto da drenagem; `< 0` desliga a saída forçada (testes). */
   forceExitAfterMs?: number;
+  /** Como registra o exit code; default escreve o `process.exitCode` real (tests injetam spy). */
+  setExitCode?: (code: number) => void;
 }
+
+/** Default de prod: registra no processo de verdade (bun test compartilha esse global e sai non-zero). */
+const recordRealExitCode = (code: number): void => {
+  process.exitCode = code;
+};
 
 /** Fecha o pool do Postgres se algum comando abriu um (lazy: não puxa o `pg` no cold start). */
 export async function closeDbIfOpen(): Promise<void> {
@@ -19,6 +26,7 @@ export async function closeDbIfOpen(): Promise<void> {
 /** Limpa (pool, stdin), seta `exitCode` e deixa o loop drenar; força a saída no teto. */
 export async function shutdown(code = 0, opts: ShutdownOpts = {}): Promise<void> {
   const forceAfter = opts.forceExitAfterMs ?? FORCE_EXIT_AFTER_MS;
+  const setExitCode = opts.setExitCode ?? recordRealExitCode;
   if (forceAfter >= 0) {
     const timer = setTimeout(() => process.exit(code), forceAfter);
     timer.unref();
@@ -29,5 +37,5 @@ export async function shutdown(code = 0, opts: ShutdownOpts = {}): Promise<void>
   } catch {
     /* sem stdin */
   }
-  process.exitCode = code;
+  setExitCode(code);
 }
