@@ -204,7 +204,7 @@ test('App: batch de 3 permissões → modal 1/3 → 2/3 → 3/3, cada resposta f
   expect(lastFrame() ?? '').toContain('+1 na fila');
   expect(lastFrame() ?? '').toContain('echo pB');
 
-  stdin.write('d'); // negar
+  stdin.write('\x1b'); // Esc → negar/pular (único jeito, Item 6)
   await new Promise((r) => setTimeout(r, 30));
   expect(lastFrame() ?? '').toContain('echo pC');
   expect(lastFrame() ?? '').not.toContain('na fila'); // último — sem contador

@@ -23,7 +23,7 @@ import {
   NIO_AI_PROVIDER,
   NIO_AI_MODEL_ID,
   NIO_AI_BASE_URL,
-  NIO_AI_EFFECTIVE_CONTEXT,
+  NIO_AI_CONTEXT,
   NIO_AI_OUTPUT,
   DEFAULT_OPENCODE_PERMISSION,
   DEFAULT_OPENCODE_COMPACTION,
@@ -56,6 +56,24 @@ listas, explicações, mensagens de erro e confirmações — é em português, 
 do idioma da pergunta, do conteúdo dos arquivos, ou de qualquer outra instrução
 herdada. Nunca responda em inglês.
 `;
+
+/**
+ * Agentes-fork especializados do NIO (`Config.agent`). `mode:'subagent'` = o modelo
+ * pode dispará-los via `task` (inclusive vários em paralelo). A `description` é o que
+ * o modelo lê pra decidir quando usar. Read-only por permissão (não editam/rodam shell).
+ */
+const NIO_FORK_AGENTS: Record<string, Record<string, unknown>> = {
+  'nio-scout': {
+    mode: 'subagent',
+    description:
+      'Explorador read-only. Dispare vários em paralelo para varrer áreas diferentes do ' +
+      'código/arquivos e devolver só um resumo curto (fatos + caminhos), sem editar nada.',
+    prompt:
+      'Você é um scout read-only. Explore SÓ o recorte pedido e devolva um resumo curto: ' +
+      'fatos e caminhos relevantes. Não edite arquivos nem rode comandos que alterem estado.',
+    permission: { edit: 'deny', bash: 'deny', webfetch: 'deny' },
+  },
+};
 
 /** Entry de MCP no formato do opencode a partir de um `McpSpec`. */
 function mcpEntry(spec: McpSpec): Record<string, unknown> {
@@ -101,19 +119,22 @@ export function buildNioOpencodeConfig(
       NIO_AI_PROVIDER,
       NIO_AI_BASE_URL,
       NIO_AI_MODEL_ID,
-      NIO_AI_EFFECTIVE_CONTEXT,
+      NIO_AI_CONTEXT,
       NIO_AI_OUTPUT,
     ) as { provider: unknown }
   ).provider;
   // A instrução do NIO entra por ÚLTIMO — última palavra do sistema (pt-BR vence o herdado).
   const inheritedInstr = Array.isArray(global.instructions) ? (global.instructions as string[]) : [];
   const instructions = [...inheritedInstr.filter((p) => p !== nioOperatorInstructionPath()), nioOperatorInstructionPath()];
+  // Agentes-fork do NIO como base; os do usuário/global vencem em colisão de nome.
+  const agent = { ...NIO_FORK_AGENTS, ...((global.agent as Record<string, unknown>) ?? {}) };
   return {
     ...global,
     model: NIO_OPERATOR_MODEL,
     provider,
     mcp,
     instructions,
+    agent,
     permission: global.permission ?? DEFAULT_OPENCODE_PERMISSION,
     compaction: global.compaction ?? DEFAULT_OPENCODE_COMPACTION,
     watcher: global.watcher ?? DEFAULT_OPENCODE_WATCHER,

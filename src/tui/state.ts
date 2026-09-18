@@ -13,8 +13,8 @@ import { tlog } from './debug.js';
 
 export interface ChatPart {
   id: string;
-  kind: 'text' | 'reasoning' | 'tool' | 'step';
-  /** texto (text/reasoning) ou título (tool). */
+  kind: 'text' | 'reasoning' | 'tool' | 'step' | 'fork';
+  /** texto (text/reasoning) ou título (tool/fork). */
   text: string;
   /** kind tool: nome, estado, args de entrada e saída. */
   tool?: {
@@ -25,6 +25,8 @@ export interface ChatPart {
   };
   /** kind step: uso do passo agêntico (step-finish). */
   step?: { tokensIn: number; tokensOut: number; cost: number };
+  /** kind fork: sub-agente disparado pelo modelo (part `subtask`). */
+  fork?: { agent: string; description: string };
 }
 
 export interface ChatMessage {
@@ -149,8 +151,9 @@ export function toPermissionReq(raw: Record<string, unknown>): PermissionReq | n
  */
 export function reconcilePendingPermissions(
   prev: ChatState,
-  rawList: Array<Record<string, unknown>>,
+  rawList: Array<Record<string, unknown>> | null,
 ): ChatState {
+  if (rawList === null) return prev; // fetch falhou → mantém a fila (não apaga o modal)
   const live = rawList.map(toPermissionReq).filter((r): r is PermissionReq => r !== null);
   const liveIds = new Set(live.map((r) => r.id));
   const kept = prev.permissions.filter((r) => liveIds.has(r.id));
@@ -189,8 +192,9 @@ export function toQuestionReq(raw: Record<string, unknown>): QuestionReq | null 
 /** Reconcilia a fila de perguntas com a verdade do server (`GET /session/:id/question`). */
 export function reconcilePendingQuestions(
   prev: ChatState,
-  rawList: Array<Record<string, unknown>>,
+  rawList: Array<Record<string, unknown>> | null,
 ): ChatState {
+  if (rawList === null) return prev; // fetch falhou → mantém a fila (não apaga a pergunta)
   const live = rawList.map(toQuestionReq).filter((r): r is QuestionReq => r !== null);
   const liveIds = new Set(live.map((r) => r.id));
   const kept = prev.questions.filter((r) => liveIds.has(r.id));
@@ -268,6 +272,11 @@ interface RawPart {
   state?: { status?: string; output?: string; error?: string; title?: string; input?: Record<string, unknown> };
   tokens?: { input?: number; output?: number };
   cost?: number;
+  /** part `subtask` (fork disparado pelo modelo). */
+  agent?: string;
+  description?: string;
+  /** metadata do part; `compaction_continue` = aviso sintético de mídia removida. */
+  metadata?: { compaction_continue?: boolean };
 }
 
 /** COW: tira o eco local `pending-user` quando a mensagem real chega. `messages`
@@ -311,6 +320,40 @@ function metaFromInfo(info: { mode?: unknown; summary?: unknown }): { mode?: str
   return meta;
 }
 
+/** Pares de tag de reasoning inline (lista canônica, espelha o open-webui). */
+const REASONING_TAGS: [string, string][] = [
+  ['<think>', '</think>'],
+  ['<thinking>', '</thinking>'],
+  ['<reason>', '</reason>'],
+  ['<reasoning>', '</reasoning>'],
+  ['<thought>', '</thought>'],
+  ['◁think▷', '◁/think▷'],
+  ['<|begin_of_thought|>', '<|end_of_thought|>'],
+];
+
+/**
+ * Fallback: tira reasoning inline do texto de saída, pra quando o provider NÃO
+ * separa o reasoning num part próprio (ex.: vLLM sem `--reasoning-parser`, ou
+ * outro modelo que emite `<think>` no content). Remove spans fechados; um tag
+ * aberto sem fechamento (streaming) corta do tag até o fim. Puro, sem regex.
+ */
+export function stripReasoningTags(text: string): string {
+  let out = text;
+  for (const [open, close] of REASONING_TAGS) {
+    let start = out.indexOf(open);
+    while (start >= 0) {
+      const end = out.indexOf(close, start + open.length);
+      if (end < 0) {
+        out = out.slice(0, start); // aberto sem fechar → some do tag em diante
+        break;
+      }
+      out = out.slice(0, start) + out.slice(end + close.length);
+      start = out.indexOf(open);
+    }
+  }
+  return out;
+}
+
 /**
  * Interpreta um part cru do SDK sobre o part anterior (por id) e devolve o novo part
  * — ou `null` pra ignorar (`step-start`, ou texto ausente sem part prévio). Puro.
@@ -318,7 +361,9 @@ function metaFromInfo(info: { mode?: unknown; summary?: unknown }): { mode?: str
 function computePart(prev: ChatPart | undefined, raw: RawPart): ChatPart | null {
   const id = raw.id as string;
   const type = raw.type ?? 'text';
-  if (type === 'step-start') return null;
+  // step-start não tem conteúdo; `compaction` é o resumo interno da auto-compaction
+  // do opencode — nunca renderiza, senão o "pensamento de compressão" vaza no output.
+  if (type === 'step-start' || type === 'compaction') return null;
   if (type === 'step-finish') {
     return {
       id, kind: 'step', text: prev?.text ?? '',
@@ -334,8 +379,21 @@ function computePart(prev: ChatPart | undefined, raw: RawPart): ChatPart | null 
       },
     };
   }
+  if (type === 'subtask') {
+    const agent = raw.agent ?? 'agent';
+    const description = raw.description ?? '';
+    return { id, kind: 'fork', text: description || agent, fork: { agent, description } };
+  }
+  // aviso sintético do opencode: anexo grande removido + contexto compactado. Mostra
+  // um marcador conciso no lugar do parágrafo longo (senão parece que travou raciocinando).
+  if (raw.metadata?.compaction_continue) {
+    return { id, kind: 'text', text: '✂ anexo grande removido — contexto compactado; reenvie menor se precisar.' };
+  }
   if (typeof raw.text === 'string') {
-    return { id, kind: type === 'reasoning' ? 'reasoning' : 'text', text: raw.text };
+    const kind = type === 'reasoning' ? 'reasoning' : 'text';
+    // no output (`text`), tira reasoning inline que o provider não separou; o part
+    // `reasoning` em si (live) mantém o texto cru.
+    return { id, kind, text: kind === 'text' ? stripReasoningTags(raw.text) : raw.text };
   }
   return prev ?? null;
 }
@@ -356,7 +414,7 @@ function applyRawPart(parts: ChatPart[], raw: RawPart): ChatPart[] {
 export function applyEvent(prev: ChatState, evt: Event): ChatState {
   const state: ChatState = { ...prev };
   const p = (evt as { properties?: Record<string, unknown> }).properties ?? {};
-  tlog('event', evt.type, JSON.stringify(p).slice(0, 200));
+  tlog('event', evt.type, p); // o cap de tamanho fica no tlog (debug.ts), não aqui
 
   // `permission.asked` é o que o opencode 1.18 emite de verdade (os tipos do SDK
   // ainda listam só `permission.updated`). Ambos caem aqui. Batch paralelo =
@@ -601,6 +659,29 @@ export function summarizeToolInput(input?: Record<string, unknown>): string {
   for (const k of keys) if (typeof input[k] === 'string' && input[k]) return String(input[k]);
   const first = Object.values(input).find((v) => typeof v === 'string' && v);
   return first ? String(first) : '';
+}
+
+/**
+ * Uso da janela de contexto no último turno do assistant, pra o rodapé medir
+ * "quanto o turno gastou" contra a janela do provider. `tokensIn` = o MAIOR
+ * `tokensIn` entre os steps (o prompt de pico já inclui todo o histórico —
+ * somar contaria o contexto N vezes); `tokensOut` = a SOMA do output gerado nos
+ * steps. Em turno multi-step o total in+out superestima um pouco (o output de um
+ * step vira input do próximo), o que é o lado seguro pra um medidor de teto.
+ * `{0,0}` se nenhum turno reportou uso. Puro.
+ */
+export function contextUsage(messages: ChatMessage[]): { tokensIn: number; tokensOut: number } {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]!;
+    if (m.role !== 'assistant') continue;
+    const steps = m.parts.filter((p) => p.step).map((p) => p.step!);
+    if (steps.length === 0) continue;
+    return {
+      tokensIn: Math.max(...steps.map((s) => s.tokensIn)),
+      tokensOut: steps.reduce((n, s) => n + s.tokensOut, 0),
+    };
+  }
+  return { tokensIn: 0, tokensOut: 0 };
 }
 
 /** Soma dos tokens/custo de todos os `step` parts de uma mensagem. */

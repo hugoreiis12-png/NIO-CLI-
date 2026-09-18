@@ -232,17 +232,47 @@ export const NIO_AI_THINK = /^(1|true|yes|on)$/i.test((env('AI_THINK') ?? '').tr
 export const NIO_AI_MAX_INPUT = envNum('AI_MAX_INPUT', 32000);
 
 /**
- * Janela de contexto **efetiva** declarada ao opencode (`limit.context`). O opencode
- * orça o prompt por esse valor (reserva `output`, enche o input com o resto), então
- * declarar os 65536 crus fazia a TUI empacotar ~63k de input e estourar a janela.
- * Rebaixamos pra `NIO_AI_MAX_INPUT + NIO_AI_OUTPUT` — assim o teto de input vale
- * também no caminho da TUI (não só no headless), sem passar do contexto real do
- * modelo. `NIO_AI_MAX_INPUT=0` (trava off) ou `NIO_AI_CONTEXT=0` mantêm o cru.
+ * Teto acima do qual o input do usuário é compactado por map-reduce antes de enviar
+ * (lossy). Default = `NIO_AI_MAX_INPUT`. `0` desativa o map-reduce. Ver `map-reduce.ts`.
  */
-export const NIO_AI_EFFECTIVE_CONTEXT =
-  NIO_AI_CONTEXT > 0 && NIO_AI_MAX_INPUT > 0
-    ? Math.min(NIO_AI_CONTEXT, NIO_AI_MAX_INPUT + NIO_AI_OUTPUT)
-    : NIO_AI_CONTEXT;
+export const NIO_AI_MAPREDUCE_THRESHOLD = envNum('AI_MAPREDUCE_THRESHOLD', NIO_AI_MAX_INPUT);
+
+/**
+ * Teto de bytes do arquivo de imagem anexado (~1,5 MB → base64 ~2 MB). Imagem acima
+ * disso não é enviada crua (fura a janela do provider) — vira aviso. `0` desativa o
+ * guard. Override `NIO_AI_MAX_IMAGE_BYTES`. Ver `tui/attachments.ts`.
+ */
+export const NIO_AI_MAX_IMAGE_BYTES = envNum('AI_MAX_IMAGE_BYTES', 1_500_000);
+
+/** Dimensão-alvo (px) ao reduzir imagem acima do teto (scaleToFit). Override `NIO_AI_IMAGE_MAX_DIM`. */
+export const NIO_AI_IMAGE_MAX_DIM = envNum('AI_IMAGE_MAX_DIM', 1024);
+
+// A janela declarada ao opencode (`limit.context`) é a REAL do provider
+// (`NIO_AI_CONTEXT`), não um teto de input rebaixado. Sub-declarar (o antigo
+// `min(context, max_input+output)`) fazia o opencode achar a janela menor que o
+// prompt real e auto-compactar em loop infinito. O teto de input é assunto
+// separado — vive só no fail-fast do headless (`NIO_AI_MAX_INPUT`, qwen-client).
+
+/** Folga de compactação do opencode (`DEFAULT_OPENCODE_COMPACTION.reserved`). */
+const COMPACTION_FLOOR = 8000;
+
+/**
+ * Aviso de config de contexto suspeita: janela declarada pequena demais (≤ output +
+ * folga de compactação) faz o opencode achar o contexto sempre cheio e auto-compactar
+ * em loop — exatamente o bug que corrigimos. `null` = ok. Puro (params testáveis).
+ */
+export function contextConfigWarning(
+  context = NIO_AI_CONTEXT,
+  output = NIO_AI_OUTPUT,
+): string | null {
+  if (context > 0 && context <= output + COMPACTION_FLOOR) {
+    return (
+      `NIO_AI_CONTEXT=${context} é pequeno demais (≤ output ${output} + folga ${COMPACTION_FLOOR}): ` +
+      'o opencode pode auto-compactar em loop. Ajuste NIO_AI_CONTEXT ao --max-model-len real do vLLM.'
+    );
+  }
+  return null;
+}
 
 /**
  * Compaction automática do OpenCode: com a janela apertada (64K num backend local +
@@ -413,7 +443,7 @@ export function planOpencodeUpdate(
   // precisa existir com o modelo+limite declarados; sem baseURL, o opencode não deve
   // ter baseURL de hijack legado (fica no default big-pickle).
   const providerOk = baseURL
-    ? nioAiProviderOk(existing, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_EFFECTIVE_CONTEXT, NIO_AI_OUTPUT)
+    ? nioAiProviderOk(existing, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_CONTEXT, NIO_AI_OUTPUT)
     : !opencodeHasBaseURL(existing);
   const alreadyConfigured =
     nioOk &&
@@ -443,7 +473,7 @@ export function planOpencodeUpdate(
   if (!existing.compaction) next.compaction = DEFAULT_OPENCODE_COMPACTION; // janela apertada — nunca sobrescreve
   if (!existing.watcher) next.watcher = DEFAULT_OPENCODE_WATCHER; // nunca sobrescreve
   next = clearOpencodeProviderBaseURL(next); // limpa qualquer hijack legado no provider `opencode`
-  if (baseURL) next = planNioAiProvider(next, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_EFFECTIVE_CONTEXT, NIO_AI_OUTPUT);
+  if (baseURL) next = planNioAiProvider(next, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_CONTEXT, NIO_AI_OUTPUT);
   return { alreadyConfigured, next };
 }
 

@@ -11,7 +11,8 @@ import {
   NIO_AI_BASE_URL,
   NIO_AI_PROVIDER,
   NIO_AI_MODEL_ID,
-  NIO_AI_EFFECTIVE_CONTEXT,
+  NIO_AI_CONTEXT,
+  contextConfigWarning,
 } from './client-configs.js';
 import type { McpSpec } from '../../core/environment.js';
 
@@ -53,8 +54,8 @@ test('planOpencodeUpdate: com baseURL → semeia o provider dedicado, NÃO toca 
   const first = planOpencodeUpdate({}, NIO_ENTRY, [], url);
   const p = first.next.provider as Record<string, any>;
   expect(p[NIO_AI_PROVIDER].options.baseURL).toBe(url);
-  // Contexto EFETIVO (rebaixado p/ caber NIO_AI_MAX_INPUT), não o cru do modelo.
-  expect(p[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(NIO_AI_EFFECTIVE_CONTEXT);
+  // Janela REAL do provider (NIO_AI_CONTEXT) — sub-declarar causava loop de compactação.
+  expect(p[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(NIO_AI_CONTEXT);
   expect(p.opencode).toBeUndefined(); // opencode fica no default, sem hijack
 
   const seeded = first.next;
@@ -94,7 +95,7 @@ test('installOpencodeGlobal: aponta o provider pro backend de IA (NIO_AI_BASE_UR
   installOpencodeGlobal([], p); // sem baseURL explícito → herda o default (NIO_AI_BASE_URL)
   const cfg = JSON.parse(readFileSync(p, 'utf8'));
   expect(cfg.provider[NIO_AI_PROVIDER].options.baseURL).toBe(NIO_AI_BASE_URL);
-  expect(cfg.provider[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(NIO_AI_EFFECTIVE_CONTEXT);
+  expect(cfg.provider[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(NIO_AI_CONTEXT);
   expect(cfg.model).toBe(NIO_OPERATOR_MODEL);
   expect(cfg.provider.opencode).toBeUndefined(); // opencode fica no default (big-pickle)
 
@@ -134,10 +135,17 @@ test('upsertOpencodeMcp: cria o arquivo se não existe', () => {
   rmSync(d, { recursive: true, force: true });
 });
 
-test('NIO_AI_EFFECTIVE_CONTEXT: cabe input + output, sem passar do contexto real', () => {
-  // Com os defaults (max_input 32000, output 2048), a janela declarada rebaixa
-  // pra 34048 — o opencode passa a orçar o input em ~32000, não nos 65536 crus.
-  expect(NIO_AI_EFFECTIVE_CONTEXT).toBeLessThanOrEqual(65536);
-  expect(NIO_AI_EFFECTIVE_CONTEXT).toBeGreaterThan(0);
+test('contextConfigWarning: avisa janela pequena demais, silencia janela sã ou desativada', () => {
+  expect(contextConfigWarning(10000, 2048)).toBeTruthy(); // 10000 ≤ 2048 + 8000
+  expect(contextConfigWarning(98304, 2048)).toBeNull(); // folgada
+  expect(contextConfigWarning(0, 2048)).toBeNull(); // 0 = declaração desativada
+});
+
+test('janela declarada ao opencode = NIO_AI_CONTEXT (a real do provider, não um teto rebaixado)', () => {
+  // Declarar menos que a janela real fazia o opencode achar o contexto sempre cheio
+  // e auto-compactar em loop. A janela declarada tem que ser a real do provider.
+  const { next } = planOpencodeUpdate({}, NIO_ENTRY, [], NIO_AI_BASE_URL);
+  const p = next.provider as Record<string, any>;
+  expect(p[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].limit.context).toBe(NIO_AI_CONTEXT);
 });
 

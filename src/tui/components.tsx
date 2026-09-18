@@ -62,6 +62,19 @@ export function DiffSummary({
   );
 }
 
+/** Chips dos arquivos detectados no input (Item 4 — anexos). `[]` → nada. */
+export function AttachChips({ files }: { files: string[] }): React.ReactElement | null {
+  if (files.length === 0) return null;
+  return (
+    <Box paddingX={1}>
+      <Text color={theme.accent} wrap="truncate-end">
+        {'anexos: '}
+        <Text color={theme.dim}>{files.join('  ·  ')}</Text>
+      </Text>
+    </Box>
+  );
+}
+
 /** Menu de opções da pergunta do modelo (`questionOptions`, Sprint 7.6). */
 export function QuestionPicker({
   options,
@@ -132,23 +145,37 @@ export function Footer({
   cwd,
   session,
   mode,
-  sessionTokens = 0,
+  tokensIn = 0,
+  tokensOut = 0,
+  contextLimit = 0,
 }: {
   model: string;
   cwd: string;
   session: { name: string; profile: string } | null;
   mode?: string;
-  sessionTokens?: number;
+  /** input de pico do último turno (já inclui o histórico). */
+  tokensIn?: number;
+  /** output gerado no último turno. */
+  tokensOut?: number;
+  /** janela de contexto do provider (NIO_AI_CONTEXT); 0 = não mostra %. */
+  contextLimit?: number;
 }): React.ReactElement {
   const folder = cwd.replace(/\/+$/, '').split('/').pop() || cwd;
+  const used = tokensIn + tokensOut;
+  const pct = contextLimit > 0 ? used / contextLimit : 0;
+  const tokenColor = pct >= 0.9 ? theme.err : pct >= 0.7 ? theme.warn : theme.dim;
+  const tokenLabel =
+    used > 0
+      ? `↑${kfmt(tokensIn)} ↓${kfmt(tokensOut)}${contextLimit > 0 ? ` · ${Math.round(pct * 100)}%` : ''}`
+      : null;
   const bits: string[] = [`⏵ ${model}`, folder];
   if (session) bits.push(`${session.name} · ${session.profile}`);
-  if (sessionTokens > 0) bits.push(`${kfmt(sessionTokens)} tok`);
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text wrap="truncate-end">
         <Text color={theme.dim}>{bits.join('  ·  ')}</Text>
         {mode ? <Text color={theme.accentBright}>{`  [${mode}]`}</Text> : null}
+        {tokenLabel ? <Text color={tokenColor}>{`  ${tokenLabel}`}</Text> : null}
       </Text>
       <Text color={theme.dim}>
         <Text color={theme.accent}>/</Text> paleta{'   '}
@@ -183,6 +210,18 @@ function ToolBlock({ part }: { part: ChatPart }): React.ReactElement {
         </Text>
       )}
     </Box>
+  );
+}
+
+/** Fork: sub-agente disparado pelo modelo (part `subtask`) — `⑂ agente · descrição`. */
+function ForkBlock({ part }: { part: ChatPart }): React.ReactElement {
+  const f = part.fork;
+  return (
+    <Text wrap="truncate-end">
+      <Text color={theme.accent}>{'⑂ '}</Text>
+      <Text color={theme.accentBright}>{f?.agent ?? part.text}</Text>
+      {f?.description ? <Text color={theme.dim}>{` · ${clip(f.description, 60)}`}</Text> : null}
+    </Text>
   );
 }
 
@@ -253,6 +292,7 @@ function Author({ role }: { role: ChatMessage['role'] }): React.ReactElement {
 function Part({ part }: { part: ChatPart }): React.ReactElement | null {
   if (part.kind === 'step') return null; // agregado no rodapé (UsageFooter)
   if (part.kind === 'tool') return <ToolBlock part={part} />;
+  if (part.kind === 'fork') return <ForkBlock part={part} />; // sub-agente disparado
   // raciocínio é só pra acompanhar AO VIVO (LiveMessage); não entra no histórico/output.
   if (part.kind === 'reasoning') return null;
   return part.text.trim() ? <Markdown text={part.text} /> : null;
@@ -314,6 +354,7 @@ export function LiveMessage({
   const allTools = message.parts.filter((p) => p.kind === 'tool');
   const tools = allTools.slice(-4); // só as últimas na área viva; o histórico tem todas
   const toolsHidden = allTools.length - tools.length;
+  const forks = message.parts.filter((p) => p.kind === 'fork'); // sub-agentes disparados
   // orça a altura: chrome (todo + tools + rodapé + raciocínio) sai do budget de texto
   const reasoningShown =
     expandReasoning && reasoningLines.length
@@ -343,6 +384,9 @@ export function LiveMessage({
       )}
       {tools.map((t) => (
         <ToolBlock key={t.id} part={t} />
+      ))}
+      {forks.map((f) => (
+        <ForkBlock key={f.id} part={f} />
       ))}
       {reasoningRaw && !expandReasoning && (
         <Text color={theme.dim} wrap="truncate-end">

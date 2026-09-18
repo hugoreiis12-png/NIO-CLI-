@@ -14,17 +14,56 @@ test('Footer: modelo · pasta · sessão · tokens + linha de atalhos (Sprint 4)
       cwd="/Users/hugo/Desktop/app-web"
       session={{ name: 'app-web', profile: 'fullstack' }}
       mode="plan"
-      sessionTokens={12500}
+      tokensIn={12500}
     />,
   );
   const f = lastFrame() ?? '';
   expect(f).toContain('big-pickle');
   expect(f).toContain('app-web'); // pasta = basename do cwd (e nome da sessão)
   expect(f).toContain('fullstack');
-  expect(f).toContain('12.5k tok');
+  expect(f).toContain('↑12.5k');
   expect(f).toContain('[plan]'); // pill de modo (Sprint 5)
   expect(f).toContain('paleta');
   expect(f).toContain('sair');
+});
+
+test('Footer: com contextLimit mostra ↑in ↓out + % da janela do provider (Task 2)', () => {
+  const f =
+    render(
+      <Footer
+        model="big-pickle"
+        cwd="/tmp/app"
+        session={null}
+        tokensIn={60000}
+        tokensOut={6000}
+        contextLimit={98304}
+      />,
+    ).lastFrame() ?? '';
+  expect(f).toContain('↑60.0k'); // input de pico
+  expect(f).toContain('↓6.0k'); // output gerado
+  expect(f).toContain('67%'); // (60000+6000)/98304 ≈ 0.671 → 67%
+});
+
+test('Footer: sem contextLimit mostra ↑in ↓out sem % (janela não declarada)', () => {
+  const f =
+    render(
+      <Footer model="big-pickle" cwd="/tmp/app" session={null} tokensIn={31000} tokensOut={2000} />,
+    ).lastFrame() ?? '';
+  expect(f).toContain('↑31.0k');
+  expect(f).toContain('↓2.0k');
+  expect(f).not.toContain('%'); // sem janela, não mostra percentual
+});
+
+test('MessageView: fork (subtask) aparece como ⑂ agente · descrição (Item 5)', () => {
+  const msg: ChatMessage = {
+    id: 'a',
+    role: 'assistant',
+    parts: [{ id: 'f', kind: 'fork', text: 'explore', fork: { agent: 'explore', description: 'varrer o core' } }],
+  };
+  const f = render(<MessageView message={msg} />).lastFrame() ?? '';
+  expect(f).toContain('⑂');
+  expect(f).toContain('explore');
+  expect(f).toContain('varrer o core');
 });
 
 test('MessageView: renderiza texto do assistant e do usuário', () => {

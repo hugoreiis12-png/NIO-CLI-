@@ -44,6 +44,18 @@ test('buildNioOpencodeConfig: filtra o mcp pro conjunto do perfil, herda excel d
   expect(instr[instr.length - 1]).toContain('nio-operator.md');
 });
 
+test('buildNioOpencodeConfig: semeia agentes-fork do NIO (subagent) e preserva os do global', () => {
+  const cfg = buildNioOpencodeConfig(
+    { agent: { meu: { mode: 'subagent', description: 'do usuário' } } },
+    [{ id: 'nio-lang', command: ['nio-lang'] }],
+    [],
+  );
+  const agent = cfg.agent as Record<string, Record<string, unknown>>;
+  expect(agent['nio-scout']?.mode).toBe('subagent'); // fork do NIO presente
+  expect(agent['nio-scout']?.permission).toEqual({ edit: 'deny', bash: 'deny', webfetch: 'deny' });
+  expect(agent.meu?.description).toBe('do usuário'); // agente do usuário preservado
+});
+
 test('buildNioOpencodeConfig: id herdado ausente no global é ignorado (sem quebrar)', () => {
   const cfg = buildNioOpencodeConfig({ mcp: {} }, [{ id: 'nio-lang', command: ['nio-lang'] }], ['excel']);
   const mcp = cfg.mcp as Record<string, unknown>;

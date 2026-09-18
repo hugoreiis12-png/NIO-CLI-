@@ -18,13 +18,14 @@ import {
   Toasts,
   ErrorBlock,
   DiffSummary,
+  AttachChips,
   type PaletteAction,
 } from './components.js';
 import { InfoPanel, CommandRunner, PermissionModal, QuestionModal } from './palette.js';
 import { buildPalette, type PaletteItem } from './palette-source.js';
 import {
   applyEvent,
-  messageUsage,
+  contextUsage,
   pendingQuestion,
   questionOptions,
   pushUserMessage,
@@ -41,6 +42,10 @@ import {
   fetchPendingQuestions,
   type OpencodeHandle,
 } from './opencode.js';
+import { NIO_AI_CONTEXT } from '../lib/clients/client-configs.js';
+import { compactInput } from '../lib/exec/map-reduce.js';
+import { buildAttachedInput, detectPaths } from './attachments.js';
+import type { FilePartInput } from '@opencode-ai/sdk';
 
 type Overlay =
   | { kind: 'none' }
@@ -222,15 +227,35 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
 
   useEffect(() => () => handle.close(), [handle]);
 
-  const send = (text: string) => {
+  const send = async (text: string) => {
     if (!sessionId.current) return;
     setDraft('');
     userTurnActive.current = true; // este turno foi pedido pelo usuário → não abortar
-    setChat((prev) => pushUserMessage(prev, text));
+    setChat((prev) => pushUserMessage(prev, text)); // eco mostra o texto ORIGINAL
+    // Anexos: embute o conteúdo dos arquivos (csv/txt/xlsx) no texto e coleta parts de
+    // imagem (Item 4b). Falha → segue com o texto cru.
+    let enriched = text;
+    let fileParts: FilePartInput[] = [];
+    try {
+      const built = await buildAttachedInput(text);
+      enriched = built.text;
+      fileParts = built.fileParts;
+    } catch (err) {
+      tlog('buildAttachedInput falhou, texto cru', (err as Error).message);
+    }
+    // Map-reduce: input grande é compactado (lossy) antes de enviar; erro → manda cru.
+    let payload = enriched;
+    try {
+      payload = await compactInput(enriched, {
+        onProgress: (n) => toast(`compactando input · ${n} trecho(s)`),
+      });
+    } catch (err) {
+      tlog('compactInput falhou, enviando cru', (err as Error).message);
+    }
     // Sem o antigo sufixo `/no_think` (poluía o contexto). O reasoning do Qwen não é
     // suprimível via config do opencode (ver client-configs) — a Camada B não o mostra no output.
     handle.client.session
-      .prompt({ path: { id: sessionId.current }, body: { model, agent: mode, parts: [{ type: 'text', text }] } })
+      .prompt({ path: { id: sessionId.current }, body: { model, agent: mode, parts: [...fileParts, { type: 'text', text: payload }] } })
       .catch((err) => tlog('prompt falhou', (err as Error).message));
   };
 
@@ -341,15 +366,15 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   // Sprint 7.4/7.6 — o nio terminou com uma pergunta (e às vezes opções)
   const question = useMemo(() => pendingQuestion(chat), [chat]);
   const options = useMemo(() => questionOptions(chat), [chat]);
-  // total de tokens da sessão — só muda quando chega um `step-finish` (recalcular a
-  // cada frame do spinner era desperdício: o tick do spinner não muda as mensagens).
-  const sessionTokens = useMemo(
-    () =>
-      chat.messages.reduce((n, m) => {
-        const u = messageUsage(m);
-        return n + (u ? u.tokensIn + u.tokensOut : 0);
-      }, 0),
-    [chat.messages],
+  // uso da janela de contexto do último turno (input de pico + output gerado), pra
+  // o rodapé medir o gasto contra a janela do provider. Só muda no `step-finish`;
+  // recalcular a cada frame do spinner era desperdício (o tick não muda as mensagens).
+  const usage = useMemo(() => contextUsage(chat.messages), [chat.messages]);
+  // Item 4 — arquivos detectados no rascunho (chips acima do input). fs-based, mas
+  // barato e memoizado no draft (só alguns tokens por vez).
+  const attachLabels = useMemo(
+    () => detectPaths(draft).map((d) => `${d.path.split(/[\\/]/).pop() ?? d.path} [${d.kind}]`),
+    [draft],
   );
 
   if (splash) {
@@ -402,6 +427,9 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
         </Box>
       )}
 
+      {/* Item 4 — chips dos arquivos detectados no rascunho, acima do input. */}
+      {!overlayUp && <AttachChips files={attachLabels} />}
+
       {/* o input NUNCA desmonta — o rascunho fica no App (Sprint 6). */}
       <InputBox
         value={draft}
@@ -438,7 +466,9 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
         cwd={cwd}
         session={session}
         mode={mode}
-        sessionTokens={sessionTokens}
+        tokensIn={usage.tokensIn}
+        tokensOut={usage.tokensOut}
+        contextLimit={NIO_AI_CONTEXT}
       />
     </Box>
   );

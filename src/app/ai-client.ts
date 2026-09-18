@@ -9,7 +9,12 @@
  */
 import type { spawn } from 'node:child_process';
 import { spawnPortable } from '../lib/proc.js';
-import { installOpencodeGlobal, NIO_OPERATOR_MODEL, NIO_AI_BASE_URL } from '../lib/clients/client-configs.js';
+import {
+  installOpencodeGlobal,
+  contextConfigWarning,
+  NIO_OPERATOR_MODEL,
+  NIO_AI_BASE_URL,
+} from '../lib/clients/client-configs.js';
 import { isBinaryInstalled } from '../lib/clients/client-install.js';
 import { c, sym } from '../lib/colors.js';
 import { dlog } from '../lib/debug.js';
@@ -40,6 +45,8 @@ export interface LaunchAiDeps {
 export async function ensureHeadroomAndWire(): Promise<void> {
   try {
     installOpencodeGlobal([]); // semeia o provider dedicado (NIO_AI_BASE_URL) + model + MCPs
+    const warn = contextConfigWarning();
+    if (warn) console.warn(`  ${c.yellow(sym.warn)} ${warn}`);
     dlog('opencode.json: motor →', NIO_AI_BASE_URL, ', model =', NIO_OPERATOR_MODEL);
   } catch (err) {
     console.warn(`  ${c.yellow(sym.warn)} não gravei o opencode.json: ${(err as Error).message}`);

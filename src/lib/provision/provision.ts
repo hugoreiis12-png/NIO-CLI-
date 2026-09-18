@@ -1,3 +1,4 @@
+/* Provisonamento de skills comandos do provider para o client de */ 
 import { existsSync } from "node:fs";
 import { brand } from "../../brand.js";
 import { opencodeTarget, type ProvisionTarget } from "../clients/targets.js";

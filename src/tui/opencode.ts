@@ -50,17 +50,17 @@ export async function listPrimaryAgents(client: OpencodeClient): Promise<string[
  */
 export async function fetchPendingPermissions(
   baseUrl: string,
-): Promise<Array<Record<string, unknown>>> {
+): Promise<Array<Record<string, unknown>> | null> {
   try {
     const res = await fetch(new URL('/permission', baseUrl), {
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(2000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) return null; // falhou ≠ "sem pendências" — o caller não reconcilia
     const body = (await res.json()) as unknown;
-    return Array.isArray(body) ? (body as Array<Record<string, unknown>>) : [];
+    return Array.isArray(body) ? (body as Array<Record<string, unknown>>) : null;
   } catch {
-    return [];
+    return null; // erro/timeout → null (mantém a fila como está, não apaga o modal)
   }
 }
 
@@ -72,18 +72,18 @@ export async function fetchPendingPermissions(
 export async function fetchPendingQuestions(
   baseUrl: string,
   sessionId: string,
-): Promise<Array<Record<string, unknown>>> {
-  if (!sessionId) return [];
+): Promise<Array<Record<string, unknown>> | null> {
+  if (!sessionId) return null; // sem sessão pra consultar → não reconcilia
   try {
     const res = await fetch(new URL(`/session/${sessionId}/question`, baseUrl), {
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(2000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) return null;
     const body = (await res.json()) as unknown;
-    return Array.isArray(body) ? (body as Array<Record<string, unknown>>) : [];
+    return Array.isArray(body) ? (body as Array<Record<string, unknown>>) : null;
   } catch {
-    return [];
+    return null; // erro/timeout → null (mantém a fila, não apaga a pergunta)
   }
 }
 

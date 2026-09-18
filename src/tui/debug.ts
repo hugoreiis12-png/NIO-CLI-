@@ -12,7 +12,9 @@ const FILE = join(homedir(), '.nio', 'tui.log');
 export function tlog(...args: unknown[]): void {
   if (!DEBUG) return;
   try {
-    const line = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+    // 2000 chars/arg: o antigo teto de 200 cortava o payload dos parts (ex.: o
+    // `text` de uma compaction), cegando o debug. Longo o bastante sem virar dump.
+    const line = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a).slice(0, 2000))).join(' ');
     appendFileSync(FILE, `${new Date().toISOString()} ${line}\n`);
   } catch {
     /* best-effort */

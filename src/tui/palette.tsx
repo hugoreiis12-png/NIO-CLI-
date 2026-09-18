@@ -101,9 +101,11 @@ export function PermissionModal({
 }): React.ReactElement {
   useInput((input, key) => {
     const k = input.toLowerCase();
-    if (k === 'a' || key.return) onRespond('once');
+    // Aprovar exige tecla explícita ([a]/[s]); pular/negar SÓ com Esc (sem `d` nem
+    // Enter — evita aprovação ou dispensa acidental). O modal fica até a decisão.
+    if (k === 'a') onRespond('once');
     else if (k === 's') onRespond('always');
-    else if (k === 'd' || key.escape) onRespond('reject');
+    else if (key.escape) onRespond('reject');
   });
 
   const detail = req.command
@@ -130,7 +132,7 @@ export function PermissionModal({
           {req.always.slice(0, 5).join(', ')}
         </Text>
       )}
-      <Text color={theme.dim}>[a]/↵ permitir · [s] sempre · [d]/Esc negar</Text>
+      <Text color={theme.dim}>[a] permitir · [s] sempre · Esc pular</Text>
     </Box>
   );
 }

@@ -7,10 +7,12 @@ import {
   emptyChat,
   summarizeToolInput,
   messageUsage,
+  contextUsage,
   pendingQuestion,
   questionOptions,
   looksLikeScaffolding,
   isInternalMessage,
+  stripReasoningTags,
 } from './state.js';
 import type { ChatMessage } from './state.js';
 import type { Event } from '@opencode-ai/sdk';
@@ -110,6 +112,89 @@ test('Sprint 2 — step-finish vira part `step` com tokens/custo; messageUsage s
   const msg = s.messages.find((m) => m.role === 'assistant')!;
   expect(msg.parts.filter((p) => p.kind === 'step')).toHaveLength(2);
   expect(messageUsage(msg)).toEqual({ tokensIn: 1300, tokensOut: 600, cost: 0.015 });
+});
+
+test('Bug mídia — part compaction_continue vira marcador conciso (não parágrafo longo)', () => {
+  let s = applyEvent(emptyChat, ev('message.updated', { info: { id: 'm', role: 'assistant' } }));
+  s = applyEvent(s, ev('message.part.updated', {
+    part: {
+      type: 'text', messageID: 'm', id: 'cc1', synthetic: true,
+      metadata: { compaction_continue: true },
+      text: "The previous request exceeded the provider's size limit due to large media attachments.",
+    },
+  }));
+  const msg = s.messages.find((x) => x.role === 'assistant')!;
+  const t = msg.parts.filter((p) => p.kind === 'text').map((p) => p.text).join('');
+  expect(t).toContain('✂ anexo grande removido');
+  expect(t).not.toContain("provider's size limit");
+});
+
+test('Item 5 — part subtask vira kind:fork (sub-agente disparado fica visível)', () => {
+  let s = applyEvent(emptyChat, ev('message.updated', { info: { id: 'm', role: 'assistant' } }));
+  s = applyEvent(s, ev('message.part.updated', {
+    part: { type: 'subtask', messageID: 'm', id: 'sub1', agent: 'explore', description: 'varrer o core', prompt: 'x' },
+  }));
+  const msg = s.messages.find((x) => x.role === 'assistant')!;
+  const fork = msg.parts.find((p) => p.kind === 'fork');
+  expect(fork).toBeTruthy();
+  expect(fork!.fork).toEqual({ agent: 'explore', description: 'varrer o core' });
+});
+
+test('Item 6 — reconcile(null) = no-op (fetch falhou não apaga o modal); [] ainda remove', () => {
+  const asked = applyEvent(
+    emptyChat,
+    ev('permission.asked', { id: 'p1', sessionID: 's', permission: 'bash', metadata: { command: 'git push' } }),
+  );
+  expect(asked.permissions).toHaveLength(1);
+  // fetch falhou (null) → mantém a fila intacta (mesma referência)
+  expect(reconcilePendingPermissions(asked, null)).toBe(asked);
+  expect(reconcilePendingQuestions(asked, null)).toBe(asked);
+  // server respondeu vazio de verdade ([]) → remove (comportamento antigo preservado)
+  expect(reconcilePendingPermissions(asked, []).permissions).toHaveLength(0);
+});
+
+test('stripReasoningTags: tira <think> fechado, tag aberta sem fechar, e vários pares', () => {
+  expect(stripReasoningTags('antes<think>raciocínio</think>depois')).toBe('antesdepois');
+  expect(stripReasoningTags('resposta<think>pensando sem fim')).toBe('resposta'); // aberto sem fechar
+  expect(stripReasoningTags('a<thinking>x</thinking>b◁think▷y◁/think▷c')).toBe('abc');
+  expect(stripReasoningTags('sem tag nenhuma')).toBe('sem tag nenhuma'); // no-op
+});
+
+test('computePart: <think> inline num part de texto NÃO chega ao output (Item 1)', () => {
+  let s = applyEvent(emptyChat, ev('message.updated', { info: { id: 'm', role: 'assistant' } }));
+  s = applyEvent(s, ev('message.part.updated', {
+    part: { type: 'text', messageID: 'm', id: 't1', text: '<think>oculto</think>Resposta final' },
+  }));
+  const msg = s.messages.find((x) => x.role === 'assistant')!;
+  const text = msg.parts.filter((p) => p.kind === 'text').map((p) => p.text).join('');
+  expect(text).toBe('Resposta final');
+  expect(text).not.toContain('oculto');
+});
+
+test('part type:compaction NÃO vira texto no output (não vaza o resumo interno)', () => {
+  let s = applyEvent(emptyChat, ev('message.updated', { info: { id: 'm', role: 'assistant' } }));
+  s = applyEvent(s, ev('message.part.updated', {
+    part: { type: 'compaction', messageID: 'm', id: 'c1', text: 'RESUMO INTERNO que não deve aparecer' },
+  }));
+  const msg = s.messages.find((x) => x.role === 'assistant')!;
+  expect(msg.parts.some((p) => p.kind === 'text')).toBe(false);
+  expect(JSON.stringify(msg.parts)).not.toContain('RESUMO INTERNO');
+});
+
+test('Task 2 — contextUsage: input de pico + output somado do último turno', () => {
+  const step = (id: string, input: number, output: number): ChatMessage['parts'][number] => ({
+    id, kind: 'step', text: '', step: { tokensIn: input, tokensOut: output, cost: 0 },
+  });
+  const messages: ChatMessage[] = [
+    { id: 'a1', role: 'assistant', parts: [step('s1', 5000, 999)] }, // turno antigo — ignorado
+    { id: 'u1', role: 'user', parts: [{ id: 'p', kind: 'text', text: 'oi' }] },
+    { id: 'a2', role: 'assistant', parts: [step('s2', 20000, 100), step('s3', 31000, 400)] }, // último turno
+  ];
+  // input = MAIOR tokensIn do último turno (31000, não a soma 51000); output = SOMA (500).
+  expect(contextUsage(messages)).toEqual({ tokensIn: 31000, tokensOut: 500 });
+  // sem turno com uso → {0,0}.
+  expect(contextUsage([{ id: 'u', role: 'user', parts: [{ id: 'p', kind: 'text', text: 'oi' }] }])).toEqual({ tokensIn: 0, tokensOut: 0 });
+  expect(contextUsage([])).toEqual({ tokensIn: 0, tokensOut: 0 });
 });
 
 test('Sprint 2 — summarizeToolInput pega o campo mais útil', () => {
