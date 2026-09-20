@@ -491,7 +491,7 @@ Health check — não requer token nem Bearer.
 
 - **Portainer URL:** `https://192.168.0.160:9443/#!/3/docker/stacks/nio_cli277?id=106`
 - **Stack ID:** 106
-- **Imagem do gateway:** `ghcr.io/hugoreiis12-png/nio-gateway:v0.5.0`
+- **Imagem do gateway:** `ghcr.io/hugoreiis12-png/nio-gateway` — tag bumpada automaticamente pelo `.github/workflows/image.yml` a cada release (`v*`); confira a tag atual em `docker/docker-compose.deploy.yml`, não hardcode aqui
 
 ### Arquivos de Compose
 
@@ -661,8 +661,9 @@ da imagem:
 # Verificar tag atual no compose
 grep "image:" docker/docker-compose.deploy.yml
 
-# Versão atual: v0.5.0 (possivelmente desatualizada)
-# Necessário rebuild com tag v0.5.1 para incluir suporte a env var
+# A tag é bumpada automaticamente a cada release (v*) por .github/workflows/image.yml —
+# se o compose estiver apontando pra uma tag anterior à mudança que você precisa,
+# aguarde o próximo release ou rode workflow_dispatch manual do image.yml.
 ```
 
 ### 9.6 Conexão Recusada com Kong
@@ -695,10 +696,8 @@ docker exec <container_name> nslookup nio-kong
 
 ## Referências
 
-- **Specs de Auth:** `docs/specs/auth/0004-login-2fa-sms-otp.md`
-- **ADR 0006:** Autenticação via SMS OTP
-- **ADR 0011:** Pepper rotation para backup codes
-- **ADR 0012:** Trilha de eventos de autenticação
+- 2º fator hoje é WhatsApp Business API, não SMS — ver `docs/arch/ARQUITETURA-GATEWAY.md` e `db/migrations/0009_whatsapp_channel.sql`
+- Pepper rotation e trilha de eventos de auth (`auth_events`) — ver `db/migrations/0005_password_pepper.sql` e `0007_auth_events.sql`
 - **ARQUITETURA-GATEWAY.md:** Visão geral do gateway
 - **ARQUITETURA-DOCKER.md:** Visão geral do deploy Docker
 - **Portainer Stack:** `https://192.168.0.160:9443/#!/3/docker/stacks/nio_cli277?id=106`

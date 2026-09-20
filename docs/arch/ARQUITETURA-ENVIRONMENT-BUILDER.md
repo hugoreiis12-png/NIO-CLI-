@@ -8,6 +8,11 @@
 >
 > Levantado em **25 ago 2026** lendo o código. Decisões de escopo travadas com
 > o dono do projeto na mesma data (ver "Decisões travadas").
+>
+> **Status (2026-09-20)**: o pipeline descrito aqui já existe — `src/profiles/`,
+> `ProfileCatalog`, `ToolchainGateway` e `app/environment-builder.ts` foram
+> implementados. Doc mantido como referência de arquitetura/raciocínio de design,
+> não como "planejado vs. feito".
 
 ## Resumo executivo
 
@@ -30,11 +35,11 @@ O **alvo e a persistência já estão modelados** — falta quem produza o dado.
 | `sessions.config JSONB` + índice GIN (`db/schema.sql:31,39`) | ✅ coluna pronta |
 | `SessionRepository.updateConfig(id, config)` e `NewSessionInput.config?` (`src/core/repositories.ts:42,68`) | ✅ escritor pronto |
 | `Profile` union + `pickProfile` no wizard (`src/core/types.ts:13`, `init/profile-step.ts`) | ✅ |
-| Infra de instalação: `spawnSync` sem shell, allowlist por regex, marcador de idempotência (`~/.nio/installed-deps.json`), detecção por glob (`src/lib/dependency-install.ts`, `dependencies.ts`) | ✅ **reaproveitar** no `ToolchainGateway` — não reinventar |
-| `installOpencodeGlobal` / `planOpencodeUpdate` — merge defensivo do `mcp.nio` no `opencode.json` (`src/lib/client-configs.ts:257,290`) | ✅ **estender** pra fundir MCPs do perfil |
-| **`src/profiles/` (catálogo)** — CLAUDE.md promete, não existe | ❌ |
-| **Ports `ProfileCatalog` / `ToolchainGateway`** — CLAUDE.md lista, não existem | ❌ |
-| **`app/EnvironmentBuilder`** | ❌ não existe |
+| Infra de instalação: `spawnSync` sem shell, allowlist por regex, marcador de idempotência (`~/.nio/installed-deps.json`), detecção por glob (`src/lib/deps/dependency-install.ts`, `dependencies.ts`) | ✅ reaproveitado no `ToolchainGateway` |
+| `installOpencodeGlobal` / `planOpencodeUpdate` — merge defensivo do `mcp.nio` no `opencode.json` (`src/lib/clients/client-configs.ts:257,290`) | ✅ estendido pra fundir MCPs do perfil |
+| **`src/profiles/` (catálogo)** | ✅ existe (11 arquivos, `createProfileCatalog` em `src/profiles/index.ts`) |
+| **Ports `ProfileCatalog` / `ToolchainGateway`** | ✅ existem (`src/profiles/index.ts`, `src/adapters/pkg/toolchain-gateway.ts`) |
+| **`app/EnvironmentBuilder`** | ✅ existe (`src/app/environment-builder.ts`) |
 | Quem popula `sessions.config` | ❌ **ninguém** — `resolveSessionSetup` cria a Session com `config: {}` |
 | MCPs por perfil no `opencode.json` | ❌ `installOpencodeGlobal` só escreve o MCP `nio` |
 
@@ -176,9 +181,9 @@ Cada passo termina com `bunx tsc --noEmit` limpo e `bun test` verde.
 
 ## Referências
 
-- `docs/arch/ARQUITETURA-CLIENTE-IA.md` — operador fixo (OpenCode/big-pickle),
-  handoff do `init`; o `EnvironmentBuilder` roda antes do handoff.
+- `docs/arch/ARQUITETURA-CLIENTE-IA.md` — operador via provider dedicado `nio-local`
+  (OpenCode só como runtime), handoff do `init`; o `EnvironmentBuilder` roda antes do handoff.
 - `src/core/types.ts` (`EnvironmentConfig`), `src/core/repositories.ts`
-  (`SessionRepository.updateConfig`), `src/lib/client-configs.ts`
-  (`planOpencodeUpdate`), `src/lib/dependency-install.ts` (padrão de instalação).
+  (`SessionRepository.updateConfig`), `src/lib/clients/client-configs.ts`
+  (`planOpencodeUpdate`), `src/lib/deps/dependency-install.ts` (padrão de instalação).
 - `CLAUDE.md` — regra do hexágono, perfis hardcoded, `adapters/pkg/`.

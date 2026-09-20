@@ -431,3 +431,4 @@ Sprint 5  (Tab modos)    ─ independente, pequeno              → junto do 4 (
 - `@opencode-ai/sdk` `types.gen.d.ts` — a fonte de verdade dos eventos/parts
 - `docs/arch/ARQUITETURA-CLIENTE-TUI.md` — arquitetura atual da TUI (se ainda existir após a reorg de docs)
 - `NIO_DEBUG=1` — loga cada evento cru do opencode (`src/tui/debug.ts`)
+- `docs/arch/ARQUITETURA-TUI-INTERACOES-MOTOR.md` — Sprint 7.x (fila de permissão, toasts, perguntas, diff), trabalho posterior às 6 sprints deste doc

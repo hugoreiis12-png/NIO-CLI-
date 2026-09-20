@@ -98,11 +98,11 @@ flowchart TD
 | **Tunelamento** | Código próprio | Transporte da request da CLI até a borda | ❌ Não existe — a CLI hoje fala direto com o Postgres, sem rede intermediária nenhuma |
 | **Edge Filter** | Escrito à mão (`src/gateway/edge-filter.ts`) | Primeira triagem de toda request no `nio-gateway`: rejeita `Origin` de browser, checa o `X-Nio-Gateway-Token`, loga (trace id, evento) | ✅ Existe e roda no `nio-gateway` |
 | **Kong Gateway OSS** | Ferramenta adotada (self-hosted, modo DB-less) | `jwt` (valida token emitido pelo Gateway core), `acl` (permissionamento por `Profile`), `rate-limiting`, `request-validator`, balanceamento entre instâncias do Gateway core se houver mais de uma | ❌ Não existe deploy nenhum ainda — decisão tomada, nada instalado |
-| **Gateway core** | Escrito à mão (`src/gateway/server.ts` já existe da spec 0002, hoje só serve rotas OAuth/PKCE que não são mais o caminho) | Processa a request já validada pelo Kong; decide por tipo de request; orquestra Validator → confronto de senha → 2º fator | 🟡 Scaffold existe (Bun.serve na porta 8787), lógica de processamento não |
+| **Gateway core** | Escrito à mão (`src/gateway/index.ts`, `node:http`) | Processa a request já validada pelo Kong; decide por tipo de request; orquestra Validator → confronto de senha → 2º fator | ✅ Implementado — `services/{login,register,security}.ts` |
 | **Validator** | Código próprio, já existe | Confere se o usuário tem cadastro ativo em `user_cli` | ✅ `UserRepository.findByName` |
 | **Confronto de senha** | Código próprio, já existe | Verifica a senha contra o hash argon2id | ✅ `UserRepository.verifyCredentials` — anti-enumeração embutida |
-| **2º fator (SMS)** | Ferramenta adotada — **Twilio Verify** | Gera, envia e valida o código OTP; guarda o estado do código do lado deles, não do nosso | ❌ Conta/credenciais Twilio ainda não existem |
-| **Sessão local** | Código próprio, já existe | `~/.nio/session.json` + `user_cli.token_session` | ✅ `src/lib/auth/session-store.ts` |
+| **2º fator (WhatsApp)** | Ferramenta adotada — **WhatsApp Business API (Meta Graph API)** | Gera e envia o código OTP; estado do desafio (`login_challenges`) fica no nosso banco, com hash HMAC do código | ✅ Implementado — `src/adapters/sms/whatsapp.ts` |
+| **Sessão local** | Código próprio, já existe | `~/.nio/session.json` guarda o JWT (`token`) + `sessionId` (`jti`, revogável via `auth_sessions`) — não existe mais coluna `token_session` (dropada na migration `0003`) | ✅ `src/lib/auth/session-store.ts` |
 
 Legenda: ✅ implementado e testado · 🟡 scaffold/esqueleto existe, lógica principal falta · ❌ não existe nada ainda
 
@@ -111,7 +111,7 @@ Legenda: ✅ implementado e testado · 🟡 scaffold/esqueleto existe, lógica p
 | Tecnologia | Decisão | Por quê |
 |---|---|---|
 | Postgres + argon2id + `UserRepository` | **Adotado** (já em produção) | 1º fator já funciona ponta a ponta, testado |
-| **Twilio Verify** | **Adotado** | Elimina gestão própria de estado de OTP (geração/TTL/tentativas); ~US$0,11/login com SMS no Brasil; sem alternativa OSS que faça o envio de SMS de verdade (SMS em si nunca é grátis, é rede de telefonia) |
+| **WhatsApp Business API (Meta Graph API)** | **Adotado** — substituiu a proposta original de Twilio Verify | Canal já usado pelo produto, custo por mensagem menor que SMS puro; estado do OTP (TTL, tentativas, hash) gerido no nosso banco (`login_challenges`) em vez de terceirizado |
 | **Kong Gateway OSS** (self-hosted, DB-less) | **Adotado** — só pra JWT/ACL/rate-limit/balanceamento **depois** do Edge Filter | Os plugins necessários (`jwt`, `acl`, `rate-limiting`, `request-validator`) e o balanceamento entre upstreams são núcleo OSS, sem paywall. Modo DB-less evita somar mais um banco pra operar |
 | Kong `openid-connect` plugin / Kong Konnect | **Descartado** | Enterprise/pago — mas também **não é necessário**: o handshake de credencial (senha+SMS) é feito à mão, o Kong só valida o token que a gente mesmo emite |
 | **Kong AI Gateway** (AI Proxy, Prompt Guard, etc.) | **Descartado — não se aplica** | É pra gatear chamadas HTTP diretas a provedores de LLM. A NIO-CLI não faz isso: `nio exec`/`nio plan` delegam via `spawn()` pra binários locais (`codex`, `claude`) já autenticados por conta própria — a chamada ao modelo acontece dentro desses processos, nunca passa pela NIO-CLI. Não há tráfego pra interceptar hoje. Reabrir se um dia a CLI passar a chamar API de LLM diretamente |

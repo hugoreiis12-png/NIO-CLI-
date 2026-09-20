@@ -4,7 +4,7 @@
 > O usuário escolhe um perfil, responde um wizard, e a CLI (com auxílio da IA via
 > MCP) materializa o ambiente: toolchains, linguagens, frameworks, dotfiles,
 > aliases e IDE. A entidade central é a **`Session`** (ambiente isolado, UUID,
-> persistido no Postgres). Histórico das decisões: `docs/PROGRESSO.md`.
+> persistido no Postgres).
 >
 > Nasceu de um cliente do sistema NOS (tasks/sprints/ponto, backend Supabase) —
 > todo esse domínio v1 já foi **removido**. Não escreva código novo contra ele.
@@ -78,12 +78,14 @@ profiles/:    catálogo dos 6 perfis (hardcoded no fonte)
 - **Esteira de onboarding** (`src/cli/flows/onboarding.ts`): `nio` sem args / `nio start`
   detecta o estágio (config → gateway → login → session → ready) e conduz, perguntando
   antes de cada passo. `login`/`register`/`config setup` encadeiam nela no fim.
-- **Client de IA** (`nio ai`, ADR 0007+0008; **Headroom DESATIVADO na 0010**): fala
-  **direto no OpenCode Zen**, sem proxy de compressão. `ensureHeadroomAndWire`
-  (`src/app/ai-client.ts`) só garante o `opencode.json` — provider `opencode` **sem**
-  `baseURL` (direto) + o model default —, sobe `opencode serve` headless e renderiza a
+- **Client de IA** (`nio ai`; **Headroom dormente**): fala **direto** num
+  provider dedicado `nio-local` (OpenAI-compatível, aponta pro backend Qwen vLLM
+  interno) — o provider `opencode` (Zen) não é tocado, fica no default `big-pickle`,
+  fora da competência da CLI. `ensureHeadroomAndWire`
+  (`src/app/ai-client.ts`) só garante o `opencode.json` pronto (provider `nio-local` +
+  model + MCPs), sobe `opencode serve` headless e renderiza a
   **interface NIO em Ink** (`src/tui/`, import lazy) — chat streamado via `@opencode-ai/sdk`,
-  sidebar verde, paleta `/`. Motor = `opencode/big-pickle`. (Headroom e `nio docker headroom`
+  sidebar verde, paleta `/`. Motor = `nio-local` (OpenCode só como runtime). (Headroom e `nio docker headroom`
   ficam **dormentes**, não removidos.) Headless (`nio docker
   debug/orquest/cluster`) segue em `launchAiClient` (`opencode run`). Com IDE
   (vscode/cursor), o `nio init` grava `.vscode/tasks.json` (`runOn: folderOpen` →

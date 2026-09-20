@@ -1,12 +1,20 @@
 # TUI — mapa de todas as interações "motor → usuário"
 
-> Tudo que o `opencode serve` / big-pickle pode **pedir ao usuário** pela
+> Tudo que o `opencode serve` (motor `nio-local`) pode **pedir ao usuário** pela
 > interface: permissões, toasts, perguntas abertas, erros, e as features de UX
 > que a gente ainda quer construir (respostas sugeridas, multiple-choice…).
 >
-> **Estado atual (2026-09-07):** só **1 tipo** é tratado — permissão, e mesmo
-> assim num **slot único** que quebra com batch paralelo (o bug do "executando
-> bash" eterno). Este doc é o mapa pra fazer todos direito.
+> **Estado em 2026-09-07:** só **1 tipo** era tratado — permissão, e mesmo
+> assim num **slot único** que quebrava com batch paralelo (o bug do "executando
+> bash" eterno).
+>
+> **Status (2026-09-20)**: 7.1-7.6 e 7.8 estão ✅ feitos (fila de permissões
+> deduplicada + reconciliação via `resync`, toasts, erros não-bloqueantes,
+> perguntas com cue, allowlist de permissão semeada, `<QuestionPicker>`, diff
+> summary) — ver a tabela de itens abaixo. Só 7.7 (respostas sugeridas/multiple-
+> choice) segue como spike, bloqueado por falta de suporte do SDK (`elicitation`
+> não exposto no opencode 1.18). Este doc segue como o mapa de referência de
+> cada tipo de interação.
 
 ---
 

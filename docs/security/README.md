@@ -2,24 +2,33 @@
 
 Pasta de rastreio da auditoria de segurança e do trabalho que ela gerou.
 
+> **Nota (2026-09-19)**: os documentos-fonte listados abaixo foram removidos do
+> repositório no commit `3e8f9b3` (junto com `docs/adr/0002`–`0010`) — não
+> existem mais no working tree nem no histórico git. A tabela de status logo
+> abaixo é o único registro que sobrou; foi parcialmente reverificada por
+> auditoria externa em 2026-09-19 (JWT `kid`-rotation, checagem de `sub`,
+> `MAX_SESSIONS_PER_USER`, `breach-check.ts`, `db_roles` — todos conferidos
+> diretamente no código e batendo com o que a tabela alega). Links convertidos
+> em texto simples pra não apontar pra arquivos inexistentes.
+
 | Arquivo | O quê |
 |---------|-------|
-| [`security-audit-2026-09.md`](security-audit-2026-09.md) | Auditoria original (2026-09) — modelo de ameaça, achados detalhados, roadmap. **Fonte da razão de cada item.** |
-| [`implemented.md`](implemented.md) | O que **já foi feito** — mudanças de código, arquivo por arquivo, com testes. |
-| [`ops-actions.md`](ops-actions.md) | O que precisa ser feito **do lado do time / infra** — não é código: rotação de segredo, CA do banco, hardening do GitHub. |
-| [`backlog.md`](backlog.md) | O que **ainda falta implementar** — Médios, Baixos, itens de versionamento, e a melhoria futura de cripto de senha. |
-| [`dev-tasks.md`](dev-tasks.md) | Board dos lotes de dev (o que já entrou, o que falta). |
-| [`task-user-lote3.md`](task-user-lote3.md) | Task de infra (Kong admin + rede) — ✅ validado em dev. |
-| [`task-user-lote4.md`](task-user-lote4.md) | Task no repo `NIO-SKILLS-` — publicar `nio-skills.json` (`min_cli_version`). |
-| [`i1-i2-analysis.md`](i1-i2-analysis.md) | Análise dos informativos I-1 (npm público) e I-2 (`ips_using` morto) + recomendações. |
-| [`task-user-i1-registry.md`](task-user-i1-registry.md) | Task: criar a org `nio-cli` + GitHub Packages (I-1 + metade do H-3). |
-| [`i2-login-por-ip.md`](i2-login-por-ip.md) | I-2 vira feature — perguntas de design de login por IP. |
-| [`sp1-trilha-auth.md`](sp1-trilha-auth.md) | SP-1 — análise que originou a ADR 0012. |
-| [`../adr/0012-trilha-auth-persistente.md`](../adr/0012-trilha-auth-persistente.md) | **ADR 0012** — trilha de auth persistente (`auth_events`). ✅ feito. |
-| [`third-pass.md`](third-pass.md) | **Terceira passada** — TP-1 a TP-6 ✅ implementados (2026-09-07). Só o TP-1 tem passo de ops. |
-| [`../adr/0011-endurecimento-cripto-auth.md`](../adr/0011-endurecimento-cripto-auth.md) | **ADR 0011** — a arquitetura do Lote 5 que vamos seguir (decisões fechadas, plano em 3 fases). |
-| [`lote5-cripto-arquitetura.md`](lote5-cripto-arquitetura.md) | Doc de trabalho que originou a ADR 0011 (o raciocínio). |
-| [`db-tls.md`](db-tls.md) | Runbook da CA interna do Postgres (fecha o H-2 na infra self-hosted). |
+| `security-audit-2026-09.md` | Auditoria original (2026-09) — modelo de ameaça, achados detalhados, roadmap. **Fonte da razão de cada item.** |
+| `implemented.md` | O que **já foi feito** — mudanças de código, arquivo por arquivo, com testes. |
+| `ops-actions.md` | O que precisa ser feito **do lado do time / infra** — não é código: rotação de segredo, CA do banco, hardening do GitHub. |
+| `backlog.md` | O que **ainda falta implementar** — Médios, Baixos, itens de versionamento, e a melhoria futura de cripto de senha. |
+| `dev-tasks.md` | Board dos lotes de dev (o que já entrou, o que falta). |
+| `task-user-lote3.md` | Task de infra (Kong admin + rede) — ✅ validado em dev. |
+| `task-user-lote4.md` | Task no repo `NIO-SKILLS-` — publicar `nio-skills.json` (`min_cli_version`). |
+| `i1-i2-analysis.md` | Análise dos informativos I-1 (npm público) e I-2 (`ips_using` morto) + recomendações. |
+| `task-user-i1-registry.md` | Task: criar a org `nio-cli` + GitHub Packages (I-1 + metade do H-3). |
+| `i2-login-por-ip.md` | I-2 vira feature — perguntas de design de login por IP. |
+| `sp1-trilha-auth.md` | SP-1 — análise que originou a ADR 0012. |
+| `../adr/0012-trilha-auth-persistente.md` | **ADR 0012** — trilha de auth persistente (`auth_events`). ✅ feito. |
+| `third-pass.md` | **Terceira passada** — TP-1 a TP-6 ✅ implementados (2026-09-07). Só o TP-1 tem passo de ops. |
+| `../adr/0011-endurecimento-cripto-auth.md` | **ADR 0011** — a arquitetura do Lote 5 que vamos seguir (decisões fechadas, plano em 3 fases). |
+| `lote5-cripto-arquitetura.md` | Doc de trabalho que originou a ADR 0011 (o raciocínio). |
+| `db-tls.md` | Runbook da CA interna do Postgres (fecha o H-2 na infra self-hosted). |
 
 ## Status geral (2026-09-07)
 
@@ -51,7 +60,7 @@ Pasta de rastreio da auditoria de segurança e do trabalho que ela gerou.
 | L-4 | Baixa | Segredo: `writeFile` → `chmod` (janela 0644) | ✅ feito | — | **código pronto** |
 | L-5 | Baixa | `handleLogout` sem checagem de dono | ✅ feito | força re-login (com H-1) | **código pronto** |
 | L-6 | Baixa | JWT sem `iss`/`aud` | ✅ feito | força re-login (com H-1) | **código pronto** |
-| I-1 | Info | Código `UNLICENSED` publicado público no npm | ⏳ config staged | ⏳ **você** — criar org `nio-cli` + mover repos | [task-user-i1-registry.md](task-user-i1-registry.md) |
+| I-1 | Info | Código `UNLICENSED` publicado público no npm | ⏳ config staged | ⏳ **você** — criar org `nio-cli` + mover repos | task-user-i1-registry.md |
 | I-2 | Info | `ips_using` — campo morto | ✅ feito | migration `0006` em prod | virou feature "login por IP" — auditoria de IP (`login_ip_events`), sem enforcement. ADR 0011 §F. |
 | I-3 | Info | base image sem digest / sem runner de migração | ✅ feito | rodar `db:migrate --baseline` em prod | **código pronto** (digest pinado + `scripts/migrate.ts`) |
 | §4.6 | Vers. | nomes de tool MCP sem trava | ✅ feito | — | snapshot test |
@@ -86,7 +95,7 @@ esses dá pra preparar daqui.
 
 | Item | O quê |
 |------|-------|
-| ✅ M-1, M-5, M-6, L-1…L-6 | **feitos** (Lote 1 — ver [`dev-tasks.md`](dev-tasks.md)) |
+| ✅ M-1, M-5, M-6, L-1…L-6 | **feitos** (Lote 1 — ver `dev-tasks.md`) |
 | M-3, M-4 | rate limiting — precisa decisão (in-memory vs tabela) |
 | I-2 | fix pequeno — depende do runner de migração |
 | M-2 | decidir gerenciador + commitar lockfile |

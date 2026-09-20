@@ -29,9 +29,9 @@ você → nio (CLI) ──► nio-gateway ──► Postgres        (login: senh
    materializado na linha `sessions` do Postgres. A sessão é isolada, tem UUID e
    pode ser reativada depois (`nio sessions`).
 3. **`nio ai` abre a interface NIO** — o `opencode serve` headless
-   (`opencode/big-pickle`, MCP `nio` + MCPs do perfil) e o chat do NIO em Ink
+   (provider dedicado `nio-local`/Qwen vLLM, MCP `nio` + MCPs do perfil) e o chat do NIO em Ink
    (fluxo em linha estilo Claude Code, paleta `/`, `Tab` troca de modo). O
-   Headroom foi desativado ([ADR 0010](docs/adr/0010-headroom-desativado.md)) — o
+   Headroom está dormente — o
    client fala direto no LLM, **não precisa de Docker**. Com IDE, roda num
    terminal integrado dela. A partir daí o agente tem as tools `nio_*` —
    criar/ativar sessão, re-materializar ambiente, delegar execução. Detalhe de
@@ -61,7 +61,7 @@ Ficam no PATH: `nio` (CLI), `nio-gateway` (serviço de auth), `nio-cli` e
 | **PostgreSQL** alcançável | fonte da verdade (sessões, usuários) | schema em `db/schema.sql` aplicado uma vez |
 | **`JWT_SECRET`** (segredo do time) | assinar/validar as sessões | mesmo valor em toda máquina |
 | **OpenCode** | operador de IA | o `nio init` oferece instalar (`npm i -g opencode-ai`) |
-| **Docker** | **não é necessário** pro `nio ai` (Headroom desativado, ADR 0010 — client fala direto no LLM). Ainda usado por `nio docker` (toolkit/cluster) e pelo gateway conteinerizado | `docker compose version` |
+| **Docker** | **não é necessário** pro `nio ai` (Headroom desativado — client fala direto no LLM). Ainda usado por `nio docker` (toolkit/cluster) e pelo gateway conteinerizado | `docker compose version` |
 | *(opcional)* WhatsApp Business API (Meta Graph) | 2º fator | `WHATSAPP_ENDPOINT_URL` + `WHATSAPP_TOKEN` (+ template) |
 
 ---
@@ -195,8 +195,7 @@ profiles/:    catálogo dos 6 perfis (fixos no fonte)
 - **Contrato "nunca lança"** nos ports de IO (`ToolchainGateway`, `IdeGateway`,
   `DockerGateway`, `SmsSender`): falha vira um resultado `{ status, error? }`.
 
-Detalhes: [`docs/arch/`](docs/arch/) (uma `ARQUITETURA-*.md` por camada) e os
-[ADRs](docs/adr/). Histórico cronológico: [`docs/PROGRESSO.md`](docs/PROGRESSO.md).
+Detalhes: [`docs/arch/`](docs/arch/) (uma `ARQUITETURA-*.md` por camada).
 
 ### Perfis
 
@@ -233,9 +232,7 @@ O gateway gera/valida o OTP em processo (sem Twilio, sem broker), guarda só o
 **WhatsApp Business API (Meta Graph)**. Sem `WHATSAPP_ENDPOINT_URL`/`WHATSAPP_TOKEN`
 no ambiente, o login com `auth_2` responde `503 "2FA não configurado"` — o login
 de 1 fator segue normal.
-Detalhes: [spec 0004](docs/specs/auth/0004-login-2fa-sms-otp.md) ·
-[ADR 0006](docs/adr/0006-2fa-sms-otp.md) ·
-[`docs/arch/ARQUITETURA-GATEWAY.md`](docs/arch/ARQUITETURA-GATEWAY.md).
+Detalhes: [`docs/arch/ARQUITETURA-GATEWAY.md`](docs/arch/ARQUITETURA-GATEWAY.md).
 
 Pra testar sem WhatsApp real, o repo traz um mock: `bun run dev:whatsapp-echo` sobe
 um endpoint local que imprime o código no terminal (aponte `WHATSAPP_ENDPOINT_URL` pra ele).
@@ -247,14 +244,16 @@ um endpoint local que imprime o código no terminal (aponte `WHATSAPP_ENDPOINT_U
 No fim do `nio init` a CLI sobe o **client de IA** da sessão — e o mesmo `nio ai`
 retoma a qualquer momento. Ele:
 
-1. **Prepara o `opencode.json`** — grava o provider `opencode` **direto no OpenCode Zen**
-   (sem `baseURL` de proxy), junto do `model: opencode/big-pickle`, do MCP `nio`, dos MCPs
+1. **Prepara o `opencode.json`** — grava um provider dedicado **`nio-local`**
+   (OpenAI-compatível, aponta **direto** pro backend Qwen vLLM interno via
+   `NIO_AI_BASE_URL`), junto do `model: nio-local/<model-id>`, do MCP `nio`, dos MCPs
    do perfil e de um bloco `permission` semeado (allowlist só-leitura → `allow`, resto →
-   `ask`). O **Headroom foi desativado** ([ADR 0010](docs/adr/0010-headroom-desativado.md)):
+   `ask`). O provider `opencode` (Zen) não é tocado — fica no default `big-pickle`, fora
+   da competência da CLI. **Headroom está dormente**:
    o client fala direto no LLM, sem compressão — **não precisa de Docker** pro `nio ai`.
    (O `nio docker headroom` continua existindo, dormente, pra quem quiser subir manualmente.)
-2. **Sobe o `opencode serve` headless e abre a interface NIO** (Ink). O motor é o
-   `opencode/big-pickle`; a casca é nossa. Se a sessão tem IDE (VS Code / Cursor), o
+2. **Sobe o `opencode serve` headless e abre a interface NIO** (Ink). O motor de fato é o
+   provider `nio-local`; o OpenCode entra só como runtime (`serve`/SDK), a casca é nossa. Se a sessão tem IDE (VS Code / Cursor), o
    `nio init` grava um `.vscode/tasks.json` (task `NIO`, `runOn: folderOpen`) e o
    `nio ai` sobe num **terminal integrado da IDE** — uma superfície, não duas. Sem
    IDE, roda no terminal atual. Sem TTY → recusa com mensagem; sem `opencode` no
@@ -266,7 +265,7 @@ Ver [`docs/arch/ARQUITETURA-CLIENTE-IA.md`](docs/arch/ARQUITETURA-CLIENTE-IA.md)
 
 ### Interface do `nio ai` (TUI)
 
-Chat no terminal (Ink) sobre o `opencode/big-pickle`, **em uma superfície só** — no
+Chat no terminal (Ink) sobre o motor `nio-local` (via runtime OpenCode), **em uma superfície só** — no
 estilo do Claude Code. O que o motor faz aparece **em linha**, conforme acontece:
 o raciocínio (`✻`), cada ferramenta (`● nome(args)` + `⎿` a saída), o checklist
 (`☑ ◐ ☐`), os arquivos tocados, o diff da rodada (`✎ N arquivo(s) +x −y`) e os
@@ -320,12 +319,11 @@ O modo atual fica no rodapé: `[build]`.
 `NIO_DEBUG=1 nio ai` grava cada evento cru do motor em `~/.nio/tui.log` (nunca no
 terminal — corromperia o render).
 
-> A interface NIO (Ink) está na **fatia 2a** ([ADR 0008](docs/adr/0008-interface-nio-ink.md)).
+> A interface NIO (Ink) está na **fatia 2a**.
 > A paridade completa com o OpenCode (diff viewer, file tree, seletor de modelo…) é a 2b.
 > Multi-cliente (OpenCode | Codex) e o ladder de failover entre modelos seguem
 > parkeados em
-> [`docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md`](docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md)
-> ([ADR 0004](docs/adr/0004-operador-ia-unico.md)).
+> [`docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md`](docs/arch/ARQUITETURA-CLIENTES-MULTI-FUTURO.md).
 
 ---
 
@@ -341,7 +339,7 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | --- | --- |
 | `agents` | Lista os agentes disponíveis |
 | `ai` | Abre a interface NIO da sessão ativa (opencode serve headless + chat Ink) |
-| `ai status` | Estado do Headroom (proxy de compressão — desativado por ADR 0010, dormente) |
+| `ai status` | Estado do Headroom (proxy de compressão — dormente, cliente fala direto no LLM) |
 | `command [name]` | Cria um comando personalizado pro operador de IA |
 | `completion [shell]` | Imprime o script de autocomplete (bash\|zsh\|fish). |
 | `config` | Config compartilhada da equipe (~/.nio/config.env) |
@@ -357,7 +355,7 @@ Gerada da fonte por `npm run gen:docs`. Ajuda de qualquer comando: `nio <cmd> --
 | `docker compose <action> [service]` | Wrapper sobre `docker compose` do projeto (up\|down\|restart\|ps\|logs) |
 | `docker create` | Cria e sobe um container (wizard ou flags) |
 | `docker debug [container]` | Coleta o contexto de um container e entrega o diagnóstico pro operador de IA |
-| `docker headroom` | Proxy de compressão de contexto — obrigatório pro `nio ai` (ADR 0007) |
+| `docker headroom` | Proxy de compressão de contexto — dormente, opcional pro `nio ai` |
 | `docker headroom down` | Derruba o container do Headroom |
 | `docker headroom status` | O Headroom está no ar? |
 | `docker headroom up` | Sobe o container do Headroom |
@@ -427,8 +425,7 @@ nio completion fish | source     # ~/.config/fish/config.fish
 Camada de gerência de container — metade wrapper determinístico sobre `docker`,
 metade dirigida pelo operador de IA em linguagem natural (via o **Docker MCP
 Gateway**). Roda em qualquer Docker Engine (não exige Docker Desktop). Ver
-[`docs/arch/ARQUITETURA-DOCKER.md`](docs/arch/ARQUITETURA-DOCKER.md) ·
-[ADR 0005](docs/adr/0005-camada-docker.md).
+[`docs/arch/ARQUITETURA-DOCKER.md`](docs/arch/ARQUITETURA-DOCKER.md).
 
 ```bash
 nio docker toolkit up            # sobe o MCP Gateway (127.0.0.1:8811/mcp) + Portainer (9443)
@@ -607,15 +604,15 @@ O logo Matrix anima (chuva caindo) toda vez que aparece em terminal interativo.
 
 ## Versão
 
-**0.5.0** — a interface do `nio ai` (TUI) fechada: editor multi-linha, fluxo em
-linha estilo Claude Code (raciocínio, ferramentas, checklist, diff, tokens),
-`Tab` troca de modo, paleta `/` executável, fila de permissões (com recuperação
-de pedido perdido de sub-agente), perguntas e menus de opção. Mais o fix da cauda
-de 30s no shutdown que tocava o Postgres.
+**0.11.2** — desde a 0.5.0 (interface do `nio ai` fechada: editor multi-linha,
+fluxo em linha estilo Claude Code, `Tab` troca de modo, paleta `/`, fila de
+permissões, perguntas e menus de opção), entraram: isolamento de MCP por perfil
+(menos schema por request), map-reduce/token budget pra input grande, roles de
+banco com privilégio mínimo (`db_roles`), 2º fator migrado de SMS pra WhatsApp
+Business API, e hardening contínuo de auth (JWT com rotação de `kid`, revogação
+de sessão, breach-check). Histórico completo: `git log`.
 
 Base (0.2.0–0.4.0): auth (senha + 2º fator SMS OTP), backend de sessões no
 Postgres, wizard de ambiente, tools MCP, camada Docker, gateway com Kong e a
 auditoria de segurança (argon2id + pepper, HIBP k-anonymity, roles de menor
 privilégio). Nasceu de um cliente NOS/Supabase (v1), já removido.
-
-Histórico cronológico: [`docs/PROGRESSO.md`](docs/PROGRESSO.md).

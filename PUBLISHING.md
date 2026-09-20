@@ -72,8 +72,9 @@ O workflow usa `--provenance`, que assina o pacote via sigstore. Aparece como ba
 
 ## Versionamento
 
-`v0.1.0` enquanto não tem testes automatizados nem garantia de estabilidade. Subir pra `1.0.0` quando:
+Versão `0.x` enquanto não há garantia de estabilidade de contrato — hoje já existem testes
+automatizados (suíte cobrindo `src/`, gate obrigatório em `ci.yml` antes de publish/build de
+imagem). Subir pra `1.0.0` quando:
 
-- Houver testes cobrindo os fluxos principais
 - A schema do `nio.json` estiver congelada
 - A lista de tools MCP for considerada estável (renomes/remoções viram breaking change)
