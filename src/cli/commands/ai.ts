@@ -1,12 +1,12 @@
 /**
- * `nio ai` — sobe o client de IA da sessão ativa: Headroom (obrigatório, ADR 0007)
+ * `nio ai` — sobe o client de IA da sessão ativa: Headroom (dormente, opcional)
  * + OpenCode no diretório do projeto. É o que a task da IDE roda ao abrir a pasta,
  * e o que o `nio init` chama no fim.
  */
 import type { Command } from "commander";
 import { brand } from "../../brand.js";
 import { c, sym } from "../../lib/colors.js";
-import { loadSession } from "../../lib/auth/session-store.js";
+import { loadSession } from "../../lib/auth/cli-session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { headroomHealthy, HEADROOM_URL } from "../../lib/headroom.js";
 import { HeadroomRequiredError } from "../../app/ai-client.js";
@@ -61,7 +61,7 @@ export function registerAiCommand(program: Command): void {
 
   ai
     .command("status")
-    .description("Estado do Headroom (proxy de compressão — desativado por ADR 0010, dormente)")
+    .description("Estado do Headroom (proxy de compressão — dormente, cliente fala direto no LLM)")
     .action(async () => {
       const up = await headroomHealthy();
       console.log(

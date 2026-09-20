@@ -74,7 +74,11 @@ services:
       NIO_GATEWAY_HOST: "0.0.0.0"       # ouvir na rede do container
       NIO_GATEWAY_PORT: "3000"
       NIO_DATABASE_URL: "${NIO_DATABASE_URL}"   # env var do stack no Portainer
-      NIO_DATABASE_SSL: "${NIO_DATABASE_SSL:-false}"  # .142 usa cert self-signed → sem TLS na LAN (evita DEPTH_ZERO_SELF_SIGNED_CERT)
+      # Decisão aceita (não pendência): .142 usa cert self-signed → sem TLS na LAN
+      # (evita DEPTH_ZERO_SELF_SIGNED_CERT). Tooling pra ligar TLS de verdade já
+      # existe (`scripts/db-tls-setup.sh`, CA interna) — falta só executar em
+      # produção, não falta código. Ver docs/BACKLOG-TECNICO.md §4.2.
+      NIO_DATABASE_SSL: "${NIO_DATABASE_SSL:-false}"
       JWT_SECRET: "${JWT_SECRET}"               # env var do stack no Portainer
       NIO_GATEWAY_TOKEN: "${NIO_GATEWAY_TOKEN}" # token compartilhado (app externa)
     # SEM publish de porta no host: o gateway é alcançado só pela `nio-net` (Kong o

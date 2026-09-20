@@ -11,7 +11,8 @@ import { GATEWAY_PORT, GATEWAY_URL } from '../../gateway/config.js';
 import { VERSION, semverGt } from '../../version.js';
 import { homePath } from '../../brand.js';
 import { isBinaryInstalled } from '../clients/client-install.js';
-import { dockerAvailable, infraComposePath } from '../docker.js';
+import { dockerAvailable } from '../docker/health.js';
+import { infraComposePath } from '../docker/config.js';
 import { c, sym } from '../colors.js';
 import { dlog } from '../debug.js';
 

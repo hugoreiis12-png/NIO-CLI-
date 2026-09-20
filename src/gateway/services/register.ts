@@ -5,8 +5,8 @@
  */
 import type { UserRepository } from '../../core/repositories.js';
 import { createUserRepository } from '../../adapters/pg/user-repository.js';
-import { hashPassword, MIN_PASSWORD_LENGTH } from '../../lib/auth/password.js';
-import { checkPasswordBreach } from '../../lib/auth/breach-check.js';
+import { hashPassword, MIN_PASSWORD_LENGTH } from '../auth/password.js';
+import { checkPasswordBreach } from '../auth/breach-check.js';
 
 export type RegisterOutcome =
   | { ok: true; userId: number; name: string; passwordWarning?: 'breached' }

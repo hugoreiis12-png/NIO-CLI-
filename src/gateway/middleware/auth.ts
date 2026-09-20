@@ -11,7 +11,7 @@
 import jwt from 'jsonwebtoken';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
 import { JWT_ISSUER, JWT_AUDIENCE } from '../config.js';
-import { jwtVerifyKey } from '../../lib/auth/secrets.js';
+import { jwtVerifyKey } from '../auth/secrets.js';
 
 export type AuthResult =
     | { ok: true; userId: number; sessionId: string }

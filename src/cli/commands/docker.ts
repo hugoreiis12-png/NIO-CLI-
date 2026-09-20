@@ -14,13 +14,15 @@ import {
   CLUSTER_STACK,
   DOCKER_MCP_URL,
   PORTAINER_URL,
-  dockerAvailable,
   infraComposePath,
+} from "../../lib/docker/config.js";
+import {
+  dockerAvailable,
   mcpGatewayHealthy,
   portOpen,
   portainerHealthy,
   unreachableDocker,
-} from "../../lib/docker.js";
+} from "../../lib/docker/health.js";
 import { upsertOpencodeMcp } from "../../lib/clients/client-configs.js";
 import { isBinaryInstalled } from "../../lib/clients/client-install.js";
 import {
@@ -31,7 +33,7 @@ import {
 import { gatewayHealth } from "../../lib/auth/gateway-process.js";
 import { GATEWAY_URL } from "../../gateway/config.js";
 import { openUrl } from "../../lib/open-url.js";
-import { loadSession } from "../../lib/auth/session-store.js";
+import { loadSession } from "../../lib/auth/cli-session-store.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { createDockerGateway } from "../../adapters/docker/docker-gateway.js";
 import {
@@ -560,7 +562,7 @@ export function registerDockerCommand(program: Command): void {
 
   const headroom = cmd
     .command("headroom")
-    .description("Proxy de compressão de contexto — obrigatório pro `nio ai` (ADR 0007)");
+    .description("Proxy de compressão de contexto — dormente, opcional pro `nio ai`");
   headroom.command("up", { isDefault: true }).description("Sobe o container do Headroom").action(headroomUp);
   headroom.command("down").description("Derruba o container do Headroom").action(headroomDown);
   headroom.command("status").description("O Headroom está no ar?").action(headroomStatus);

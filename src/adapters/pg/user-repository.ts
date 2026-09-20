@@ -16,7 +16,7 @@
 import { randomBytes } from 'node:crypto';
 import type { UserCli } from '../../core/types.js';
 import type { NewUserInput, UserRepository } from '../../core/repositories.js';
-import { hashPassword, needsRehash, verifyPassword, MIN_PASSWORD_LENGTH } from '../../lib/auth/password.js';
+import { hashPassword, needsRehash, verifyPassword, MIN_PASSWORD_LENGTH } from '../../gateway/auth/password.js';
 import { query } from './client.js';
 
 /**

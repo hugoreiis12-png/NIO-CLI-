@@ -1,5 +1,5 @@
 /**
- * Keyring de segredos de auth (ADR 0011). Centraliza a leitura de env com os
+ * Keyring de segredos de auth. Centraliza a leitura de env com os
  * fallbacks backward-compatible. `core/` não importa daqui — é IO de env.
  *
  * Segredos, todos "mesmo valor em todo nó do gateway" (regra do `JWT_SECRET`):
@@ -14,7 +14,7 @@
  * PERDER o `NIO_PEPPERS` depois de usar = reset de senha forçado dos usuários
  * peppered. Trate como segredo crítico, com backup.
  */
-import { getJwtSecret, MIN_JWT_SECRET_LENGTH } from '../../gateway/config.js';
+import { getJwtSecret, MIN_JWT_SECRET_LENGTH } from '../config.js';
 
 /** id 0 = sem pepper (usuário legado, ou nenhum pepper configurado). */
 export const NO_PEPPER = 0;

@@ -17,18 +17,18 @@ import { createLoginIpRepository } from '../../adapters/pg/login-ip-repository.j
 import { createAuthEventRepository } from '../../adapters/pg/auth-event-repository.js';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
 import { createWhatsAppSender, smsMode, smsProviderHost, type SmsMode } from '../../adapters/sms/whatsapp.js';
-import { hashPassword, MIN_PASSWORD_LENGTH } from '../../lib/auth/password.js';
-import { checkPasswordBreach } from '../../lib/auth/breach-check.js';
-import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
+import { hashPassword, MIN_PASSWORD_LENGTH } from '../auth/password.js';
+import { checkPasswordBreach } from '../auth/breach-check.js';
+import { generateOtp, hashOtp, verifyOtp } from '../auth/otp.js';
 import {
   generateBackupCodes,
   verifyBackupCode,
   markUsed,
   countRemaining,
-} from '../../lib/auth/backup-codes.js';
+} from '../auth/backup-codes.js';
 import { challengeUsable, maskPhone, OTP_TTL_MS, OTP_MAX_ATTEMPTS, CHALLENGE_MAX_ATTEMPTS } from './login.js';
 import { smsAllowed } from '../throttle.js';
-import { currentPepperId } from '../../lib/auth/secrets.js';
+import { currentPepperId } from '../auth/secrets.js';
 
 export interface SecurityDeps {
   users?: UserRepository;

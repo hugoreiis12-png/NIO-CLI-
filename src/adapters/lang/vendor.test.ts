@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { syncLangRepos } from './vendor.js';
-import { LANG_REPOS } from './repos.js';
+import { LANG_REPOS } from './lang-repos-map.js';
 
 let dir: string;
 beforeEach(() => {

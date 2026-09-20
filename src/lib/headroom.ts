@@ -1,11 +1,12 @@
 /**
- * Headroom — proxy de compressão de contexto (ADR 0007). Obrigatório pro client
- * de IA: `launchAiClient` sobe o container e aponta o `baseURL` do provider pra
- * cá antes de spawnar o OpenCode. Espelha `src/lib/docker.ts`.
+ * Headroom — proxy de compressão de contexto. Dormente (desativado): o client
+ * de IA fala direto no provider `nio-local`, sem passar por aqui.
+ * `ensureHeadroomAndWire` só garante o `opencode.json` pronto, nunca bloqueia.
  */
 import { spawnSync } from 'node:child_process';
 import { env } from '../brand.js';
-import { dockerAvailable, portOpen, infraComposePath } from './docker.js';
+import { dockerAvailable, portOpen } from './docker/health.js';
+import { infraComposePath } from './docker/config.js';
 import { dlog } from './debug.js';
 
 /** Porta do proxy Headroom (loopback only). `NIO_HEADROOM_PORT`, default 8787. */
@@ -52,7 +53,7 @@ export async function ensureHeadroomRunning(): Promise<HeadroomEnsureResult> {
       started: false,
       error:
         'Docker não encontrado (ou `docker compose` indisponível). O Headroom roda em ' +
-        'container e é obrigatório pro client de IA — instale/inicie o Docker Engine/Desktop.',
+        'container — instale/inicie o Docker Engine/Desktop pra subir o proxy manualmente.',
     };
   }
 

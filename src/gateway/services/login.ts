@@ -15,10 +15,10 @@ import { createUserRepository } from '../../adapters/pg/user-repository.js';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
 import { createLoginChallengeRepository } from '../../adapters/pg/login-challenge-repository.js';
 import { createWhatsAppSender, smsMode, type SmsMode } from '../../adapters/sms/whatsapp.js';
-import { generateOtp, hashOtp, verifyOtp } from '../../lib/auth/otp.js';
-import { verifyBackupCode, markUsed, countRemaining } from '../../lib/auth/backup-codes.js';
+import { generateOtp, hashOtp, verifyOtp } from '../auth/otp.js';
+import { verifyBackupCode, markUsed, countRemaining } from '../auth/backup-codes.js';
 import { JWT_EXPIRES_IN, JWT_ISSUER, JWT_AUDIENCE } from '../config.js';
-import { jwtSigningKey } from '../../lib/auth/secrets.js';
+import { jwtSigningKey } from '../auth/secrets.js';
 import { smsAllowed } from '../throttle.js';
 
 export interface SessionPayload {
@@ -123,7 +123,15 @@ async function pruneExcessSessions(sessions: AuthSessionRepository, userId: numb
   }
 }
 
-/** Cria a auth_session e assina o JWT pro usuário já autenticado. */
+/**
+ * Cria a auth_session e assina o JWT pro usuário já autenticado.
+ * Os 3 writes abaixo (touchLastSession, sessions.create, pruneExcessSessions)
+ * são deliberadamente fora de transação: são independentes, cada um com falha
+ * aceitável isoladamente — `touchLastSession` é só telemetria de último login,
+ * `pruneExcessSessions` já é best-effort (linha abaixo) e não deve dar rollback
+ * na sessão nova se a poda falhar. Envolver os 3 num `withTransaction` acoplaria
+ * a criação da sessão a uma limpeza que é higiene, não parte do login.
+ */
 export async function issueSession(user: UserCli): Promise<SessionPayload> {
   await createUserRepository().touchLastSession(user.id);
   const ms = expiresInMs(JWT_EXPIRES_IN);

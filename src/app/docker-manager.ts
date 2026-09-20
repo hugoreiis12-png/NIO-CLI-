@@ -4,7 +4,7 @@
  * `cluster` (compose/create são wrapper determinístico). Ver ARQUITETURA-DOCKER.md.
  */
 import { launchAiClient, HeadroomRequiredError } from './ai-client.js';
-import { CLUSTER_STACK } from '../lib/docker.js';
+import { CLUSTER_STACK } from '../lib/docker/config.js';
 import type { ClusterState, DockerGateway } from '../core/docker.js';
 import type { Session } from '../core/types.js';
 import type { SessionRepository } from '../core/repositories.js';

@@ -59,7 +59,7 @@ export const SECTIONS: DocSection[] = [
         items: [
           'Autenticação — `nio register` / `nio login`. O nio-gateway (serviço HTTP loopback) verifica a senha (argon2id), dispara o 2º fator se ativo, e devolve um JWT salvo em ~/.nio/session.json.',
           'Sessão — `nio init`. O wizard pergunta perfil + recipe; o EnvironmentBuilder garante os toolchains, resolve os MCPs e grava o config materializado na linha `sessions` do Postgres.',
-          'Handoff — `nio ai` prepara o opencode.json (provider direto no LLM — o Headroom foi desativado, ADR 0010, não precisa de Docker), sobe o `opencode serve` headless (opencode/big-pickle, MCP nio + MCPs do perfil) e abre a interface NIO (Ink): chat streamado + paleta `/`. Com IDE, roda num terminal integrado dela.',
+          'Handoff — `nio ai` prepara o opencode.json (provider dedicado nio-local, direto no LLM — Headroom dormente, não precisa de Docker), sobe o `opencode serve` headless (MCP nio + MCPs do perfil, OpenCode só como runtime) e abre a interface NIO (Ink): chat streamado + paleta `/`. Com IDE, roda num terminal integrado dela.',
         ],
       },
       {
@@ -84,7 +84,7 @@ export const SECTIONS: DocSection[] = [
           ['PostgreSQL alcançável', 'fonte da verdade — schema de db/schema.sql aplicado uma vez'],
           ['JWT_SECRET (segredo do time)', 'assinar/validar as sessões — mesmo valor em toda máquina'],
           ['OpenCode', 'operador de IA — o `nio init` oferece instalar (`npm i -g opencode-ai`)'],
-          ['Docker (opcional)', 'NÃO é preciso pro `nio ai` (Headroom desativado, ADR 0010). Só pra `nio docker` e o gateway conteinerizado'],
+          ['Docker (opcional)', 'NÃO é preciso pro `nio ai` (Headroom dormente). Só pra `nio docker` e o gateway conteinerizado'],
           ['provedor de WhatsApp (opcional)', '2º fator — WHATSAPP_ENDPOINT_URL + WHATSAPP_TOKEN + WHATSAPP_TEMPLATE_NAME'],
         ],
       },
@@ -153,7 +153,7 @@ export const SECTIONS: DocSection[] = [
   {
     id: 'interface-ai',
     title: 'A interface do `nio ai`',
-    blurb: 'Chat no terminal (Ink) sobre o opencode/big-pickle. Uma superfície só — no estilo do Claude Code.',
+    blurb: 'Chat no terminal (Ink) sobre o motor nio-local (via runtime OpenCode). Uma superfície só — no estilo do Claude Code.',
     blocks: [
       {
         kind: 'p',

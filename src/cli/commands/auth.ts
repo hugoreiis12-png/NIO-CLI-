@@ -4,7 +4,7 @@ import { brand } from "../../brand.js";
 import { animateMatrixLogo } from "../../matrix-logo.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { c, sym } from "../../lib/colors.js";
-import { MIN_PASSWORD_LENGTH } from "../../lib/auth/password.js";
+import { MIN_PASSWORD_LENGTH } from "../../gateway/auth/password.js";
 import {
   gatewayLogin,
   gatewayLogout,
@@ -13,7 +13,7 @@ import {
   gatewayVerify2fa,
   type GatewaySession,
 } from "../../lib/auth/gateway-client.js";
-import { loadSession, saveSession, clearSession } from "../../lib/auth/session-store.js";
+import { loadSession, saveSession, clearSession } from "../../lib/auth/cli-session-store.js";
 import { ensureConfig } from "../../lib/auth/nio-config.js";
 import { checkGatewayVersion, ensureGatewayRunning } from "../../lib/auth/gateway-process.js";
 import { shutdown } from "../../lib/shutdown.js";

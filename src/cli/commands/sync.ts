@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { brand } from "../../brand.js";
 import { spawnSyncPortable } from "../../lib/proc.js";
 import { confirm } from "../../lib/prompts.js";
-import { loadSession } from "../../lib/auth/session-store.js";
+import { loadSession } from "../../lib/auth/cli-session-store.js";
 import { SessionManager } from "../../app/session-manager.js";
 import { loadProjectConfig } from "../../config.js";
 import { checkForUpdate } from "../../lib/version-check.js";

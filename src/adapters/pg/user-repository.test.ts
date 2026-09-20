@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { mapUserRow, createUserRepository } from './user-repository.js';
-import { MIN_PASSWORD_LENGTH } from '../../lib/auth/password.js';
+import { MIN_PASSWORD_LENGTH } from '../../gateway/auth/password.js';
 
 const baseRow = {
   id: '42',

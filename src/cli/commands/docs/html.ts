@@ -82,12 +82,12 @@ function renderBlock(b: Block): string {
 
 const SCRIPT = `
 const root=document.documentElement,KEY='nio-docs-theme';
-try{const t=localStorage.getItem(KEY);if(t)root.dataset.theme=t}catch(e){}
+try{const t=localStorage.getItem(KEY);if(t)root.dataset.theme=t}catch(e){console.warn('theme:',e)}
 document.querySelector('button.theme').onclick=()=>{
   const sysDark=matchMedia('(prefers-color-scheme:dark)').matches;
   const cur=root.dataset.theme||(sysDark?'dark':'light');
   const next=cur==='dark'?'light':'dark';root.dataset.theme=next;
-  try{localStorage.setItem(KEY,next)}catch(e){}};
+  try{localStorage.setItem(KEY,next)}catch(e){console.warn('theme:',e)}};
 const links=[...document.querySelectorAll('nav.toc a')];
 addEventListener('scroll',()=>{let on=links[0];
   for(const l of links){const el=document.getElementById(l.hash.slice(1));

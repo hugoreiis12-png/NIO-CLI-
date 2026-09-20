@@ -4,7 +4,7 @@
  * port): falha de spawn / exit != 0 → `DockerResult`; `docker` ausente → `unavailable`.
  */
 import { spawnSync } from 'node:child_process';
-import { dockerAvailable, swarmActive, unreachableDocker } from '../../lib/docker.js';
+import { dockerAvailable, swarmActive, unreachableDocker } from '../../lib/docker/health.js';
 import type {
   ComposeAction,
   ComposeOptions,

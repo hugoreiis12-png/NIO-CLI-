@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import AdmZip from 'adm-zip';
 import { homePath } from '../../brand.js';
 import { codeloadZipUrl, fetchZipball, rejectSymlinks } from '../../lib/fetch-zipball.js';
-import { LANG_REPOS, type LangRepo } from './repos.js';
+import { LANG_REPOS, type LangRepo } from './lang-repos-map.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 

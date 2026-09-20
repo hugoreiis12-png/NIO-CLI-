@@ -2,7 +2,7 @@
  * Client de IA — motor = **provider dedicado** (`NIO_AI_PROVIDER`, OpenAI-compatível)
  * falando DIRETO no backend (`NIO_AI_BASE_URL`). O provider `opencode` (Zen) NÃO é mais
  * o motor: fica no default dele (big-pickle), sem competência sobre a CLI — o OpenCode
- * vira só o runtime (serve/TUI/SDK). Headroom segue DORMENTE (ADR 0010).
+ * vira só o runtime (serve/TUI/SDK). Headroom segue DORMENTE.
  * `ensureHeadroomAndWire` só garante o `opencode.json` pronto (provider + model + MCPs).
  * `launchAiClient` é **headless** (`opencode run`, pro `nio docker …`); o interativo
  * é `launchNioTui`.

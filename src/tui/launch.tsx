@@ -9,7 +9,7 @@ import { NIO_AI_PROVIDER, NIO_AI_MODEL_ID } from '../lib/clients/client-configs.
 import { installNioOpencodeConfig } from '../lib/clients/nio-oc-config.js';
 import type { Profile } from '../core/types.js';
 import { isBinaryInstalled, opencodeVersionSkew } from '../lib/clients/client-install.js';
-import { loadSession } from '../lib/auth/session-store.js';
+import { loadSession } from '../lib/auth/cli-session-store.js';
 import { createSessionRepository } from '../adapters/pg/session-repository.js';
 import { buildProgram } from '../cli/program.js';
 import { c, sym } from '../lib/colors.js';

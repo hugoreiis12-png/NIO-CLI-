@@ -12,13 +12,13 @@ import jwt from 'jsonwebtoken';
 import { createUserRepository } from '../../adapters/pg/user-repository.js';
 import { createLoginChallengeRepository } from '../../adapters/pg/login-challenge-repository.js';
 import { query, closePool } from '../../adapters/pg/client.js';
-import { generateBackupCodes } from '../../lib/auth/backup-codes.js';
+import { generateBackupCodes } from '../auth/backup-codes.js';
 import type { SmsResult, OtpSender } from '../../core/messaging.js';
 import { login, verifyLogin, logoutAll, MAX_SESSIONS_PER_USER } from './login.js';
 import { authenticate } from '../middleware/auth.js';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
 import { __clear as clearThrottle } from '../throttle.js';
-import { __resetJwtSecrets } from '../../lib/auth/secrets.js';
+import { __resetJwtSecrets } from '../auth/secrets.js';
 
 const hasEnv = Boolean(process.env.NIO_DATABASE_URL && process.env.JWT_SECRET);
 const dbTest = hasEnv ? test : test.skip;

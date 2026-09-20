@@ -7,7 +7,7 @@ import {
   verifyLogin,
   type LoginDeps,
 } from './login.js';
-import { hashOtp } from '../../lib/auth/otp.js';
+import { hashOtp } from '../auth/otp.js';
 import { __clear as clearThrottle } from '../throttle.js';
 import type { UserCli, LoginChallenge } from '../../core/types.js';
 import type { UserRepository, LoginChallengeRepository } from '../../core/repositories.js';

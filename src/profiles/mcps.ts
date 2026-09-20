@@ -4,7 +4,7 @@
  * entrada fictícia (que geraria um `opencode.json` quebrado).
  */
 import type { McpSpec } from '../core/environment.js';
-import { DOCKER_MCP_URL } from '../lib/docker.js';
+import { DOCKER_MCP_URL } from '../lib/docker/config.js';
 
 /**
  * `nio-lang` — MCP server nativo da CLI que centraliza conhecimento/config das

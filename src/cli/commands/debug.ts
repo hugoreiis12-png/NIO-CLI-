@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { existsSync } from "node:fs";
 import { getProjectConfigPath, loadProjectConfig } from "../../config.js";
-import { loadSession } from "../../lib/auth/session-store.js";
+import { loadSession } from "../../lib/auth/cli-session-store.js";
 import { ping, closePool } from "../../adapters/pg/client.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 import { isBinaryInstalled } from "../../lib/clients/client-install.js";

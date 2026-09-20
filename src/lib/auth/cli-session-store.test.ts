@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import { mkdtempSync, statSync } from "node:fs";
 import { tmpdir, platform } from "node:os";
 import { join } from "node:path";
-import { parseStoredSession, saveSession } from "./session-store.js";
+import { parseStoredSession, saveSession } from "./cli-session-store.js";
 
 const VALID = {
   userId: 1,

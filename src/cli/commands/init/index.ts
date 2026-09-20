@@ -42,7 +42,7 @@ import {
 import { promptSelection } from "../../flows/sections.js";
 import { handoffToOperator } from "./handoff.js";
 import { writeIdeAutostartTask } from "../../../lib/ide-tasks.js";
-import type { StoredSession } from "../../../lib/auth/session-store.js";
+import type { StoredSession } from "../../../lib/auth/cli-session-store.js";
 
 /**
  * Mapeia o `Ide` do wizard (`config.Ide`, superset) pro `Session.ide` (domínio).

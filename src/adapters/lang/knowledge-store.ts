@@ -10,7 +10,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homePath } from '../../brand.js';
 import type { KnowledgeStore, LangReference, LanguageId } from '../../core/lang.js';
-import { LANG_REPOS } from './repos.js';
+import { LANG_REPOS } from './lang-repos-map.js';
 
 function findReadme(dir: string): string | null {
   for (const name of ['README.md', 'readme.md', 'README.MD']) {

@@ -38,7 +38,7 @@ export function usageGuide(): string {
   p();
 
   p(H("A interface do `nio ai`"));
-  p("  Chat no terminal (Ink) sobre o motor " + c.bold("opencode/big-pickle") + ". Uma superfície só:");
+  p("  Chat no terminal (Ink) sobre o motor " + c.bold("nio-local") + " (via runtime OpenCode). Uma superfície só:");
   p("  o pensamento, as ferramentas, os arquivos e as perguntas do agente aparecem");
   p("  em linha, no estilo do Claude Code — sem sidebar, sem janela extra.");
   p();

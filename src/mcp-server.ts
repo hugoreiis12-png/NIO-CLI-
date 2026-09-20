@@ -28,7 +28,7 @@ import { type ProvisionTarget } from './lib/clients/targets.js';
 import { ensureSkillsCache, skillsMinCliWarning } from './lib/skills/skills-cache.js';
 import { shouldRunAutoPull, pickProvisionTarget } from './lib/clients/autopull.js';
 import { brand, env } from './brand.js';
-import { loadSession } from './lib/auth/session-store.js';
+import { loadSession } from './lib/auth/cli-session-store.js';
 import { createUserRepository } from './adapters/pg/user-repository.js';
 import { authenticate } from './gateway/middleware/auth.js';
 import type { UserCli } from './core/types.js';

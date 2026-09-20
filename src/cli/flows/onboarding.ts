@@ -7,7 +7,7 @@ import { confirm, select } from "../../lib/prompts.js";
 import { box, c, cmd, sym } from "../../lib/colors.js";
 import { dlog } from "../../lib/debug.js";
 import { checkConfig } from "../../lib/auth/nio-config.js";
-import { loadSession } from "../../lib/auth/session-store.js";
+import { loadSession } from "../../lib/auth/cli-session-store.js";
 import { gatewayHealth, ensureGatewayRunning } from "../../lib/auth/gateway-process.js";
 import { createSessionRepository } from "../../adapters/pg/session-repository.js";
 
