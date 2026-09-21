@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as XLSX from 'xlsx';
+import { Jimp } from 'jimp';
 import { detectPaths, buildAttachedInput } from './attachments.js';
 
 function fixture(): { dir: string; csv: string; txt: string; xlsx: string; spaced: string; png: string } {
@@ -74,14 +75,29 @@ test('buildAttachedInput: imagem vira FilePartInput data-URI (Item 4b)', async (
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('buildAttachedInput: imagem grande demais NÃO vira part — vira aviso (guard)', async () => {
+test('buildAttachedInput: arquivo grande NÃO-imagem (lixo) → aviso rápido, sem travar o jimp', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'nio-attach-big-'));
   const big = join(dir, 'grande.png');
-  writeFileSync(big, Buffer.alloc(2_000_000, 1)); // 2 MB > teto default 1.5 MB
+  writeFileSync(big, Buffer.alloc(2_000_000, 1)); // 2 MB de lixo (sem assinatura de imagem) > teto
   const { fileParts, text } = await buildAttachedInput(`analisa ${big}`);
-  expect(fileParts).toEqual([]); // não anexou o data-URI cru (evita estouro)
+  expect(fileParts).toEqual([]); // guard de assinatura → não vira part
   expect(text).toContain('grande demais');
   expect(text).toContain('grande.png');
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('buildAttachedInput: imagem acima do teto é REDUZIDA (downscale) → part jpeg', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nio-attach-ds-'));
+  const p = join(dir, 'foto.png');
+  const img = new Jimp({ width: 512, height: 512 });
+  for (let i = 0; i < img.bitmap.data.length; i++) img.bitmap.data[i] = (Math.random() * 256) | 0; // ruído real → png grande
+  await img.write(p as `${string}.png`);
+  // teto força o downscale; a versão reduzida (64px jpeg) cabe folgado
+  const { fileParts, text } = await buildAttachedInput(`veja ${p}`, { maxImageBytes: 100_000, maxDim: 64 });
+  expect(fileParts).toHaveLength(1);
+  expect(fileParts[0]!.mime).toBe('image/jpeg'); // re-encodada ao reduzir
+  expect(fileParts[0]!.url.startsWith('data:image/jpeg;base64,')).toBe(true);
+  expect(text).not.toContain('grande demais'); // reduziu, não barrou
   rmSync(dir, { recursive: true, force: true });
 });
 

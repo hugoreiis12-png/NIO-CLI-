@@ -84,9 +84,24 @@ function imagePart(det: DetectedPath): FilePartInput {
   return { type: 'file', mime, filename: basename(det.path), url: `data:${mime};base64,${b64}` };
 }
 
+/** Assinatura de imagem decodificável (PNG/JPEG/GIF/WEBP) nos primeiros bytes. */
+function isImageSignature(b: Buffer): boolean {
+  if (b.length < 12) return false;
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return true; // PNG
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return true; // JPEG
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return true; // GIF
+  if (
+    b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && // RIFF
+    b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50 // WEBP
+  )
+    return true;
+  return false;
+}
+
 /**
  * Reduz imagem acima do teto: `scaleToFit(maxDim)` + JPEG q72 → data-URI pequeno.
- * `null` se não deu (arquivo ilegível ou ainda acima do teto). Lazy import do jimp.
+ * `null` se não deu (não é imagem, ilegível, ou ainda acima do teto). Checa a
+ * assinatura ANTES do jimp — arquivo grande não-imagem não trava o decode. Lazy import.
  */
 async function downscaleImage(
   path: string,
@@ -94,14 +109,16 @@ async function downscaleImage(
   maxDim: number,
 ): Promise<FilePartInput | null> {
   try {
+    const bytes = readFileSync(path);
+    if (!isImageSignature(bytes)) return null; // não é imagem → não deixa o jimp mastigar o arquivo
     const { Jimp, JimpMime } = await import('jimp');
-    const img = await Jimp.read(path);
+    const img = await Jimp.read(bytes);
     img.scaleToFit({ w: maxDim, h: maxDim });
-    const buf = await img.getBuffer(JimpMime.jpeg, { quality: 72 });
-    if (maxBytes > 0 && buf.length > maxBytes) return null; // ainda grande → desiste
+    const out = await img.getBuffer(JimpMime.jpeg, { quality: 72 });
+    if (maxBytes > 0 && out.length > maxBytes) return null; // ainda grande → desiste
     return {
       type: 'file', mime: 'image/jpeg', filename: basename(path),
-      url: `data:image/jpeg;base64,${buf.toString('base64')}`,
+      url: `data:image/jpeg;base64,${out.toString('base64')}`,
     };
   } catch {
     return null; // jimp não conseguiu ler/reencodar
@@ -109,9 +126,9 @@ async function downscaleImage(
 }
 
 /**
- * Monta o input com anexos: tira os tokens de path do texto e embute o conteúdo dos
- * arquivos de texto como blocos rotulados. `fileParts` (imagens) fica vazio até o
- * Item 4b. `send()` roda o map-reduce sobre o `text` resultante.
+ * Monta o input com anexos: tira os tokens de path do texto, embute o conteúdo dos
+ * arquivos de texto como blocos rotulados e devolve as imagens como `fileParts`
+ * (reduzidas se acima do teto). `send()` roda o map-reduce sobre o `text` resultante.
  */
 export async function buildAttachedInput(
   text: string,
