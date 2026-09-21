@@ -199,6 +199,8 @@ NIO_DATABASE_CA=/caminho/para/ca.crt
 
 **Status**: procedimento documentado, nenhum passo executado ainda. Ação real fica condicionada a decisão do time sobre quando rotacionar (H-1/H-3 pedem rotação de credencial; TLS depende de reverter a decisão de 6.4).
 
+> **Feature registrada para a próxima sessão:** `docs/TLS-ROLLOUT-PROXIMA-SESSION.md` — spec autocontida do rollout TLS (Fase 1 PG `.142` com CA existente + Fase 2 Kong `:8443` opt-in; repo pronto na branch `feat/kong-edge-tls`, corte pendente do dono da infra). Começar por lá.
+
 ---
 
 ## 7. Performance / latência
