@@ -15,7 +15,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { writeJson } from '../file-merge.js';
 import { brand, envName } from '../../brand.js';
 import type { McpSpec, ProfileDefinition } from '../../core/environment.js';
-import { nioLangMcp } from '../../profiles/mcps.js';
+import { nioLangMcp, withFabricAuth } from '../../profiles/mcps.js';
 import { createProfileCatalog } from '../../profiles/index.js';
 import type { Profile } from '../../core/types.js';
 import {
@@ -108,7 +108,7 @@ export function buildNioOpencodeConfig(
 ): Record<string, unknown> {
   const globalMcp = (global.mcp ?? {}) as Record<string, Record<string, unknown>>;
   const mcp: Record<string, unknown> = { [brand.mcpServerKey]: nioMcpEntry() };
-  for (const spec of modeledMcps) mcp[spec.id] = mcpEntry(spec);
+  for (const spec of modeledMcps) mcp[spec.id] = mcpEntry(withFabricAuth(spec));
   for (const id of inheritGlobalMcpIds) {
     const fromGlobal = globalMcp[id];
     if (fromGlobal) mcp[id] = { ...fromGlobal, enabled: true };

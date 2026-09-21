@@ -43,6 +43,30 @@ export const powerbiMcp: McpSpec = {
   command: ['npx', '-y', '@microsoft/powerbi-modeling-mcp@latest', '--start', '--skipconfirmation'],
 };
 
+/** Flag que força o MCP a autenticar por service principal (headless, contra Fabric). */
+const SERVICE_PRINCIPAL_FLAG = '--authmode=serviceprincipal';
+
+/**
+ * True se as 3 credenciais de service principal do Azure estão no ambiente. O MCP
+ * (Azure Identity SDK) e o adapter REST do Fabric leem exatamente estes nomes.
+ */
+export function hasFabricServicePrincipal(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env.AZURE_TENANT_ID && env.AZURE_CLIENT_ID && env.AZURE_CLIENT_SECRET);
+}
+
+/**
+ * Resolve a spec do PowerBI conforme o ambiente: com service principal configurado,
+ * anexa `--authmode=serviceprincipal` (conecta ao XMLA do Fabric sem login interativo);
+ * sem SP, mantém o comando Desktop-local (sem auth, modelo aberto na máquina). Só afeta
+ * o `powerbiMcp`; idempotente. Os segredos `AZURE_*` são lidos do env herdado pelo MCP,
+ * nunca escritos no `opencode.json`.
+ */
+export function withFabricAuth(spec: McpSpec, env: NodeJS.ProcessEnv = process.env): McpSpec {
+  if (spec.id !== powerbiMcp.id || !hasFabricServicePrincipal(env)) return spec;
+  if (spec.command?.includes(SERVICE_PRINCIPAL_FLAG)) return spec;
+  return { ...spec, command: [...(spec.command ?? []), SERVICE_PRINCIPAL_FLAG] };
+}
+
 /**
  * Excel MCP (haris-musa/excel-mcp-server) — ler/escrever planilhas `.xlsx` sem
  * Excel instalado. **Perfis analytics** (`analyst`, `bi`, `scientist`, `dba`).
