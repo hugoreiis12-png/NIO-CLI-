@@ -7,6 +7,8 @@
 > **Atualização 2026-09-20 (manhã)**: análise de performance/latência (comparação contra a medição de 09-07, `[[cli-startup-perf]]`) — 4 itens novos em [§ 7](#7-performance--latência). Nenhum implementado ainda, todos só analisados por código/git history (sem acesso de rede ao provider de IA desta máquina).
 >
 > **Atualização 2026-09-20 (sprint organizacional)**: reorganização de módulos (separação `lib/auth`→`gateway/auth`/servidor vs cliente, split de `lib/docker.ts`, 2 renomes de clareza) + atualização de toda a documentação desatualizada (`README.md`, `AGENT.md`, `KONG-GATEWAY-USO.md`, `ARQUITETURA-ENVIRONMENT-BUILDER.md`, `ARQUITETURA-TUI-INTERACOES-MOTOR.md`, `PUBLISHING.md` + strings de `nio docs`/`--help`). Zero mudança de comportamento — `tsc`/`bun test`/`bun run build` verdes após cada passo. 1 bug real achado de bônus, registrado em **5.3**, não corrigido de propósito (fora do escopo "reorg pura"). `docs/TASKS-TUI-STREAMING.md` foi removido pelo dono do projeto — item 7.4 resumido inline.
+>
+> **Atualização 2026-09-21**: runbook de rotação de segredos/config de prod (JWT, senha do Postgres, gateway token, TLS) documentado em [§ 6.6](#66-runbook-de-rotação-de-segredosconfig-de-prod). Nenhum comando foi executado — é o procedimento pra quando H-1/H-2/6.1 forem tocados de fato. Confirmado por leitura de código: nenhum desses segredos entra no pacote npm (`package.json.files` não inclui `docker-compose.deploy.yml`, único lugar onde são referenciados).
 
 ## Como usar
 
@@ -127,6 +129,75 @@ Ver 4.2 acima — o comentário só formaliza a decisão aceita hoje (`NIO_DATAB
 
 ### 6.5 `AGENTS.md` — não é uma pendência de prod
 `AGENTS.md` está no `.gitignore` (`/AGENTS.md`) — nunca entra em `git push`, nunca chega no CI nem em prod por definição. É config local do harness do Claude Code (dev tooling), sem efeito no app rodando. Registrado aqui só pra não ser confundido com um item pendente — não precisa de ação em prod.
+
+### 6.6 Runbook de rotação de segredos/config de prod
+Procedimento pra quando H-1 (`docs/security/README.md`), H-2 e a rotação de credenciais do Postgres forem executados de fato. Roda inteiro **fora deste repo** (host de prod / stack do Portainer) — nenhum destes segredos é lido de arquivo versionado; todos entram como env var do stack (`docker/docker-compose.deploy.yml:75-82`). Confirmado por leitura de `package.json.files`: esse compose de deploy não é empacotado no npm, então nada abaixo tem qualquer efeito sobre o `npm publish`.
+
+**1. `JWT_SECRET` — zero downtime (kid rotation, já suportado pelo código)**
+
+```bash
+# gera o novo segredo (≥32 chars, MIN_JWT_SECRET_LENGTH em src/gateway/config.ts:13)
+openssl rand -base64 32
+```
+
+No stack do Portainer, adiciona `JWT_SECRETS` mantendo `JWT_SECRET` (o antigo) como está — ele segue validando tokens legados sem `kid`:
+
+```
+JWT_SECRETS=2026a:<valor-atual-de-JWT_SECRET>,2026b:<segredo-novo-gerado-acima>
+```
+
+Redeploy do `nio-gateway` (pega o env novo). Espera o TTL do token (`JWT_EXPIRES_IN`, default `12h` — `.env.example:28`) pra todo token antigo expirar. Depois:
+
+```
+JWT_SECRET=<segredo-novo>      # substitui o valor antigo de vez
+JWT_SECRETS=                   # remove — só 1 segredo ativo, kid não é mais necessário
+```
+
+Redeploy de novo. Fluxo documentado em `.env.example:42-46`.
+
+**2. Senha do Postgres (`nio_cli_user` / `nio_gw_user`)**
+
+Rodar direto no Postgres de prod (os `CREATE USER` de login não estão versionados de propósito — só os `ROLE` sem login em `db/schema.sql:204-213`):
+
+```sql
+ALTER ROLE nio_cli_user  WITH PASSWORD '<senha-nova-1>';
+ALTER ROLE nio_gw_user   WITH PASSWORD '<senha-nova-2>';
+```
+
+Depois, no stack do Portainer, atualiza as duas URLs **em paralelo** (senão a role antiga derruba a conexão antes do redeploy):
+
+```
+NIO_DATABASE_URL=postgres://nio_cli_user:<senha-nova-1>@<host>:5432/nio_cli
+NIO_GATEWAY_DATABASE_URL=postgres://nio_gw_user:<senha-nova-2>@<host>:5432/nio_cli
+```
+
+Redeploy do `nio-gateway`. Sanity check pós-troca:
+
+```bash
+bun run db:migrate -- --status   # aponta pro NIO_DATABASE_URL de prod — confere schema em dia (item 6.2 acima)
+```
+
+**3. `NIO_GATEWAY_TOKEN` (token da app externa)**
+
+```bash
+openssl rand -base64 32
+```
+Atualiza no Portainer + no lado do consumidor externo do gateway (fora deste repo) **antes** do redeploy, senão a app externa perde acesso.
+
+**4. TLS real do Postgres (H-2) — só se a decisão aceita em 6.4 mudar**
+
+```bash
+NIO_HOST=<ip-ou-hostname-do-postgres> bash scripts/db-tls-setup.sh init
+bash scripts/db-tls-setup.sh server "$NIO_HOST"
+```
+
+Segue as instruções que o próprio script imprime (`postgresql.conf`, `pg_hba.conf`, reiniciar o Postgres). Por fim, no stack:
+```
+NIO_DATABASE_SSL=true
+NIO_DATABASE_CA=/caminho/para/ca.crt
+```
+
+**Status**: procedimento documentado, nenhum passo executado ainda. Ação real fica condicionada a decisão do time sobre quando rotacionar (H-1/H-3 pedem rotação de credencial; TLS depende de reverter a decisão de 6.4).
 
 ---
 
