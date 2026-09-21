@@ -27,6 +27,7 @@ import { registerDockerCommand } from "./commands/docker.js";
 import { registerSecurityCommands } from "./commands/security.js";
 import { registerDocsCommand } from "./commands/docs.js";
 import { registerConfigCommand } from "./commands/config.js";
+import { registerFabricCommand } from "./commands/fabric.js";
 import { registerStartCommand } from "./commands/start.js";
 import { registerAiCommand } from "./commands/ai.js";
 
@@ -60,6 +61,7 @@ export function buildProgram(logoShown: () => boolean = () => false): Command {
   registerSecurityCommands(program);
   registerDocsCommand(program);
   registerConfigCommand(program);
+  registerFabricCommand(program);
   registerStartCommand(program);
   registerAiCommand(program);
 
