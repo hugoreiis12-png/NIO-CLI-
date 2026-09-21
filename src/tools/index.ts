@@ -12,6 +12,9 @@ import * as sessionActivate from './session-activate.js';
 import * as sessionCreate from './session-create.js';
 import * as envMaterialize from './env-materialize.js';
 import * as envDetectDeps from './env-detect-deps.js';
+import * as fabricQuery from './fabric-query.js';
+import * as fabricWorkspaces from './fabric-workspaces.js';
+import * as fabricDatasets from './fabric-datasets.js';
 
 export interface ToolContext {
   /** Identidade v2 resolvida da sessão local (~/.nio/session.json). */
@@ -36,6 +39,9 @@ export const tools: Record<string, ToolModule> = {
   [sessionCreate.definition.name]: sessionCreate,
   [envMaterialize.definition.name]: envMaterialize,
   [envDetectDeps.definition.name]: envDetectDeps,
+  [fabricQuery.definition.name]: fabricQuery,
+  [fabricWorkspaces.definition.name]: fabricWorkspaces,
+  [fabricDatasets.definition.name]: fabricDatasets,
 };
 
 export const toolDefinitions: Tool[] = Object.values(tools).map((t) => t.definition);
