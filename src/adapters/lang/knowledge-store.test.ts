@@ -1,8 +1,14 @@
-import { test, expect, beforeEach, afterEach } from 'bun:test';
+import { test, expect, beforeEach, afterEach, setDefaultTimeout } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createKnowledgeStore } from './knowledge-store.js';
+
+// Este teste é síncrono (readFileSync/readdirSync em temp dir). Sob a suíte cheia
+// (91 arquivos em paralelo, disco do Windows contido), o I/O estola e passa dos 5s
+// default do bun → flake de timeout. Sobe o teto SÓ deste arquivo (in-file é o
+// mecanismo confiável; preload/bunfig timeout não pegam sob paralelismo).
+setDefaultTimeout(20_000);
 
 let dir: string;
 beforeEach(() => {
