@@ -126,11 +126,19 @@ export function getProjectConfigPath(cwd: string = process.cwd()): string {
  * subpasta (ex.: `proj-x/backend/src`) ainda encontra o binding em `proj-x/backend`
  * ou `proj-x`. O mais próximo vence (binding do repo tem precedência sobre o do pai).
  */
-export function findProjectConfigPath(cwd: string = process.cwd()): string | null {
+/**
+ * Sobe da `cwd` procurando o `nio.json`. `stopAt` (opcional) limita o walk: não sobe
+ * ACIMA desse diretório (ele mesmo é buscado). Default `undefined` = ilimitado até a
+ * raiz do FS (comportamento de prod). O `stopAt` existe para testes herméticos, que
+ * senão achariam um `nio.json` real em `$HOME` acima do diretório temporário.
+ */
+export function findProjectConfigPath(cwd: string = process.cwd(), stopAt?: string): string | null {
   let dir = isAbsolute(cwd) ? cwd : join(process.cwd(), cwd);
+  const boundary = stopAt ? (isAbsolute(stopAt) ? stopAt : join(process.cwd(), stopAt)) : null;
   for (;;) {
     const candidate = join(dir, PROJECT_CONFIG_FILE);
     if (existsSync(candidate)) return candidate;
+    if (boundary !== null && dir === boundary) return null; // não sobe além do stopAt
     const parent = dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -218,12 +226,12 @@ function shapeProjectConfig(obj: Record<string, unknown>): ProjectConfig {
   return config;
 }
 
-export function loadProjectConfig(cwd: string = process.cwd()): ProjectConfig | null {
+export function loadProjectConfig(cwd: string = process.cwd(), stopAt?: string): ProjectConfig | null {
   // Precedência pro ambiente (Desktop Extension / Cowork não têm nio.json no cwd).
   const envConfig = loadProjectConfigFromEnv();
   if (envConfig) return envConfig;
 
-  const path = findProjectConfigPath(cwd);
+  const path = findProjectConfigPath(cwd, stopAt); // stopAt: só testes herméticos usam
   if (!path) return null;
 
   const config = shapeProjectConfig(readProjectConfigFile(path));

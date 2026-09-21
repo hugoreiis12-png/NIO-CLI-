@@ -49,7 +49,8 @@ test('config válido: project_id + repository_id preservados', () => {
 });
 
 test('sem nio.json em nenhum ancestral → null', () => {
-  expect(loadProjectConfig(dir)).toBeNull();
+  // `stopAt = dir`: hermético — senão o walk acha um `nio.json` real em $HOME acima do temp.
+  expect(loadProjectConfig(dir, dir)).toBeNull();
 });
 
 test('project_id ausente → setup local válido (sem binding)', () => {
@@ -177,7 +178,7 @@ test('findProjectConfigPath: o binding mais próximo vence sobre o do pai', () =
 });
 
 test('findProjectConfigPath: sem nio.json em nenhum ancestral → null', () => {
-  expect(findProjectConfigPath(dir)).toBeNull();
+  expect(findProjectConfigPath(dir, dir)).toBeNull(); // stopAt = dir: não escapa pro $HOME
 });
 
 // --- .gitignore: marcadores da marca + migração ---
