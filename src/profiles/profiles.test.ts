@@ -19,16 +19,19 @@ test('ProfileCatalog.get: os 6 perfis resolvem e batem o próprio nome', () => {
   }
 });
 
-test('powerbi-modeling + excel(herdado) nos perfis analytics; fora de fullstack/qa', () => {
+test('powerbi-modeling + excel(modelado + herdado) nos perfis analytics; fora de fullstack/qa', () => {
   const catalog = createProfileCatalog();
   const hasPowerbi = (p: Profile) => catalog.get(p).mcps.some((m) => m.id === 'powerbi-modeling');
+  const hasExcel = (p: Profile) => catalog.get(p).mcps.some((m) => m.id === 'excel');
   const inheritsExcel = (p: Profile) => (catalog.get(p).inheritGlobalMcpIds ?? []).includes('excel');
   for (const p of ['analyst', 'bi', 'scientist', 'dba'] as Profile[]) {
     expect(hasPowerbi(p)).toBe(true);
+    expect(hasExcel(p)).toBe(true); // modelado (semeado no global), não só herdado
     expect(inheritsExcel(p)).toBe(true);
   }
   for (const p of ['fullstack', 'qa'] as Profile[]) {
     expect(hasPowerbi(p)).toBe(false);
+    expect(hasExcel(p)).toBe(false);
     expect(inheritsExcel(p)).toBe(false);
   }
 });

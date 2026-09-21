@@ -44,6 +44,20 @@ export const powerbiMcp: McpSpec = {
 };
 
 /**
+ * Excel MCP (haris-musa/excel-mcp-server) — ler/escrever planilhas `.xlsx` sem
+ * Excel instalado. **Perfis analytics** (`analyst`, `bi`, `scientist`, `dba`).
+ * Roda via `uvx` (uv/Python) — pré-requisito de host; se `uv` faltar, o MCP não
+ * sobe. Forma canônica que o global do usuário já usava: `uvx excel-mcp-server stdio`.
+ * Modelado aqui (fonte única) e semeado no global via `installOpencodeGlobal`; os
+ * perfis também o herdam por id (`inheritGlobalMcpIds`), então a def do usuário no
+ * global, se houver, vence a modelada (cópia verbatim em `buildNioOpencodeConfig`).
+ */
+export const excelMcp: McpSpec = {
+  id: 'excel',
+  command: ['uvx', 'excel-mcp-server', 'stdio'],
+};
+
+/**
  * n8n-mcp (czlonkowski) — MCP server de n8n (docs de nodes/workflows). Registrado
  * como MCP **próprio** (é server de verdade, não dobra no `nio-lang`) quando o
  * usuário escolhe a linguagem `n8n` no wizard fullstack. Roda **sem auth** para

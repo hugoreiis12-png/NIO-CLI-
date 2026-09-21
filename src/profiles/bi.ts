@@ -1,5 +1,5 @@
 import type { ProfileDefinition } from '../core/environment.js';
-import { powerbiMcp } from './mcps.js';
+import { powerbiMcp, excelMcp } from './mcps.js';
 import { postgresqlClientToolchain, powerbiDesktopToolchain } from './toolchains.js';
 
 /**
@@ -13,6 +13,6 @@ export const biProfile: ProfileDefinition = {
   languages: ['sql', 'dax'],
   toolchains: [postgresqlClientToolchain, powerbiDesktopToolchain],
   frameworks: ['powerbi'],
-  mcps: [powerbiMcp],
+  mcps: [powerbiMcp, excelMcp],
   inheritGlobalMcpIds: ['excel'],
 };
