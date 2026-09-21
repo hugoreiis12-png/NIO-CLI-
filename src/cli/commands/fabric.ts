@@ -5,26 +5,27 @@
  */
 import type { Command } from "commander";
 import { c, sym } from "../../lib/colors.js";
-import { readFabricAuthEnv } from "../../adapters/fabric/token.js";
+import { fabricGrant, type TokenGrant } from "../../adapters/fabric/token.js";
 import { createFabricGateway } from "../../adapters/fabric/client.js";
 
-const HINT = "Configure AZURE_TENANT_ID, AZURE_CLIENT_ID e AZURE_CLIENT_SECRET em ~/.nio/config.env";
+const HINT =
+  "Configure AZURE_TENANT_ID/AZURE_CLIENT_ID e (NIO_FABRIC_USERNAME/PASSWORD p/ token de usuário com RLS, " +
+  "ou AZURE_CLIENT_SECRET p/ service principal) em ~/.nio/config.env";
 
 interface FabricStatusReport {
   configured: boolean;
+  grant?: TokenGrant;
   status: "ok" | "unconfigured" | "unauthorized" | "unavailable" | "failed";
   workspaceCount?: number;
   error?: string;
 }
 
 async function probe(): Promise<FabricStatusReport> {
-  const auth = readFabricAuthEnv();
-  if (!auth.tenantId || !auth.clientId || !auth.clientSecret) {
-    return { configured: false, status: "unconfigured" };
-  }
+  const grant = fabricGrant();
+  if (!grant) return { configured: false, status: "unconfigured" };
   const out = await createFabricGateway().listWorkspaces();
-  if (out.status === "ok") return { configured: true, status: "ok", workspaceCount: out.data?.length ?? 0 };
-  return { configured: true, status: out.status, error: out.error };
+  if (out.status === "ok") return { configured: true, grant, status: "ok", workspaceCount: out.data?.length ?? 0 };
+  return { configured: true, grant, status: out.status, error: out.error };
 }
 
 async function runStatus(opts: { json?: boolean }): Promise<void> {
@@ -34,7 +35,8 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
     process.exit(r.status === "ok" ? 0 : 1);
   }
   if (r.status === "ok") {
-    console.log(`${c.green(sym.ok)} Fabric conectado — ${r.workspaceCount} workspace(s) visível(is) ao service principal.`);
+    const via = r.grant === "user" ? "token de usuário (RLS aplicado)" : "service principal";
+    console.log(`${c.green(sym.ok)} Fabric conectado via ${via} — ${r.workspaceCount} workspace(s) visível(is).`);
     return;
   }
   if (r.status === "unconfigured") {

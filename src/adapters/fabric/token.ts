@@ -1,13 +1,16 @@
 /**
- * Aquisição de token do Power BI / Fabric por **service principal**
- * (`client_credentials`). Contrato nunca-lança: falha vira `TokenResult` com
- * `status`. Cacheia o `access_token` até ~1min antes de expirar. Segredos só do env
- * (`AZURE_*`) — nunca logados nem persistidos; o token fica só em memória.
+ * Aquisição de token do Power BI / Fabric. Dois grants, auto-selecionados por env:
+ * - **token de usuário (ROPC, grant `password`)** quando há `NIO_FABRIC_USERNAME`+
+ *   `NIO_FABRIC_PASSWORD` → a consulta roda como o usuário e **respeita o RLS**.
+ * - **service principal (`client_credentials`)** caso contrário (dataset sem RLS).
+ * Contrato nunca-lança: falha vira `TokenResult` com `status`. Cacheia o
+ * `access_token` até ~1min antes de expirar. Segredos só do env — nunca logados nem
+ * persistidos; o token fica só em memória.
  */
 
 const TOKEN_ENDPOINT = (tenant: string): string =>
   `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`;
-/** Scope do audience api.powerbi.com (client_credentials). */
+/** Scope do audience api.powerbi.com. */
 const SCOPE = 'https://analysis.windows.net/powerbi/api/.default';
 const EXPIRY_SKEW_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -16,6 +19,8 @@ export interface FabricAuthEnv {
   tenantId?: string;
   clientId?: string;
   clientSecret?: string;
+  username?: string;
+  password?: string;
 }
 
 export function readFabricAuthEnv(env: NodeJS.ProcessEnv = process.env): FabricAuthEnv {
@@ -23,14 +28,18 @@ export function readFabricAuthEnv(env: NodeJS.ProcessEnv = process.env): FabricA
     tenantId: env.AZURE_TENANT_ID?.trim(),
     clientId: env.AZURE_CLIENT_ID?.trim(),
     clientSecret: env.AZURE_CLIENT_SECRET?.trim(),
+    username: env.NIO_FABRIC_USERNAME?.trim(),
+    password: env.NIO_FABRIC_PASSWORD, // senha sem trim — pode ter caractere significativo na borda
   };
 }
 
+export type TokenGrant = 'user' | 'service_principal';
 export type TokenStatus = 'ok' | 'unconfigured' | 'unauthorized' | 'unavailable';
 
 export interface TokenResult {
   status: TokenStatus;
   token?: string;
+  grant?: TokenGrant;
   error?: string;
 }
 
@@ -38,31 +47,62 @@ export interface TokenProvider {
   get(): Promise<TokenResult>;
 }
 
+/** Qual grant o env habilita (usuário vence SP), ou `null` se falta credencial. */
+export function fabricGrant(auth: FabricAuthEnv = readFabricAuthEnv()): TokenGrant | null {
+  if (!auth.tenantId || !auth.clientId) return null;
+  if (auth.username && auth.password) return 'user';
+  if (auth.clientSecret) return 'service_principal';
+  return null;
+}
+
+/** Monta o corpo do grant escolhido (ROPC ou client_credentials). */
+function grantBody(grant: TokenGrant, auth: FabricAuthEnv): URLSearchParams {
+  if (grant === 'user') {
+    const body = new URLSearchParams({
+      grant_type: 'password',
+      client_id: auth.clientId!,
+      username: auth.username!,
+      password: auth.password!,
+      scope: SCOPE,
+    });
+    if (auth.clientSecret) body.set('client_secret', auth.clientSecret); // app confidencial
+    return body;
+  }
+  return new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: auth.clientId!,
+    client_secret: auth.clientSecret!,
+    scope: SCOPE,
+  });
+}
+
 /** Provider com cache em memória. `fetchImpl` é seam pra teste (default = `fetch` global). */
 export function createTokenProvider(
   auth: FabricAuthEnv = readFabricAuthEnv(),
   fetchImpl: typeof fetch = fetch,
 ): TokenProvider {
-  let cached: { token: string; expiresAt: number } | null = null;
+  let cached: { token: string; expiresAt: number; grant: TokenGrant } | null = null;
 
   return {
     async get(): Promise<TokenResult> {
-      if (!auth.tenantId || !auth.clientId || !auth.clientSecret) {
-        return { status: 'unconfigured', error: 'AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET não configurados' };
+      const grant = fabricGrant(auth);
+      if (!auth.tenantId || !grant) {
+        return {
+          status: 'unconfigured',
+          error:
+            'Fabric não configurado: defina AZURE_TENANT_ID/AZURE_CLIENT_ID e ' +
+            '(NIO_FABRIC_USERNAME/NIO_FABRIC_PASSWORD p/ token de usuário com RLS, ' +
+            'ou AZURE_CLIENT_SECRET p/ service principal).',
+        };
       }
-      if (cached && cached.expiresAt > Date.now()) return { status: 'ok', token: cached.token };
-
-      const body = new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_id: auth.clientId,
-        client_secret: auth.clientSecret,
-        scope: SCOPE,
-      });
+      if (cached && cached.expiresAt > Date.now()) {
+        return { status: 'ok', token: cached.token, grant: cached.grant };
+      }
       try {
         const res = await fetchImpl(TOKEN_ENDPOINT(auth.tenantId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body,
+          body: grantBody(grant, auth),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
         if (!res.ok) {
@@ -73,8 +113,8 @@ export function createTokenProvider(
         const json = (await res.json()) as { access_token?: string; expires_in?: number };
         if (!json.access_token) return { status: 'unavailable', error: 'resposta do token sem access_token' };
         const ttlMs = (json.expires_in ?? 3600) * 1000;
-        cached = { token: json.access_token, expiresAt: Date.now() + ttlMs - EXPIRY_SKEW_MS };
-        return { status: 'ok', token: json.access_token };
+        cached = { token: json.access_token, expiresAt: Date.now() + ttlMs - EXPIRY_SKEW_MS, grant };
+        return { status: 'ok', token: json.access_token, grant };
       } catch (err) {
         return { status: 'unavailable', error: (err as Error).message };
       }
