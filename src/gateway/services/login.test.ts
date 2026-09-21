@@ -101,12 +101,21 @@ describe('login', () => {
   });
 
   test('auth_2 ligado + phone → 2fa_required (WhatsApp enviado, sem JWT)', async () => {
-    const out = await login('hugo', 'pw', deps({ u: user({ auth2: true, phone: '+5511988887777' }) }));
-    expect(out.ok).toBe(true);
-    expect(out.ok && out.step).toBe('2fa_required');
-    expect(out.ok && out.step === '2fa_required' && out.phoneHint).toBe('+55•••••••7777');
-    // fix do 2º fator: informa o backend de WhatsApp (sem WHATSAPP_* no teste → unconfigured)
-    expect(out.ok && out.step === '2fa_required' && out.smsMode).toBe('unconfigured');
+    // Hermético SÓ aqui: este caso exige WHATSAPP_* AUSENTE (→ unconfigured). O Bun
+    // auto-carrega o `.env`, que os seta. Limpo local (não num beforeEach) pra NÃO mudar
+    // o caminho que os testes `echo`/`não configurado`/`falhou` abaixo exercitam.
+    const WA = ['WHATSAPP_ENDPOINT_URL', 'WHATSAPP_TOKEN', 'WHATSAPP_TEMPLATE_NAME', 'WHATSAPP_TEMPLATE_LANGUAGE'] as const;
+    const saved = WA.map((k) => [k, process.env[k]] as const);
+    for (const k of WA) delete process.env[k];
+    try {
+      const out = await login('hugo', 'pw', deps({ u: user({ auth2: true, phone: '+5511988887777' }) }));
+      expect(out.ok).toBe(true);
+      expect(out.ok && out.step).toBe('2fa_required');
+      expect(out.ok && out.step === '2fa_required' && out.phoneHint).toBe('+55•••••••7777');
+      expect(out.ok && out.step === '2fa_required' && out.smsMode).toBe('unconfigured');
+    } finally {
+      for (const [k, v] of saved) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
   });
 
   test('endpoint de WhatsApp em loopback → 2fa_required com smsMode=echo + devCode', async () => {
