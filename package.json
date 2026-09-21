@@ -51,6 +51,7 @@
     "gen:docs": "bun run scripts/gen-reference.ts",
     "db:ping": "bun run scripts/db-ping.ts",
     "db:tls": "bash scripts/db-tls-setup.sh",
+    "kong:tls": "bash scripts/kong-tls-setup.sh",
     "db:migrate": "bun run scripts/migrate.ts",
     "argon2:calibrate": "node scripts/argon2-calibrate.mjs",
     "dev:whatsapp-echo": "bun run scripts/whatsapp-echo.ts",

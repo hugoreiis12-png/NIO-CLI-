@@ -79,8 +79,16 @@ services:
       # existe (`scripts/db-tls-setup.sh`, CA interna) — falta só executar em
       # produção, não falta código. Ver docs/BACKLOG-TECNICO.md §4.2.
       NIO_DATABASE_SSL: "${NIO_DATABASE_SSL:-false}"
+      # Fase 1 (corte): CA interna dentro do container. Bind ABSOLUTO (relativo
+      # quebra no Portainer). Descomentado SÓ no corte, com o arquivo já criado
+      # no host .160 (copiado de db-tls/ca.crt). Sem o arquivo, o container não
+      # sobe — ordem: arquivo primeiro, uncomment+push depois.
+      #NIO_DATABASE_CA: "/etc/ssl/nio/db-ca.pem"
       JWT_SECRET: "${JWT_SECRET}"               # env var do stack no Portainer
       NIO_GATEWAY_TOKEN: "${NIO_GATEWAY_TOKEN}" # token compartilhado (app externa)
+    # Fase 1 (corte): descomentar junto com NIO_DATABASE_CA acima.
+    #volumes:
+    #  - "/etc/nio/db-ca.pem:/etc/ssl/nio/db-ca.pem:ro"
     # SEM publish de porta no host: o gateway é alcançado só pela `nio-net` (Kong o
     # acha por nome). Isso evita conflito de :3000 e força o tráfego pelo Kong (:8000),
     # onde vale o rate-limiting. Debug local: `curl http://127.0.0.1:8000/health`.
@@ -127,7 +135,15 @@ services:
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /kong/kong.yml
-      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      # Edge TLS (Fase 2): default mantém só :8000 (comportamento atual). Pra ligar
+      # o :8443, defina no Portainer KONG_PROXY_LISTEN=0.0.0.0:8000, 0.0.0.0:8443 ssl
+      # + KONG_SSL_CERT / KONG_SSL_CERT_KEY com o CONTEÚDO PEM (emitido por
+      # `bun run kong:tls server <host-da-LAN>`). Valores ficam no Portainer, nunca
+      # no git — mesmo nível de sigilo do JWT_SECRET. Sem cert válido o Kong gera
+      # self-signed sozinho: a validação pós-deploy (s_client sem -k) pega isso.
+      KONG_PROXY_LISTEN: "${KONG_PROXY_LISTEN:-0.0.0.0:8000}"
+      KONG_SSL_CERT: "${KONG_SSL_CERT:-}"
+      KONG_SSL_CERT_KEY: "${KONG_SSL_CERT_KEY:-}"
       # Admin API desligada (auditoria M-7) — config é declarativa, nada chama o
       # admin em runtime. Antes só era loopback; agora nem isso.
       KONG_ADMIN_LISTEN: "off"
@@ -140,6 +156,10 @@ services:
       # INGRESSO na LAN — porta do host configurável (NIO_KONG_PROXY_PORT), pois :8000
       # pode estar ocupada no host. Default 8000; neste host use 8080.
       - "${NIO_KONG_PROXY_PORT:-8000}:8000"
+      # Edge TLS :8443 (Fase 2, corte): descomentar junto com KONG_PROXY_LISTEN
+      # com ssl. Publicar antes do corte só ocuparia a porta do host à toa (e
+      # falharia o deploy se já estiver em uso) — por isso nasce comentado.
+      #- "${NIO_KONG_PROXY_SSL_PORT:-8443}:8443"
     depends_on:
       nio-gateway: { condition: service_healthy }
     networks: [ nio-net ]

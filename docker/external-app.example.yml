@@ -28,6 +28,8 @@ services:
       # URL do Kong (acessível da rede do container)
       # Se ambos os stacks estão na mesma rede Docker: http://nio-kong:8000
       # Se o app roda fora do Docker: http://<host-ip>:8000
+      # Com edge TLS habilitado (§6.1 de KONG-GATEWAY-USO.md): https://<host-ip>:8443
+      #   (+ ca.crt da CA interna no trust store do container)
       NIO_KONG_URL: "http://nio-kong:8000"
 
       # Headroom (proxy OpenAI) — opcional, se o app usa IA

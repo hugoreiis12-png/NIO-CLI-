@@ -56,7 +56,7 @@
 
 | Serviço | Container | Porta(s) | Visível na LAN |
 |---------|-----------|----------|-----------------|
-| Kong API Gateway | `nio-kong` | `8000` (HTTP), `8443` (HTTPS), `8001` (admin) | ✅ Sim |
+| Kong API Gateway | `nio-kong` | `8000` (HTTP), `8443` (HTTPS — só quando o edge TLS está habilitado, ver §6.1), `8001` (admin) | ✅ Sim |
 | NIO Gateway | `nio-gateway` | `3000` (loopback only) | ❌ Não |
 | Headroom Proxy | `nio-headroom` | `8787` | ✅ Sim |
 | MCP Gateway | `nio-mcp-gateway` | `8811` (127.0.0.1) | ❌ Não |
@@ -476,12 +476,46 @@ Health check — não requer token nem Bearer.
 | `WHATSAPP_TOKEN` | nio-gateway | — | Token de acesso (Bearer) da WhatsApp Business API |
 | `WHATSAPP_TEMPLATE_NAME` | nio-gateway | `autenticao` | Template de autenticação |
 | `WHATSAPP_TEMPLATE_LANGUAGE` | nio-gateway | `pt_BR` | Idioma do template |
+| `KONG_PROXY_LISTEN` | nio-kong | `0.0.0.0:8000` | Listeners do Kong — com TLS: `0.0.0.0:8000, 0.0.0.0:8443 ssl` (ver §6.1) |
+| `KONG_SSL_CERT` | nio-kong | — | Conteúdo PEM do cert do Kong (emitido por `bun run kong:tls`) |
+| `KONG_SSL_CERT_KEY` | nio-kong | — | Conteúdo PEM da key do Kong (segredo, nível `JWT_SECRET`) |
+| `NIO_KONG_PROXY_SSL_PORT` | nio-kong | `8443` | Porta do host publicada para o `:8443` |
 | `SMTP_*` | nio-headroom | — | Configurações de email (Headroom proxy) |
 
 ### Gateway Token — Fontes de Dados (ordem de precedência)
 
 1. **`NIO_GATEWAY_TOKEN`** (variável de ambiente) — prioridade máxima
 2. **`~/.nio/gateway.token`** (arquivo no filesystem) — fallback
+
+### 6.1 Edge TLS — Kong `:8443` (Fase 2)
+
+O Kong termina TLS na borda; Kong→gateway segue `http://nio-gateway:3000` dentro da `nio-net` (isolada, sem TLS — correto). O cert do Kong sai da **mesma CA interna do Postgres** (`db-tls/ca.crt`), sem CA nova — decisão registrada.
+
+**Emissão (máquina com bash+openssl, uma vez):**
+```bash
+bash scripts/kong-tls-setup.sh server 192.168.0.160
+# SAN precisa cobrir EXATAMENTE como os clientes alcançam o Kong (IP e/ou DNS)
+```
+
+**Corte (Portainer → redeploy):**
+1. Stack `nio_cli277` → Environment variables: `KONG_PROXY_LISTEN=0.0.0.0:8000, 0.0.0.0:8443 ssl` + `KONG_SSL_CERT`/`KONG_SSL_CERT_KEY` com os conteúdos PEM (nunca no git).
+2. No compose (commit à parte, com o arquivo de cert já emitido): descomentar o publish `8443` (`NIO_KONG_PROXY_SSL_PORT`) e, para a Fase 1, o mount `ca.crt` + `NIO_DATABASE_CA` do gateway.
+3. "Pull and redeploy".
+3. Validar **sem `-k`** (é o teste que importa — pega cert auto-gerado pelo Kong ou CA faltando):
+```bash
+curl https://192.168.0.160:8443/health
+openssl s_client -connect 192.168.0.160:8443 -showcerts </dev/null | openssl x509 -noout -subject -issuer -dates
+# issuer precisa ser CN=NIO Internal DB CA; subject/SAN precisa cobrir o host
+```
+
+**Clientes (cada máquina com `nio` + app externa):**
+1. Instalar `db-tls/ca.crt` no trust store do SO (robusto), ou `NODE_EXTRA_CA_CERTS=/caminho/ca.crt`.
+2. `NIO_GATEWAY_URL=https://192.168.0.160:8443` (troca o `http://...:8000`).
+3. `curl https://192.168.0.160:8443/health` sem `-k` como sanity.
+
+**Reversão:** voltar `NIO_GATEWAY_URL` para `http://...:8000` nos clientes (o `:8000` segue ativo durante a transição) e/ou remover o `ssl` do `KONG_PROXY_LISTEN` + redeploy. Nenhum dado é migrado — é só transporte.
+
+**Expiração:** o cert do Kong vale ~825 dias (`openssl x509 -in kong.crt -noout -dates`); renovar com `KONG_TLS_FORCE=1` + trocar as duas vars no Portainer antes de vencer.
 
 ---
 
