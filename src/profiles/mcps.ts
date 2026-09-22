@@ -67,6 +67,29 @@ export function withFabricAuth(spec: McpSpec, env: NodeJS.ProcessEnv = process.e
   return { ...spec, command: [...(spec.command ?? []), SERVICE_PRINCIPAL_FLAG] };
 }
 
+/** Opt-in (`NIO_FABRIC_XMLA=1`) pra reabilitar a modelagem XMLA por service principal. */
+function xmlaOptIn(env: NodeJS.ProcessEnv): boolean {
+  return env.NIO_FABRIC_XMLA === '1' || env.NIO_FABRIC_XMLA === 'true';
+}
+
+/**
+ * Adaptividade dos dois caminhos do Power BI, na MESMA config:
+ * - **REST → consulta no Fabric**: as tools `nio_fabric_*` (servidor MCP do nio)
+ *   consultam datasets do Fabric por service principal, sem XMLA. Sempre presentes.
+ * - **XMLA → modelagem no Desktop local**: o MCP `powerbi-modeling` conecta no modelo
+ *   aberto no Power BI Desktop (XMLA local, sem auth). Fica **sempre presente** neste
+ *   modo — é o default aqui (sem `--authmode`).
+ *
+ * O modo Fabric-XMLA por service principal (`--authmode=serviceprincipal`) NÃO entra
+ * por padrão: exige capacidade Premium **dedicada** (SKU P/F) com a SP licenciada —
+ * PPU e workspace compartilhado não valem pra SP (`PowerBINotLicensedException`).
+ * Só é ligado com opt-in `NIO_FABRIC_XMLA=1`, pra quem tem capacidade dedicada.
+ */
+export function resolveFabricMcps(specs: McpSpec[], env: NodeJS.ProcessEnv = process.env): McpSpec[] {
+  if (xmlaOptIn(env)) return specs.map((s) => withFabricAuth(s, env));
+  return specs; // powerbi-modeling segue em Desktop-local; Fabric via REST (nio_fabric_*)
+}
+
 /**
  * Excel MCP (haris-musa/excel-mcp-server) — ler/escrever planilhas `.xlsx` sem
  * Excel instalado. **Perfis analytics** (`analyst`, `bi`, `scientist`, `dba`).
