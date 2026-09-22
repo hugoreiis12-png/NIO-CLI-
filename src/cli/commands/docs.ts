@@ -10,14 +10,6 @@ import { VERSION } from "../../version.js";
 import { c, sym } from "../../lib/colors.js";
 import { openUrl } from "../../lib/open-url.js";
 import { homePath } from "../../brand.js";
-import { SECTIONS, TAGLINE } from "./docs/content.js";
-import { commandSection, toolSection } from "./docs/dynamic.js";
-import { renderTerminal } from "./docs/terminal.js";
-import { renderHtml } from "./docs/html.js";
-
-function allSections(program: Command) {
-  return [...SECTIONS, commandSection(program), toolSection()];
-}
 
 export function registerDocsCommand(program: Command): void {
   program
@@ -26,8 +18,17 @@ export function registerDocsCommand(program: Command): void {
     .option("--html", "gera a página HTML em vez de imprimir no terminal")
     .option("--open", "abre a página no navegador (implica --html)")
     .option("-o, --out <path>", "caminho do HTML (default ~/.nio/nio-docs.html)")
-    .action((opts: { html?: boolean; open?: boolean; out?: string }) => {
-      const sections = allSections(program);
+    .action(async (opts: { html?: boolean; open?: boolean; out?: string }) => {
+      // Conteúdo/render (SECTIONS, terminal, html) importados sob demanda: pesam
+      // ~107ms e só o `nio docs` os usa — fora do caminho quente do cold-start.
+      const [{ SECTIONS, TAGLINE }, { commandSection, toolSection }, { renderTerminal }, { renderHtml }] =
+        await Promise.all([
+          import("./docs/content.js"),
+          import("./docs/dynamic.js"),
+          import("./docs/terminal.js"),
+          import("./docs/html.js"),
+        ]);
+      const sections = [...SECTIONS, commandSection(program), toolSection()];
 
       if (!opts.html && !opts.open) {
         console.log(renderTerminal(sections, VERSION));

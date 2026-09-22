@@ -21,6 +21,7 @@ export interface DetectedPath {
   kind: AttachKind;
 }
 
+// Constantes de extensão -> tipo de anexo. Só arquivos com extensão conhecida entram na detecção.
 const EXT_KIND: Record<string, AttachKind> = {
   '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.gif': 'image', '.webp': 'image',
   '.csv': 'csv',

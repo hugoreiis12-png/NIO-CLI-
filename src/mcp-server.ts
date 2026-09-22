@@ -225,7 +225,7 @@ async function main() {
   registerResourceHandlers(server, surface);
   registerPromptHandlers(server, surface);
 
-  notifyMcpServerIfUpdate();
+  void notifyMcpServerIfUpdate();
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

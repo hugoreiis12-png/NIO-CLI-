@@ -253,8 +253,10 @@ export const NIO_AI_IMAGE_MAX_DIM = envNum('AI_IMAGE_MAX_DIM', 1024);
 // prompt real e auto-compactar em loop infinito. O teto de input é assunto
 // separado — vive só no fail-fast do headless (`NIO_AI_MAX_INPUT`, qwen-client).
 
-/** Folga de compactação do opencode (`DEFAULT_OPENCODE_COMPACTION.reserved`). */
+/** Piso da folga de compactação; a folga real é `max(piso, 10% do contexto)`. */
 const COMPACTION_FLOOR = 8000;
+/** Fração da janela reservada pro resumo → compacta quando falta ~10% pro teto. */
+const COMPACTION_RESERVE_RATIO = 0.1;
 
 /**
  * Aviso de config de contexto suspeita: janela declarada pequena demais (≤ output +
@@ -279,10 +281,21 @@ export function contextConfigWarning(
  * schemas de MCP pesados), deixa o motor compactar/podar o histórico sozinho,
  * reservando `reserved` tokens pro resumo. Só semeado se ausente (não sobrescreve).
  */
+/**
+ * Folga (`reserved`) que a auto-compactação deixa antes de estourar: **10% da janela
+ * real** (`NIO_AI_CONTEXT`), com piso `COMPACTION_FLOOR`. Assim o opencode começa a
+ * compactar quando falta ~10% pro teto, sem rebaixar janelas pequenas abaixo do piso.
+ * Nunca ultrapassa o próprio contexto (não recria o loop de auto-compactação).
+ */
+export function compactionReserved(context = NIO_AI_CONTEXT): number {
+  if (context <= 0) return COMPACTION_FLOOR;
+  return Math.min(context, Math.max(COMPACTION_FLOOR, Math.round(context * COMPACTION_RESERVE_RATIO)));
+}
+
 export const DEFAULT_OPENCODE_COMPACTION: Record<string, unknown> = {
   auto: true,
   prune: true,
-  reserved: 8000,
+  reserved: compactionReserved(),
 };
 
 /** Watcher: ignora dirs volumosos (não dispara reindex/eventos à toa). Só se ausente. */

@@ -1,4 +1,4 @@
-import updateNotifier, { type UpdateInfo } from 'update-notifier';
+import type { UpdateInfo } from 'update-notifier';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -16,19 +16,22 @@ function loadPkg(): { name: string; version: string } {
 const ONE_DAY_MS = 1000 * 60 * 60 * 24;
 
 /**
- * Inicia checagem em background (cacheada). Retorna o objeto pra inspeção.
+ * Inicia checagem em background (cacheada). Import dinâmico: o `update-notifier`
+ * custa ~256ms pra carregar — fora do caminho quente do cold-start.
  */
-export function startVersionCheck() {
+export async function startVersionCheck() {
+  const { default: updateNotifier } = await import('update-notifier');
   const pkg = loadPkg();
   return updateNotifier({ pkg, updateCheckInterval: ONE_DAY_MS });
 }
 
 /**
- * Pro CLI interativo: chama .notify() com banner padrão no stdout.
+ * Pro CLI interativo: chama .notify() com banner padrão no stdout. Async e lazy —
+ * o caller roda depois do output, só em TTY (ver `cli.ts`).
  */
-export function notifyCliIfUpdate(): void {
+export async function notifyCliIfUpdate(): Promise<void> {
   try {
-    const notifier = startVersionCheck();
+    const notifier = await startVersionCheck();
     notifier.notify({ defer: false, isGlobal: true });
   } catch {
     // Best-effort. Nunca quebrar o CLI por causa de checagem de versão.
@@ -71,9 +74,9 @@ export async function checkForUpdate(timeoutMs = 3000): Promise<UpdateStatus | n
  * Pro MCP server: SEM banner em stdout (corromperia JSON-RPC).
  * Loga em stderr só se houver update — o Claude Code captura stderr.
  */
-export function notifyMcpServerIfUpdate(): void {
+export async function notifyMcpServerIfUpdate(): Promise<void> {
   try {
-    const notifier = startVersionCheck();
+    const notifier = await startVersionCheck();
     const update: UpdateInfo | undefined = notifier.update;
     if (update && update.latest !== update.current) {
       console.error(

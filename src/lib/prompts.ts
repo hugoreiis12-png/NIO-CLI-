@@ -26,6 +26,32 @@ function unwrap<T>(value: T | symbol): T {
 }
 
 /**
+ * stdin não é um TTY (Git Bash/mintty sem winpty, pipe, CI). Sem isto o `@clack`
+ * cancela o prompt na hora e o `unwrap` mata o processo com exit(130) — o efeito
+ * de "a pergunta sumiu sem eu responder". Falha alto e acionável no lugar disso.
+ */
+export class NonInteractiveError extends Error {
+  constructor(message: string) {
+    super(
+      `"${message}" precisa de um terminal interativo, mas stdin não é um TTY ` +
+        `(Git Bash sem winpty, pipe ou CI). Rode num terminal real — no Git Bash, use \`winpty nio …\`.`,
+    );
+    this.name = 'NonInteractiveError';
+  }
+}
+
+/** `true` quando não dá pra prompt interativo. */
+function noTty(): boolean {
+  return !process.stdin.isTTY;
+}
+
+/** Em não-TTY: usa o default se houver, senão lança `NonInteractiveError`. */
+function fallbackOrThrow<T>(message: string, fallback: T | undefined): T {
+  if (fallback !== undefined) return fallback;
+  throw new NonInteractiveError(message);
+}
+
+/**
  * Converte o `validate` do inquirer (`(v: string) => true | string`) pro do clack
  * (`Validate<string>` = `(v: string | undefined) => string | undefined`).
  */
@@ -50,6 +76,7 @@ export async function password(opts: {
   mask?: string;
   validate?: (value: string) => boolean | string;
 }): Promise<string> {
+  if (noTty()) throw new NonInteractiveError(opts.message); // senha nunca tem default
   return unwrap(
     await clackPassword({
       message: opts.message,
@@ -64,6 +91,7 @@ export async function input(opts: {
   default?: string;
   validate?: (value: string) => boolean | string;
 }): Promise<string> {
+  if (noTty()) return fallbackOrThrow(opts.message, opts.default);
   return unwrap(
     await text({
       message: opts.message,
@@ -74,6 +102,7 @@ export async function input(opts: {
 }
 
 export async function confirm(opts: { message: string; default?: boolean }): Promise<boolean> {
+  if (noTty()) return fallbackOrThrow(opts.message, opts.default);
   return unwrap(await clackConfirm({ message: opts.message, initialValue: opts.default }));
 }
 
@@ -87,6 +116,7 @@ export async function select<T>(opts: {
   choices: Choice<T>[];
   default?: T;
 }): Promise<T> {
+  if (noTty()) return fallbackOrThrow(opts.message, opts.default);
   const options: ClackOption<T>[] = opts.choices.map((ch) => ({
     value: ch.value,
     label: ch.name,
@@ -106,6 +136,7 @@ export async function checkbox<T>(opts: {
   /** Prepende uma opção "marca tudo" (rótulo custom se string). Expande pra todos. */
   all?: boolean | string;
 }): Promise<T[]> {
+  if (noTty()) throw new NonInteractiveError(opts.message); // checkbox não tem default
   const withAll = Boolean(opts.all) && opts.choices.length > 1;
   const allLabel = typeof opts.all === "string" ? opts.all : "Todos";
   const options: ClackOption<unknown>[] = [

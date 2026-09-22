@@ -13,6 +13,7 @@ import {
   NIO_AI_MODEL_ID,
   NIO_AI_CONTEXT,
   contextConfigWarning,
+  compactionReserved,
 } from './client-configs.js';
 import type { McpSpec } from '../../core/environment.js';
 
@@ -139,6 +140,14 @@ test('contextConfigWarning: avisa janela pequena demais, silencia janela sã ou 
   expect(contextConfigWarning(10000, 2048)).toBeTruthy(); // 10000 ≤ 2048 + 8000
   expect(contextConfigWarning(98304, 2048)).toBeNull(); // folgada
   expect(contextConfigWarning(0, 2048)).toBeNull(); // 0 = declaração desativada
+});
+
+test('compactionReserved: 10% da janela com piso 8000, nunca acima do contexto', () => {
+  expect(compactionReserved(98304)).toBe(9830); // ~10% de 98304
+  expect(compactionReserved(65536)).toBe(8000); // 10% (6554) < piso → piso
+  expect(compactionReserved(200000)).toBe(20000); // 10% de janela grande
+  expect(compactionReserved(5000)).toBe(5000); // piso 8000 > contexto → capa no contexto
+  expect(compactionReserved(0)).toBe(8000); // declaração desativada → piso
 });
 
 test('janela declarada ao opencode = NIO_AI_CONTEXT (a real do provider, não um teto rebaixado)', () => {

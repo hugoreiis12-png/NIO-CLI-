@@ -355,6 +355,17 @@ export function stripReasoningTags(text: string): string {
 }
 
 /**
+ * Compactação proativa: os `tokens` (input+output do último step, = contexto atual)
+ * já cruzaram o teto menos a folga reservada? Se sim, o App dispara `session.summarize`
+ * no próximo idle — compacta entre turnos, não no início do próximo prompt (evita a
+ * trava de "demora pra continuar após estourar"). Puro e testável; sem IO.
+ */
+export function shouldCompact(tokens: number, context: number, reserved: number): boolean {
+  if (context <= 0 || tokens <= 0) return false;
+  return tokens >= context - reserved;
+}
+
+/**
  * Interpreta um part cru do SDK sobre o part anterior (por id) e devolve o novo part
  * — ou `null` pra ignorar (`step-start`, ou texto ausente sem part prévio). Puro.
  */

@@ -13,6 +13,7 @@ import {
   looksLikeScaffolding,
   isInternalMessage,
   stripReasoningTags,
+  shouldCompact,
 } from './state.js';
 import type { ChatMessage } from './state.js';
 import type { Event } from '@opencode-ai/sdk';
@@ -158,6 +159,17 @@ test('stripReasoningTags: tira <think> fechado, tag aberta sem fechar, e vários
   expect(stripReasoningTags('resposta<think>pensando sem fim')).toBe('resposta'); // aberto sem fechar
   expect(stripReasoningTags('a<thinking>x</thinking>b◁think▷y◁/think▷c')).toBe('abc');
   expect(stripReasoningTags('sem tag nenhuma')).toBe('sem tag nenhuma'); // no-op
+});
+
+test('shouldCompact: dispara ao cruzar o teto menos a folga; ignora casos degenerados', () => {
+  const ctx = 65536;
+  const reserved = 8000; // teto efetivo = 57536
+  expect(shouldCompact(57535, ctx, reserved)).toBe(false); // 1 abaixo
+  expect(shouldCompact(57536, ctx, reserved)).toBe(true); // exatamente no teto efetivo
+  expect(shouldCompact(60000, ctx, reserved)).toBe(true); // acima
+  expect(shouldCompact(1000, ctx, reserved)).toBe(false); // bem abaixo
+  expect(shouldCompact(60000, 0, reserved)).toBe(false); // contexto inválido → nunca
+  expect(shouldCompact(0, ctx, reserved)).toBe(false); // sem tokens → nunca
 });
 
 test('computePart: <think> inline num part de texto NÃO chega ao output (Item 1)', () => {

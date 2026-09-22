@@ -278,9 +278,5 @@ export async function runInitWizard(): Promise<void> {
   await handoffToSession(session);
 }
 
-export function registerInitCommand(program: Command): void {
-  program
-    .command("init")
-    .description(`Cria ${brand.projectConfigFile} no diretório atual e materializa o ambiente da sessão`)
-    .action(runInitWizard);
-}
+// `registerInitCommand` vive em `./register.ts` (leve) pra não puxar este módulo
+// inteiro no cold-start. `runInitWizard`/`handoffToSession` seguem exportados aqui.

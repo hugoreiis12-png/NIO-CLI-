@@ -26,6 +26,7 @@ import { buildPalette, type PaletteItem } from './palette-source.js';
 import {
   applyEvent,
   contextUsage,
+  shouldCompact,
   pendingQuestion,
   questionOptions,
   pushUserMessage,
@@ -42,7 +43,7 @@ import {
   fetchPendingQuestions,
   type OpencodeHandle,
 } from './opencode.js';
-import { NIO_AI_CONTEXT } from '../lib/clients/client-configs.js';
+import { NIO_AI_CONTEXT, compactionReserved } from '../lib/clients/client-configs.js';
 import { compactInput } from '../lib/exec/map-reduce.js';
 import { buildAttachedInput, detectPaths } from './attachments.js';
 import type { FilePartInput } from '@opencode-ai/sdk';
@@ -96,6 +97,7 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   const busyStartedAt = useRef<number>(0); // pro tempo decorrido no StatusLine
   const tuiCommandRef = useRef<(cmd: string) => void>(() => {}); // Sprint 7.2 — closures frescas
   const userTurnActive = useRef(false); // turno em curso foi pedido pelo usuário? (senão = compactação/emenda → aborta)
+  const compactingRef = useRef(false); // Frente 5 — já disparou a compactação proativa? (evita duplicar)
 
   const [splash, setSplash] = useState(splashMs > 0);
   useEffect(() => {
@@ -279,6 +281,28 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
         { id: `toast-${Date.now()}`, message, variant, until: Date.now() + 3000 },
       ],
     }));
+
+  // Frente 5 — compactação proativa: quando o turno acaba (idle) e o contexto já
+  // cruzou o teto menos a folga, dispara `session.summarize` AGORA (ocioso, o
+  // usuário está lendo) — o próximo prompt não paga a compactação inline (a trava
+  // de "demora pra continuar após estourar"). Mesma sessão, contexto vira resumo.
+  useEffect(() => {
+    if (chat.busy || !sessionId.current) return;
+    const { tokensIn, tokensOut } = contextUsage(chat.messages);
+    if (!shouldCompact(tokensIn + tokensOut, NIO_AI_CONTEXT, compactionReserved())) {
+      compactingRef.current = false; // abaixo do teto (pós-compactação) → re-arma
+      return;
+    }
+    if (compactingRef.current) return; // já disparou; aguardando o motor compactar
+    compactingRef.current = true;
+    handle.client.session
+      .summarize({ path: { id: sessionId.current } })
+      .catch(() => {
+        compactingRef.current = false; // falhou → re-arma pra tentar de novo
+      });
+    toast('compactando o contexto proativamente…');
+  }, [chat.busy, chat.messages, handle]);
+
   tuiCommandRef.current = (cmd: string) => {
     switch (cmd) {
       case 'prompt.clear':

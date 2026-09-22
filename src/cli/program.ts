@@ -9,7 +9,7 @@ import { brand } from "../brand.js";
 import { renderMatrixLogo } from "../matrix-logo.js";
 import { usageGuide } from "./help-guide.js";
 import { registerAuthCommands } from "./commands/auth.js";
-import { registerInitCommand } from "./commands/init/index.js";
+import { registerInitCommand } from "./commands/init/register.js";
 import { registerSyncCommand } from "./commands/sync.js";
 import { registerSkillsCommands } from "./commands/skills.js";
 import { registerExecCommand } from "./commands/exec.js";

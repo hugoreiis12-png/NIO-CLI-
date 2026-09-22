@@ -28,6 +28,9 @@ export async function fetchZipball(url: string, opts: FetchZipballOpts): Promise
     timedOut = true;
     ac.abort();
   }, opts.timeoutMs);
+  // Não segurar o event loop só por este timer: um warm em background (ex.
+  // `ensureSkillsCache` no start do CLI) não deve adiar a saída do processo.
+  timer.unref?.();
   try {
     const res = await fetch(url, { signal: ac.signal, redirect: 'follow' });
     if (!res.ok) throw new Error(`HTTP ${res.status} ao baixar ${url}`);
