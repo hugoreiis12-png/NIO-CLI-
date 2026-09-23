@@ -23,22 +23,55 @@ interface OdataList<T> {
   '@odata.nextLink'?: string;
 }
 
+/** Quanto do corpo de erro lemos antes de parsear — precisa caber o `pbi.error` aninhado. */
+const ERROR_BODY_LIMIT = 8_000;
+/** Teto do que é exibido ao usuário (o corpo cru pode ser HTML longo em 401/403). */
+const MAX_ERROR_MESSAGE = 1_200;
+
+/**
+ * O diagnóstico DAX acionável do Power BI mora aninhado em
+ * `error["pbi.error"].details[].detail.value` (ex.: "Cannot find table 'Metas'").
+ * O `error.message` do topo costuma ser genérico ("An unexpected error occurred").
+ */
+interface PbiErrorDetail {
+  detail?: { value?: string };
+}
+interface PbiError {
+  code?: string;
+  details?: PbiErrorDetail[];
+}
 interface ExecuteError {
   code?: string;
   message?: string;
+  'pbi.error'?: PbiError;
 }
 interface ExecuteQueriesResponse {
   error?: ExecuteError;
   results?: { error?: ExecuteError; tables?: { rows?: FabricRow[]; error?: ExecuteError }[] }[];
 }
 
-/** Extrai a mensagem de erro de DAX do corpo 400 (JSON `{error:{message}}`) ou devolve o texto cru. */
+/**
+ * Mensagem acionável de um erro do executeQueries. Prioriza os `pbi.error.details[]`
+ * (o motivo real do DAX); cai pro `message`/`code` do topo quando não houver.
+ * Usado tanto no 400 quanto no erro embutido que vem com HTTP 200.
+ */
+function messageFrom(err: ExecuteError | undefined): string | undefined {
+  if (!err) return undefined;
+  const nested = (err['pbi.error']?.details ?? [])
+    .map((d) => d.detail?.value?.trim())
+    .filter((v): v is string => Boolean(v));
+  const code = err.code ?? err['pbi.error']?.code;
+  if (nested.length > 0) return `${code ? `${code}: ` : ''}${nested.join(' · ')}`;
+  return err.message ?? code;
+}
+
+/** Extrai a mensagem de erro de DAX do corpo 400, ou devolve o texto cru. */
 function daxErrorFrom(detail: string): string {
   try {
     const j = JSON.parse(detail) as ExecuteQueriesResponse;
-    return j.error?.message ?? j.error?.code ?? detail;
+    return (messageFrom(j.error) ?? detail).slice(0, MAX_ERROR_MESSAGE);
   } catch {
-    return detail;
+    return detail.slice(0, MAX_ERROR_MESSAGE);
   }
 }
 
@@ -104,9 +137,10 @@ export function createFabricGateway(deps: FabricClientDeps = {}): FabricGateway 
         signal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
       });
       if (!res.ok) {
-        const detail = (await res.text().catch(() => '')).slice(0, 500);
+        const detail = (await res.text().catch(() => '')).slice(0, ERROR_BODY_LIMIT);
         if (res.status === 401 || res.status === 403) {
-          return { status: 'unauthorized', error: `Power BI respondeu ${res.status} ${detail}`.trim() };
+          const msg = detail.slice(0, MAX_ERROR_MESSAGE);
+          return { status: 'unauthorized', error: `Power BI respondeu ${res.status} ${msg}`.trim() };
         }
         return { status: 'failed', error: `Power BI respondeu ${res.status}: ${daxErrorFrom(detail)}`.trim() };
       }
@@ -114,7 +148,7 @@ export function createFabricGateway(deps: FabricClientDeps = {}): FabricGateway 
       // Erro pode vir com HTTP 200 (ex.: "mais de uma tabela"/"mais de N linhas") — surfacear.
       const result = json.results?.[0];
       const embedded = json.error ?? result?.error ?? result?.tables?.[0]?.error;
-      if (embedded) return { status: 'failed', error: embedded.message ?? embedded.code ?? 'erro de DAX' };
+      if (embedded) return { status: 'failed', error: messageFrom(embedded) ?? 'erro de DAX' };
       return { status: 'ok', data: result?.tables?.[0]?.rows ?? [] };
     } catch (err) {
       return { status: 'unavailable', error: (err as Error).message };
