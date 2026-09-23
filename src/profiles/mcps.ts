@@ -43,9 +43,6 @@ export const powerbiMcp: McpSpec = {
   command: ['npx', '-y', '@microsoft/powerbi-modeling-mcp@latest', '--start', '--skipconfirmation'],
 };
 
-/** Flag que força o MCP a autenticar por service principal (headless, contra Fabric). */
-const SERVICE_PRINCIPAL_FLAG = '--authmode=serviceprincipal';
-
 /**
  * True se as 3 credenciais de service principal do Azure estão no ambiente. O MCP
  * (Azure Identity SDK) e o adapter REST do Fabric leem exatamente estes nomes.
@@ -55,21 +52,13 @@ export function hasFabricServicePrincipal(env: NodeJS.ProcessEnv = process.env):
 }
 
 /**
- * Resolve a spec do PowerBI conforme o ambiente: com service principal configurado,
- * anexa `--authmode=serviceprincipal` (conecta ao XMLA do Fabric sem login interativo);
- * sem SP, mantém o comando Desktop-local (sem auth, modelo aberto na máquina). Só afeta
- * o `powerbiMcp`; idempotente. Os segredos `AZURE_*` são lidos do env herdado pelo MCP,
- * nunca escritos no `opencode.json`.
+ * O usuário declarou que a conexão do Power BI é **local** (Desktop/`.pbix` aberto
+ * nesta máquina)? Vem da flag `nio ai --local` (que seta `NIO_PBI_LOCAL`) ou do env
+ * direto. Sem essa declaração explícita o `powerbi-modeling` **não sobe** — ele só
+ * serve o caminho local. Exportado pra a TUI confirmar o modo ao subir.
  */
-export function withFabricAuth(spec: McpSpec, env: NodeJS.ProcessEnv = process.env): McpSpec {
-  if (spec.id !== powerbiMcp.id || !hasFabricServicePrincipal(env)) return spec;
-  if (spec.command?.includes(SERVICE_PRINCIPAL_FLAG)) return spec;
-  return { ...spec, command: [...(spec.command ?? []), SERVICE_PRINCIPAL_FLAG] };
-}
-
-/** Opt-in (`NIO_FABRIC_XMLA=1`) pra reabilitar a modelagem XMLA por service principal. */
-function xmlaOptIn(env: NodeJS.ProcessEnv): boolean {
-  return env.NIO_FABRIC_XMLA === '1' || env.NIO_FABRIC_XMLA === 'true';
+export function localPowerBiDeclared(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NIO_PBI_LOCAL === '1' || env.NIO_PBI_LOCAL === 'true';
 }
 
 /** Credenciais de service principal que o SDK Azure do MCP da Microsoft lê do env. */
@@ -94,17 +83,23 @@ function isolateFromServicePrincipal(spec: McpSpec): McpSpec {
  *   Com SP no ambiente, seu processo é **isolado dos `AZURE_*`** (`isolateFrom...`)
  *   pra não drenar pro Fabric — o MCP da Microsoft, vendo o SP no env, iria pro
  *   Fabric XMLA sozinho (timeout/`Failed to connect to TOM` em PPU/SP).
- * - **Nuvem (Fabric) → REST (`nio_fabric_*`)**: as tools do servidor MCP do nio usam
- *   os `AZURE_*` do processo do nio, sem XMLA. Sempre presentes, sem tocar no MCP local.
- * - **Opt-in `NIO_FABRIC_XMLA=1`** (capacidade dedicada P/F): o `powerbi-modeling` vai
- *   pro Fabric XMLA por SP (`--authmode`) — exceção explícita pra modelagem na nuvem.
  *
- * Os dois caminhos coexistem sem interferência: processos distintos, envs distintos.
+ * Regra: o `powerbi-modeling` serve **só a conexão local**, e só entra quando o usuário
+ * **declara** isso com `NIO_PBI_LOCAL=1`.
+ *
+ * - **Sem declaração (default)** → `powerbi-modeling` **não sobe**. O Power BI é acessado
+ *   pela nuvem, via REST (`nio_fabric_*`), que não precisa de XMLA nem de licença.
+ * - **Com `NIO_PBI_LOCAL=1`** → sobe em modo Desktop-local. Se houver service principal
+ *   no ambiente, o processo dele é **isolado dos `AZURE_*`**: sem isso o MCP da Microsoft
+ *   enxerga o SP e vai tentar o Fabric XMLA em vez do modelo local.
+ *
+ * Os dois caminhos nunca se cruzam: processos distintos, environments distintos.
  */
 export function resolveFabricMcps(specs: McpSpec[], env: NodeJS.ProcessEnv = process.env): McpSpec[] {
-  if (!hasFabricServicePrincipal(env)) return specs; // sem SP: nada a isolar (já é Desktop-local)
-  if (xmlaOptIn(env)) return specs.map((s) => withFabricAuth(s, env)); // opt-in: powerbi → Fabric XMLA
-  // default com SP: local (powerbi isolado dos AZURE_*) + nuvem (Fabric REST) lado a lado.
+  // Conexão local não declarada → o MCP de modelagem não tem o que fazer aqui.
+  if (!localPowerBiDeclared(env)) return specs.filter((s) => s.id !== powerbiMcp.id);
+  // Declarada, mas com SP no ambiente: isola, senão ele drena pro Fabric.
+  if (!hasFabricServicePrincipal(env)) return specs;
   return specs.map((s) => (s.id === powerbiMcp.id ? isolateFromServicePrincipal(s) : s));
 }
 

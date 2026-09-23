@@ -80,6 +80,10 @@
     "xlsx": "^0.18.5",
     "zod": "^4.5.4"
   },
+  "//optionalDependencies": "Embedder local do RAG de DAX (adapters/embed). Opcional de propósito: puxa binários nativos do onnxruntime (~100MB+) e só quem usa Fabric/RAG precisa. Ausente ou com build nativo falho, o CLI funciona normal — as tools de RAG respondem `unconfigured` pedindo `nio fabric rag setup`. O import é dinâmico, então NUNCA entra no cold-start.",
+  "optionalDependencies": {
+    "@huggingface/transformers": "^4.3.0"
+  },
   "//overrides": "transitivas de @modelcontextprotocol/sdk (transporte HTTP — NIO usa só stdio). Força as versões corrigidas p/ deixar o `bun audit` limpo; ranges compatíveis com os pais.",
   "overrides": {
     "fast-uri": "^3.1.7",

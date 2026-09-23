@@ -19,6 +19,7 @@ const NIO_CLI_TOOLS = [
   'nio_env_detect_deps',
   'nio_env_materialize',
   'nio_exec_status',
+  'nio_fabric_ask',
   'nio_fabric_datasets',
   'nio_fabric_query',
   'nio_fabric_workspaces',

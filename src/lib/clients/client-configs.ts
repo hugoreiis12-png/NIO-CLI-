@@ -178,6 +178,29 @@ export const NIO_AI_PROVIDER = env('AI_PROVIDER')?.trim() || 'nio-local';
 /** Id do modelo **exatamente como o backend serve** (sem prefixo de provider). Override `NIO_AI_MODEL`. */
 export const NIO_AI_MODEL_ID = env('AI_MODEL')?.trim() || 'RedHatAI/Qwen3.8-27B-INT4';
 
+/**
+ * Modelo de **embedding** do RAG — roda local, em CPU, via ONNX. É um encoder
+ * (~278M params) que só transforma texto em vetor: não gera texto, não é a LLM
+ * acima. Trocar o modelo muda a dimensão do vetor → exige migration nova.
+ */
+export const NIO_AI_EMBED_MODEL = env('AI_EMBED_MODEL')?.trim() || 'Xenova/multilingual-e5-base';
+
+/**
+ * Limiar do **Nível 1** (adaptar um template parecido). Derivado de benchmark: ponto
+ * médio entre "pergunta não relacionada" (0,83) e "paráfrase legítima" (0,93).
+ *
+ * **Nunca** autoriza replay: medimos que perguntas ERRADAS (ano/métrica/dimensão
+ * diferentes) pontuam 0,955–0,965 — acima das paráfrases legítimas. Acima do limiar o
+ * template só serve de base pra adaptação pelo modelo.
+ */
+export const NIO_FABRIC_RAG_TEMPLATE_MIN = envNum('FABRIC_RAG_TEMPLATE_MIN', 0.88);
+
+/**
+ * Top-k da busca na documentação. **Sem limiar de score**: pergunta em pt-BR contra doc
+ * em inglês fica na faixa 0,72–0,82, então um corte em 0,9 não retornaria nada.
+ */
+export const NIO_FABRIC_RAG_TOPK = envNum('FABRIC_RAG_TOPK', 5);
+
 /** Ref completo `<provider>/<id>` gravado no `model` do `opencode.json` e usado no `opencode run`. */
 export const NIO_OPERATOR_MODEL = `${NIO_AI_PROVIDER}/${NIO_AI_MODEL_ID}`;
 

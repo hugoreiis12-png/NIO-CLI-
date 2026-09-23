@@ -37,7 +37,17 @@ async function requireActiveSession(): Promise<Session> {
   return session;
 }
 
-async function runAi(): Promise<void> {
+/**
+ * A flag vira `NIO_PBI_LOCAL` no processo: o resolvedor de MCPs
+ * (`profiles/mcps.ts`) lê do env, então flag e variável não podem divergir —
+ * há um mecanismo só. Quem já tem a variável setada não precisa da flag.
+ */
+function applyLocalMode(local: boolean): void {
+  if (local) process.env.NIO_PBI_LOCAL = '1';
+}
+
+async function runAi(opts: { local?: boolean } = {}): Promise<void> {
+  applyLocalMode(Boolean(opts.local));
   const session = await requireActiveSession();
   try {
     const { launchNioTui } = await import("../../tui/index.js");
@@ -57,7 +67,11 @@ export function registerAiCommand(program: Command): void {
   const ai = program
     .command("ai")
     .description("Abre a interface NIO da sessão ativa (opencode serve headless + chat Ink)")
-    .action(runAi);
+    .option(
+      "--local",
+      "Power BI local: usa o modelo aberto no Desktop (.pbix) em vez do Fabric na nuvem",
+    )
+    .action((opts: { local?: boolean }) => runAi(opts));
 
   ai
     .command("status")

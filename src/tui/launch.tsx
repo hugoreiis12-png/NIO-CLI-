@@ -7,6 +7,7 @@ import { render } from 'ink';
 import { ensureHeadroomAndWire } from '../app/ai-client.js';
 import { NIO_AI_PROVIDER, NIO_AI_MODEL_ID } from '../lib/clients/client-configs.js';
 import { installNioOpencodeConfig } from '../lib/clients/nio-oc-config.js';
+import { localPowerBiDeclared } from '../profiles/mcps.js';
 import type { Profile } from '../core/types.js';
 import { isBinaryInstalled, opencodeVersionSkew } from '../lib/clients/client-install.js';
 import { loadSession } from '../lib/auth/cli-session-store.js';
@@ -67,6 +68,11 @@ export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
     process.env.OPENCODE_DISABLE_PROJECT_CONFIG = '1';
     if (missingInherited.length > 0) {
       console.log(`  ${c.yellow(sym.warn)} MCP(s) do perfil ausentes no seu global (ignorados): ${missingInherited.join(', ')}`);
+    }
+    // Modo do Power BI explícito: sem isto o usuário não sabe se está falando com o
+    // `.pbix` aberto ou com o Fabric — e a falha do modo errado é silenciosa.
+    if (localPowerBiDeclared()) {
+      console.log(`  ${c.cyan('⬤')} modo local — usando o modelo aberto no Power BI Desktop`);
     }
   } catch (err) {
     console.warn(`  ${c.yellow(sym.warn)} config dedicado do NIO falhou (segue no global): ${(err as Error).message}`);

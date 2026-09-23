@@ -4,12 +4,13 @@ import {
   postgresMcp,
   excelMcp,
   hasFabricServicePrincipal,
-  withFabricAuth,
+  localPowerBiDeclared,
   resolveFabricMcps,
 } from './mcps.js';
 
 const SP = { AZURE_TENANT_ID: 't', AZURE_CLIENT_ID: 'c', AZURE_CLIENT_SECRET: 's' } as NodeJS.ProcessEnv;
-const SP_XMLA = { ...SP, NIO_FABRIC_XMLA: '1' } as NodeJS.ProcessEnv;
+const LOCAL = { NIO_PBI_LOCAL: '1' } as NodeJS.ProcessEnv;
+const SP_LOCAL = { ...SP, ...LOCAL } as NodeJS.ProcessEnv;
 
 test('hasFabricServicePrincipal: só true com as 3 credenciais', () => {
   expect(hasFabricServicePrincipal(SP)).toBe(true);
@@ -17,50 +18,50 @@ test('hasFabricServicePrincipal: só true com as 3 credenciais', () => {
   expect(hasFabricServicePrincipal({} as NodeJS.ProcessEnv)).toBe(false);
 });
 
-test('withFabricAuth: com SP, anexa --authmode=serviceprincipal ao powerbi (imutável)', () => {
-  const out = withFabricAuth(powerbiMcp, SP);
-  expect(out.command).toContain('--authmode=serviceprincipal');
-  expect(powerbiMcp.command).not.toContain('--authmode=serviceprincipal'); // não muta o original
+test('localPowerBiDeclared: só com declaração explícita (flag --local ou env)', () => {
+  expect(localPowerBiDeclared({ NIO_PBI_LOCAL: '1' } as NodeJS.ProcessEnv)).toBe(true);
+  expect(localPowerBiDeclared({ NIO_PBI_LOCAL: 'true' } as NodeJS.ProcessEnv)).toBe(true);
+  expect(localPowerBiDeclared({ NIO_PBI_LOCAL: '0' } as NodeJS.ProcessEnv)).toBe(false);
+  expect(localPowerBiDeclared({} as NodeJS.ProcessEnv)).toBe(false); // default = nuvem
 });
 
-test('withFabricAuth: sem SP, mantém o comando Desktop-local intacto', () => {
-  expect(withFabricAuth(powerbiMcp, {} as NodeJS.ProcessEnv)).toBe(powerbiMcp);
+test('sem declarar conexão local, o powerbi-modeling NÃO sobe (default)', () => {
+  const out = resolveFabricMcps([powerbiMcp, postgresMcp, excelMcp], {} as NodeJS.ProcessEnv);
+  expect(out.map((m) => m.id)).toEqual(['postgres', 'excel']);
 });
 
-test('withFabricAuth: idempotente e só afeta o powerbi', () => {
-  const once = withFabricAuth(powerbiMcp, SP);
-  const twice = withFabricAuth(once, SP);
-  expect(twice.command!.filter((a) => a === '--authmode=serviceprincipal')).toHaveLength(1);
-  expect(withFabricAuth(postgresMcp, SP)).toBe(postgresMcp); // outro MCP não é tocado
+test('sem declarar local, nem com service principal o powerbi sobe (nuvem = REST)', () => {
+  const out = resolveFabricMcps([powerbiMcp, excelMcp], SP);
+  expect(out.some((m) => m.id === powerbiMcp.id)).toBe(false);
 });
 
-test('resolveFabricMcps: sem SP, powerbi em Desktop-local (sem authmode)', () => {
-  const specs = [powerbiMcp, excelMcp];
-  const out = resolveFabricMcps(specs, {} as NodeJS.ProcessEnv);
-  expect(out).toEqual(specs);
-  expect(out.find((m) => m.id === powerbiMcp.id)?.command).not.toContain('--authmode=serviceprincipal');
-});
-
-test('resolveFabricMcps: com SP e sem opt-in, isola o powerbi dos AZURE_* (Desktop-local) e mantém os demais', () => {
-  const out = resolveFabricMcps([powerbiMcp, postgresMcp, excelMcp], SP);
-  expect(out.map((m) => m.id)).toEqual(['powerbi-modeling', 'postgres', 'excel']); // nada removido
-  const pbi = out.find((m) => m.id === powerbiMcp.id)!;
-  // AZURE_* zerados só no processo do powerbi → vai pro Desktop-local, não pro Fabric
-  expect(pbi.environment).toMatchObject({ AZURE_TENANT_ID: '', AZURE_CLIENT_ID: '', AZURE_CLIENT_SECRET: '' });
-  expect(pbi.command).not.toContain('--authmode=serviceprincipal');
-  // adapters isolados: os outros MCPs ficam intactos (Fabric REST vive no servidor do nio)
-  expect(out.find((m) => m.id === postgresMcp.id)).toBe(postgresMcp);
-  expect(out.find((m) => m.id === excelMcp.id)).toBe(excelMcp);
-});
-
-test('resolveFabricMcps: isolamento não muta o spec original (imutável)', () => {
-  resolveFabricMcps([powerbiMcp], SP);
-  expect(powerbiMcp.environment).toBeUndefined(); // original intacto
-});
-
-test('resolveFabricMcps: opt-in NIO_FABRIC_XMLA=1 liga o Fabric-XMLA por service principal', () => {
-  const out = resolveFabricMcps([powerbiMcp, excelMcp], SP_XMLA);
+test('NIO_PBI_LOCAL=1 sobe o powerbi em Desktop-local, sem authmode', () => {
+  const out = resolveFabricMcps([powerbiMcp, excelMcp], LOCAL);
   const pbi = out.find((m) => m.id === powerbiMcp.id);
-  expect(pbi?.command).toContain('--authmode=serviceprincipal');
-  expect(out.find((m) => m.id === excelMcp.id)).toBe(excelMcp); // outro MCP intacto
+  expect(pbi).toBeDefined();
+  expect(pbi!.command).not.toContain('--authmode=serviceprincipal');
+  expect(pbi!.environment).toBeUndefined(); // sem SP no env, nada a isolar
+});
+
+test('local declarado COM service principal: isola os AZURE_* (senão drena pro Fabric)', () => {
+  const out = resolveFabricMcps([powerbiMcp, postgresMcp], SP_LOCAL);
+  const pbi = out.find((m) => m.id === powerbiMcp.id)!;
+  expect(pbi.environment).toMatchObject({
+    AZURE_TENANT_ID: '',
+    AZURE_CLIENT_ID: '',
+    AZURE_CLIENT_SECRET: '',
+  });
+  expect(pbi.command).not.toContain('--authmode=serviceprincipal');
+  expect(out.find((m) => m.id === postgresMcp.id)).toBe(postgresMcp); // outros intactos
+});
+
+test('resolveFabricMcps nunca muta o spec original', () => {
+  resolveFabricMcps([powerbiMcp], SP_LOCAL);
+  expect(powerbiMcp.environment).toBeUndefined();
+  expect(powerbiMcp.command).not.toContain('--authmode=serviceprincipal');
+});
+
+test('aceita "true" além de "1" na declaração de local', () => {
+  const out = resolveFabricMcps([powerbiMcp], { NIO_PBI_LOCAL: 'true' } as NodeJS.ProcessEnv);
+  expect(out.some((m) => m.id === powerbiMcp.id)).toBe(true);
 });

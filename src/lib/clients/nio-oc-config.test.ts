@@ -19,12 +19,27 @@ const GLOBAL = {
   },
 };
 
+test('buildNioOpencodeConfig: com NIO_PBI_LOCAL=1 o powerbi-modeling entra (conexão local declarada)', () => {
+  const antes = process.env.NIO_PBI_LOCAL;
+  process.env.NIO_PBI_LOCAL = '1';
+  try {
+    const cfg = buildNioOpencodeConfig(GLOBAL, [{ id: 'nio-lang', command: ['nio-lang'] }, powerbi], ['excel']);
+    const mcp = cfg.mcp as Record<string, unknown>;
+    expect(Object.keys(mcp).sort()).toEqual(['excel', 'nio', 'nio-lang', 'powerbi-modeling']);
+  } finally {
+    if (antes === undefined) delete process.env.NIO_PBI_LOCAL;
+    else process.env.NIO_PBI_LOCAL = antes;
+  }
+});
+
 test('buildNioOpencodeConfig: filtra o mcp pro conjunto do perfil, herda excel do global, força provider/model', () => {
   const cfg = buildNioOpencodeConfig(GLOBAL, [{ id: 'nio-lang', command: ['nio-lang'] }, powerbi], ['excel']);
   const mcp = cfg.mcp as Record<string, unknown>;
 
-  // só nio + nio-lang + powerbi + excel (herdado) — NADA do lixo do global
-  expect(Object.keys(mcp).sort()).toEqual(['excel', 'nio', 'nio-lang', 'powerbi-modeling']);
+  // só nio + nio-lang + excel (herdado) — NADA do lixo do global.
+  // powerbi-modeling fica DE FORA: ele serve só a conexão local e exige NIO_PBI_LOCAL=1.
+  expect(Object.keys(mcp).sort()).toEqual(['excel', 'nio', 'nio-lang']);
+  expect(mcp['powerbi-modeling']).toBeUndefined(); // sem declarar local, não sobe
   expect(mcp['powerbi-modeling-mcp']).toBeUndefined(); // duplicado fora
   expect(mcp.mermaid).toBeUndefined(); // lixo fora
 
