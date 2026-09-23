@@ -14,7 +14,10 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # pgvector/pgvector = postgres oficial + extensão `vector` já no host.
+        # A imagem `postgres:16` pura não tem pgvector, e o `db/schema.sql` faz
+        # `CREATE EXTENSION vector` (tabelas do RAG de DAX) — quebraria no bootstrap.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

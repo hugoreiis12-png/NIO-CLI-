@@ -177,6 +177,52 @@ CREATE INDEX IF NOT EXISTS idx_auth_events_ip   ON auth_events(ip, at DESC);
 CREATE INDEX IF NOT EXISTS idx_auth_events_user ON auth_events(user_id, at DESC);
 
 -- ───────────────────────────────────────────────
+-- RAG de DAX: doc/schema vetorizado + cache de consultas (migration 0010)
+-- ───────────────────────────────────────────────
+-- **Requer pgvector no host** (Debian/PGDG: `postgresql-<ver>-pgvector`). Sem a
+-- extensão disponível, este bloco falha aqui — de propósito: melhor quebrar no
+-- bootstrap com erro claro do que o RAG falhar misteriosamente depois.
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Grounding: pedaços de documentação/schema vetorizados.
+CREATE TABLE IF NOT EXISTS dax_doc_chunk (
+  id            BIGSERIAL PRIMARY KEY,
+  repo          TEXT NOT NULL,
+  ref           TEXT NOT NULL,
+  path          TEXT NOT NULL,
+  heading       TEXT,
+  content       TEXT NOT NULL,
+  content_hash  TEXT NOT NULL,
+  embedding     vector(768) NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT dax_doc_chunk_unique UNIQUE (repo, ref, path, content_hash)
+);
+CREATE INDEX IF NOT EXISTS dax_doc_chunk_embedding_idx
+  ON dax_doc_chunk USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS dax_doc_chunk_repo_ref_idx ON dax_doc_chunk (repo, ref);
+
+-- Cache semântico: o DAX que funcionou, por pergunta e por modelo semântico.
+CREATE TABLE IF NOT EXISTS dax_query_template (
+  id             BIGSERIAL PRIMARY KEY,
+  request_name   TEXT NOT NULL,
+  question_norm  TEXT NOT NULL,
+  question_hash  TEXT NOT NULL,
+  workspace_id   TEXT NOT NULL,
+  dataset_id     TEXT NOT NULL,
+  dax            TEXT NOT NULL,
+  output_summary JSONB NOT NULL,
+  embedding      vector(768) NOT NULL,
+  hit_count      INTEGER NOT NULL DEFAULT 0,
+  last_ok_at     TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT dax_query_template_hash_unique UNIQUE (question_hash)
+);
+CREATE INDEX IF NOT EXISTS dax_query_template_embedding_idx
+  ON dax_query_template USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS dax_query_template_scope_idx
+  ON dax_query_template (workspace_id, dataset_id);
+
+-- ───────────────────────────────────────────────
 -- Comentários documentais
 -- ───────────────────────────────────────────────
 COMMENT ON TABLE user_cli IS 'Usuários autenticados na NIO-CLI';
@@ -211,3 +257,5 @@ GRANT SELECT (id, name, auth_2, phone, ips_using, timestamp_creation, timestamp_
 GRANT SELECT ON auth_sessions TO nio_cli;
 GRANT SELECT, INSERT, UPDATE, DELETE ON user_cli, auth_sessions, login_challenges, auth_events, login_ip_events TO nio_gateway;
 GRANT USAGE, SELECT ON SEQUENCE user_cli_id_seq, auth_events_id_seq TO nio_gateway;
+GRANT SELECT, INSERT, UPDATE, DELETE ON dax_doc_chunk, dax_query_template TO nio_cli;
+GRANT USAGE, SELECT ON SEQUENCE dax_doc_chunk_id_seq, dax_query_template_id_seq TO nio_cli;

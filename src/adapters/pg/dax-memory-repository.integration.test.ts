@@ -14,7 +14,27 @@ import { normalizeQuestion } from '../../app/rag-templates.js';
 import { query, closePool } from './client.js';
 
 const hasDb = Boolean(process.env.NIO_DATABASE_URL);
-const dbTest = hasDb ? test : test.skip;
+
+/**
+ * As tabelas do RAG existem neste banco? Elas dependem de **pgvector no host** e da
+ * migration 0010. Um ambiente sem isso é falta de infraestrutura, não regressão de
+ * código — então pula com aviso em vez de derrubar a suíte inteira.
+ */
+async function ragSchemaReady(): Promise<boolean> {
+  if (!hasDb) return false;
+  try {
+    await query('SELECT 1 FROM dax_query_template LIMIT 1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const ragReady = await ragSchemaReady();
+if (hasDb && !ragReady) {
+  console.warn('  [skip] tabelas do RAG ausentes (pgvector + migration 0010) — testes de DaxMemory pulados');
+}
+const dbTest = ragReady ? test : test.skip;
 
 /** Workspace descartável — isola esta execução e facilita a limpeza. */
 const WS = `test-ws-${randomUUID()}`;
@@ -26,8 +46,11 @@ const hot = (i: number): number[] =>
 
 afterAll(async () => {
   if (!hasDb) return;
-  await query('DELETE FROM dax_query_template WHERE workspace_id = $1', [WS]);
-  await closePool();
+  // Só limpa o que foi criado; com o schema ausente não há nada (e a query falharia).
+  if (ragReady) {
+    await query('DELETE FROM dax_query_template WHERE workspace_id = $1', [WS]).catch(() => {});
+  }
+  await closePool().catch(() => {});
 });
 
 dbTest('DaxMemory: grava, acha por hit exato e por similaridade', async () => {
