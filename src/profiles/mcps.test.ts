@@ -41,10 +41,21 @@ test('resolveFabricMcps: sem SP, powerbi em Desktop-local (sem authmode)', () =>
   expect(out.find((m) => m.id === powerbiMcp.id)?.command).not.toContain('--authmode=serviceprincipal');
 });
 
-test('resolveFabricMcps: com SP e sem opt-in, MANTÉM o powerbi em Desktop-local (Fabric = REST)', () => {
+test('resolveFabricMcps: com SP e sem opt-in, isola o powerbi dos AZURE_* (Desktop-local) e mantém os demais', () => {
   const out = resolveFabricMcps([powerbiMcp, postgresMcp, excelMcp], SP);
   expect(out.map((m) => m.id)).toEqual(['powerbi-modeling', 'postgres', 'excel']); // nada removido
-  expect(out.find((m) => m.id === powerbiMcp.id)?.command).not.toContain('--authmode=serviceprincipal');
+  const pbi = out.find((m) => m.id === powerbiMcp.id)!;
+  // AZURE_* zerados só no processo do powerbi → vai pro Desktop-local, não pro Fabric
+  expect(pbi.environment).toMatchObject({ AZURE_TENANT_ID: '', AZURE_CLIENT_ID: '', AZURE_CLIENT_SECRET: '' });
+  expect(pbi.command).not.toContain('--authmode=serviceprincipal');
+  // adapters isolados: os outros MCPs ficam intactos (Fabric REST vive no servidor do nio)
+  expect(out.find((m) => m.id === postgresMcp.id)).toBe(postgresMcp);
+  expect(out.find((m) => m.id === excelMcp.id)).toBe(excelMcp);
+});
+
+test('resolveFabricMcps: isolamento não muta o spec original (imutável)', () => {
+  resolveFabricMcps([powerbiMcp], SP);
+  expect(powerbiMcp.environment).toBeUndefined(); // original intacto
 });
 
 test('resolveFabricMcps: opt-in NIO_FABRIC_XMLA=1 liga o Fabric-XMLA por service principal', () => {

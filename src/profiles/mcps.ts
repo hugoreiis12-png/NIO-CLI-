@@ -72,22 +72,40 @@ function xmlaOptIn(env: NodeJS.ProcessEnv): boolean {
   return env.NIO_FABRIC_XMLA === '1' || env.NIO_FABRIC_XMLA === 'true';
 }
 
+/** Credenciais de service principal que o SDK Azure do MCP da Microsoft lê do env. */
+const AZURE_SP_VARS = ['AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET'] as const;
+
 /**
- * Adaptividade dos dois caminhos do Power BI, na MESMA config:
- * - **REST → consulta no Fabric**: as tools `nio_fabric_*` (servidor MCP do nio)
- *   consultam datasets do Fabric por service principal, sem XMLA. Sempre presentes.
- * - **XMLA → modelagem no Desktop local**: o MCP `powerbi-modeling` conecta no modelo
- *   aberto no Power BI Desktop (XMLA local, sem auth). Fica **sempre presente** neste
- *   modo — é o default aqui (sem `--authmode`).
+ * **Isola** o processo do `powerbi-modeling` das credenciais de service principal:
+ * zera os `AZURE_*` **só no environment dele** (o opencode mescla env, então `''`
+ * sobrescreve o herdado sem tirar PATH/HOME). Sem enxergar o SP, o MCP conecta no
+ * **Power BI Desktop/`.pbix` local** em vez de tentar o Fabric XMLA. O processo do
+ * nio (que faz o Fabric REST) mantém os `AZURE_*` intactos — os dois não se cruzam.
+ */
+function isolateFromServicePrincipal(spec: McpSpec): McpSpec {
+  const environment = { ...spec.environment };
+  for (const v of AZURE_SP_VARS) environment[v] = '';
+  return { ...spec, environment };
+}
+
+/**
+ * Adapter de caminhos do Power BI — dois adapters isolados, um por destino:
+ * - **Local (`.pbix`/Desktop) → `powerbi-modeling` (XMLA local)**: sempre presente.
+ *   Com SP no ambiente, seu processo é **isolado dos `AZURE_*`** (`isolateFrom...`)
+ *   pra não drenar pro Fabric — o MCP da Microsoft, vendo o SP no env, iria pro
+ *   Fabric XMLA sozinho (timeout/`Failed to connect to TOM` em PPU/SP).
+ * - **Nuvem (Fabric) → REST (`nio_fabric_*`)**: as tools do servidor MCP do nio usam
+ *   os `AZURE_*` do processo do nio, sem XMLA. Sempre presentes, sem tocar no MCP local.
+ * - **Opt-in `NIO_FABRIC_XMLA=1`** (capacidade dedicada P/F): o `powerbi-modeling` vai
+ *   pro Fabric XMLA por SP (`--authmode`) — exceção explícita pra modelagem na nuvem.
  *
- * O modo Fabric-XMLA por service principal (`--authmode=serviceprincipal`) NÃO entra
- * por padrão: exige capacidade Premium **dedicada** (SKU P/F) com a SP licenciada —
- * PPU e workspace compartilhado não valem pra SP (`PowerBINotLicensedException`).
- * Só é ligado com opt-in `NIO_FABRIC_XMLA=1`, pra quem tem capacidade dedicada.
+ * Os dois caminhos coexistem sem interferência: processos distintos, envs distintos.
  */
 export function resolveFabricMcps(specs: McpSpec[], env: NodeJS.ProcessEnv = process.env): McpSpec[] {
-  if (xmlaOptIn(env)) return specs.map((s) => withFabricAuth(s, env));
-  return specs; // powerbi-modeling segue em Desktop-local; Fabric via REST (nio_fabric_*)
+  if (!hasFabricServicePrincipal(env)) return specs; // sem SP: nada a isolar (já é Desktop-local)
+  if (xmlaOptIn(env)) return specs.map((s) => withFabricAuth(s, env)); // opt-in: powerbi → Fabric XMLA
+  // default com SP: local (powerbi isolado dos AZURE_*) + nuvem (Fabric REST) lado a lado.
+  return specs.map((s) => (s.id === powerbiMcp.id ? isolateFromServicePrincipal(s) : s));
 }
 
 /**
