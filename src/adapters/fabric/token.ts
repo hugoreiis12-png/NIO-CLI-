@@ -33,6 +33,7 @@ export function readFabricAuthEnv(env: NodeJS.ProcessEnv = process.env): FabricA
   };
 }
 
+// Exporta só para teste; o resto da CLI não precisa saber do grant nem do endpoint 
 export type TokenGrant = 'user' | 'service_principal';
 export type TokenStatus = 'ok' | 'unconfigured' | 'unauthorized' | 'unavailable';
 

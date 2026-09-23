@@ -23,7 +23,9 @@ const SYSTEM = [
   '  certo:  `EVALUATE ROW("Linhas", COUNTROWS(\'Vendas\'))`',
   '- Uma única consulta por chamada, retornando UMA tabela.',
   '- Teto de 100k linhas: use TOPN/SUMMARIZECOLUMNS em vez de varrer a tabela inteira.',
-  '- Para listar metadados do modelo use as funções INFO (ex.: `EVALUATE INFO.TABLES()`).',
+  '- Metadados do modelo: use as funções `INFO.VIEW.*` — `EVALUATE INFO.VIEW.TABLES()`,',
+  '  `INFO.VIEW.MEASURES()`, `INFO.VIEW.COLUMNS()`. A forma SEM `VIEW` (`INFO.TABLES()`)',
+  '  retorna 400 neste tenant — medido, não suposto.',
 ].join('\n');
 
 /** Instrução do Nível 1: adaptar um DAX validado, preservando a estrutura que funciona. */

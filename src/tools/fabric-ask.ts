@@ -10,6 +10,9 @@ import { askDax, type DaxRagDeps } from '../app/dax-rag.js';
 import { createDaxGenerator } from '../app/dax-generator.js';
 import { createDaxMemoryRepository } from '../adapters/pg/dax-memory-repository.js';
 import { createLocalEmbedder } from '../adapters/embed/local-embedder.js';
+import { createDocIndexRepository, findChunkByPath } from '../adapters/pg/doc-index-repository.js';
+import { createSchemaSearch } from '../app/schema-search.js';
+import { NIO_FABRIC_RAG_TOPK } from '../lib/clients/client-configs.js';
 import { fabricGateway, orEnvDefault } from './fabric-shared.js';
 
 const ArgsSchema = z
@@ -79,12 +82,18 @@ export async function runFabricAsk(
 }
 
 /** Monta as dependências de produção. Separado pra o teste injetar fakes. */
-function productionDeps(): DaxRagDeps {
+function productionDeps(datasetId: string): DaxRagDeps {
   return {
     memory: createDaxMemoryRepository(),
     embedder: createLocalEmbedder(),
     fabric: fabricGateway(),
     generate: createDaxGenerator(),
+    // Nível 2: grounding no schema do modelo (inventário de tabelas + top-k).
+    // Sem acervo sincronizado devolve vazio e a geração segue sem contexto.
+    searchDocs: createSchemaSearch(
+      { index: createDocIndexRepository(), byPath: findChunkByPath, topK: NIO_FABRIC_RAG_TOPK },
+      datasetId,
+    ),
   };
 }
 
@@ -98,7 +107,7 @@ export async function handler(args: unknown, _ctx: ToolContext): Promise<CallToo
   if (!datasetId) return errorResult('dataset_id ausente e NIO_FABRIC_DATASET não definido.');
 
   return runFabricAsk(
-    productionDeps(),
+    productionDeps(datasetId),
     workspaceId,
     datasetId,
     parsed.data.question,

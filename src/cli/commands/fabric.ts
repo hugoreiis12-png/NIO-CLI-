@@ -7,6 +7,7 @@ import type { Command } from "commander";
 import { c, sym } from "../../lib/colors.js";
 import { fabricGrant, type TokenGrant } from "../../adapters/fabric/token.js";
 import { createFabricGateway } from "../../adapters/fabric/client.js";
+import { registerFabricRagCommands } from "./fabric-rag.js";
 
 const HINT =
   "Configure AZURE_TENANT_ID/AZURE_CLIENT_ID e (NIO_FABRIC_USERNAME/PASSWORD p/ token de usuário com RLS, " +
@@ -61,4 +62,6 @@ export function registerFabricCommand(program: Command): void {
     .description("Preflight: confere as credenciais AZURE_* e lista workspaces")
     .option("--json", "saída estável em JSON")
     .action(runStatus);
+
+  registerFabricRagCommands(fabric);
 }
