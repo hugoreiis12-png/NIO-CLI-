@@ -1,4 +1,5 @@
 import { test, expect } from 'bun:test';
+import { excelMcp } from '../../profiles/mcps.js';
 import { buildNioOpencodeConfig, profileModeledMcps } from './nio-oc-config.js';
 import { NIO_OPERATOR_MODEL, NIO_AI_PROVIDER } from './client-configs.js';
 import { createProfileCatalog } from '../../profiles/index.js';
@@ -87,4 +88,32 @@ test('profileModeledMcps: base (nio-lang) + os do perfil; qa não tem powerbi/ex
   const qa = profileModeledMcps(catalog.get('qa')).map((m) => m.id);
   expect(qa).toEqual(['nio-lang']); // só a base
   expect(catalog.get('qa').inheritGlobalMcpIds ?? []).not.toContain('excel');
+});
+
+test('ACEITE: instrução com caminho inexistente é descartada (some em silêncio)', () => {
+  // Medido em prod: o global apontava um ARCHITECT.md de um checkout antigo, e o
+  // grounding de BI que se acreditava ativo nunca chegava ao modelo.
+  const cfg = buildNioOpencodeConfig(
+    { instructions: ['C:/nao/existe/ARCHITECT.md'] },
+    [],
+    [],
+  );
+  const instr = cfg.instructions as string[];
+  expect(instr.some((p) => p.includes('nao/existe'))).toBe(false);
+  expect(instr[instr.length - 1]).toContain('nio-operator.md'); // a do NIO continua por último
+});
+
+test('ACEITE: perfil pede excel e o global não tem → NIO usa a própria spec', () => {
+  // Máquina nova: o perfil analytics lista `excel` em inheritGlobalMcpIds, ninguém
+  // criava a entry, e ela sumia com um aviso. O NIO já modela o excel — use-o.
+  const cfg = buildNioOpencodeConfig({}, [excelMcp], ['excel']);
+  const mcp = cfg.mcp as Record<string, { command?: string[] }>;
+  expect(mcp.excel?.command).toEqual(['uvx', 'excel-mcp-server', 'stdio']);
+});
+
+test('def do usuário no global vence a modelada (não sobrescreve configuração dele)', () => {
+  const meu = { type: 'local', command: ['meu-excel'], enabled: true };
+  const cfg = buildNioOpencodeConfig({ mcp: { excel: meu } }, [excelMcp], ['excel']);
+  const mcp = cfg.mcp as Record<string, { command?: string[] }>;
+  expect(mcp.excel?.command).toEqual(['meu-excel']);
 });

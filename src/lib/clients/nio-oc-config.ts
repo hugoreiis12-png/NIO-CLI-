@@ -11,11 +11,11 @@
  */
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { writeJson } from '../file-merge.js';
 import { brand, envName } from '../../brand.js';
 import type { McpSpec, ProfileDefinition } from '../../core/environment.js';
-import { nioLangMcp, resolveFabricMcps } from '../../profiles/mcps.js';
+import { nioLangMcp, resolveFabricMcps, excelMcp } from '../../profiles/mcps.js';
 import { createProfileCatalog } from '../../profiles/index.js';
 import type { Profile } from '../../core/types.js';
 import {
@@ -130,6 +130,13 @@ const NIO_FORK_AGENTS: Record<string, Record<string, unknown>> = {
   },
 };
 
+/**
+ * MCPs que o NIO sabe definir sozinho. Se o perfil pede um destes por
+ * `inheritGlobalMcpIds` e ele não está no global do usuário, usamos esta spec em vez de
+ * descartar — máquina nova não deveria perder a ferramenta que o perfil exige.
+ */
+const KNOWN_MCPS: Record<string, McpSpec | undefined> = { [excelMcp.id]: excelMcp };
+
 /** Entry de MCP no formato do opencode a partir de um `McpSpec`. */
 function mcpEntry(spec: McpSpec): Record<string, unknown> {
   if (spec.url) return { type: 'remote', url: spec.url, enabled: true };
@@ -180,7 +187,13 @@ export function buildNioOpencodeConfig(
   ).provider;
   // A instrução do NIO entra por ÚLTIMO — última palavra do sistema (pt-BR vence o herdado).
   const inheritedInstr = Array.isArray(global.instructions) ? (global.instructions as string[]) : [];
-  const instructions = [...inheritedInstr.filter((p) => p !== nioOperatorInstructionPath()), nioOperatorInstructionPath()];
+  // Caminho que não existe é instrução que NÃO chega ao modelo — e some em silêncio.
+  // Medido em prod: o global apontava um ARCHITECT.md de um checkout antigo, então o
+  // grounding de BI que se acreditava ativo nunca foi carregado.
+  const instructions = [
+    ...inheritedInstr.filter((p) => p !== nioOperatorInstructionPath() && existsSync(p)),
+    nioOperatorInstructionPath(),
+  ];
   // Agentes-fork do NIO como base; os do usuário/global vencem em colisão de nome.
   const agent = { ...NIO_FORK_AGENTS, ...((global.agent as Record<string, unknown>) ?? {}) };
   return {
@@ -219,8 +232,13 @@ export function installNioOpencodeConfig(profile: Profile | null): NioConfigResu
   const inherit = def?.inheritGlobalMcpIds ?? [];
   const modeled = def ? profileModeledMcps(def) : [nioLangMcp];
   const globalMcp = (global.mcp ?? {}) as Record<string, unknown>;
-  const missingInherited = inherit.filter((id) => !globalMcp[id]);
-  const cfg = buildNioOpencodeConfig(global, modeled, inherit);
+  const ausentes = inherit.filter((id) => !globalMcp[id]);
+  // O NIO já modela alguns desses (ex.: `excel`). Faltando no global do usuário, usar a
+  // spec própria em vez de descartar: numa máquina nova o perfil pedia o MCP, ninguém o
+  // criava, e ele sumia com um aviso — mesma armadilha das credenciais do Fabric.
+  const supridos = ausentes.map((id) => KNOWN_MCPS[id]).filter((s): s is McpSpec => Boolean(s));
+  const missingInherited = ausentes.filter((id) => !KNOWN_MCPS[id]);
+  const cfg = buildNioOpencodeConfig(global, [...modeled, ...supridos], inherit);
   const path = nioOpencodeConfigPath();
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(nioOperatorInstructionPath(), NIO_OPERATOR_INSTRUCTION, 'utf8'); // pt-BR obrigatório
