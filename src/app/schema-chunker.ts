@@ -67,7 +67,11 @@ function measureChunk(measure: FabricRow): string {
   if (folder) lines.push(`Pasta: ${folder}`);
   const desc = cell(measure, 'Description');
   if (desc) lines.push(`Descrição: ${desc}`);
-  // `Expression` não vem preenchido pelo INFO.VIEW — por isso o chunk é só identidade.
+  // Hoje o `INFO.VIEW.MEASURES()` deste tenant devolve `[Expression]` nulo (medido) e o
+  // chunk fica só com a identidade. Quando a fórmula vier, ela entra — é o que permite
+  // ao modelo conferir o cálculo em vez de só chamar a medida às cegas.
+  const expression = cell(measure, 'Expression');
+  if (expression) lines.push(`Expressão DAX: ${expression}`);
   return lines.join('\n');
 }
 

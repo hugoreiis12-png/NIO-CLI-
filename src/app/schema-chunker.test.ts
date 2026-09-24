@@ -69,6 +69,20 @@ test('chunk de medida carrega nome + tabela (o que evita nome inventado)', () =>
   expect(m.content).toContain('Tabela: VISAO_COMERCIAL');
 });
 
+test('fórmula da medida entra no chunk quando o tenant a devolve', () => {
+  const rows = {
+    ...ROWS,
+    measures: [{ '[Name]': 'M', '[Table]': 'T', '[Expression]': 'SUM(T[V])' }],
+  };
+  const m = buildSchemaChunks(rows, 'ds').find((c) => c.path.startsWith('medida/'))!;
+  expect(m.content).toContain('Expressão DAX: SUM(T[V])');
+});
+
+test('sem fórmula (INFO.VIEW devolve nulo) o chunk não ganha linha vazia', () => {
+  const m = buildSchemaChunks(ROWS, 'ds').find((c) => c.path.startsWith('medida/'))!;
+  expect(m.content).not.toContain('Expressão DAX:');
+});
+
 test('medida oculta não entra', () => {
   const paths = buildSchemaChunks(ROWS, 'ds').map((c) => c.path);
   expect(paths.filter((p) => p.startsWith('medida/'))).toEqual(['medida/VISAO_COMERCIAL/TOTAL_LIQUIDO']);

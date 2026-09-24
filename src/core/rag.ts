@@ -53,8 +53,12 @@ export interface ScoredChunk extends DocChunk {
 export interface DocIndex {
   /** Grava os chunks (ignora os já presentes por `repo+ref+path+hash`). Devolve quantos entraram. */
   indexChunks(chunks: DocChunk[], embeddings: number[][]): Promise<RagResult<number>>;
-  /** Top-k por similaridade de cosseno. */
-  search(embedding: number[], topK: number): Promise<RagResult<ScoredChunk[]>>;
+  /**
+   * Top-k por similaridade de cosseno **dentro de um `repo`**. O escopo é obrigatório:
+   * cada modelo semântico é um acervo próprio, e misturar tabelas de um dataset no
+   * contexto de outro produz nome inexistente — o erro que este índice existe pra matar.
+   */
+  search(repo: string, embedding: number[], topK: number): Promise<RagResult<ScoredChunk[]>>;
   /** Refs já indexados de um repo — evita reingerir o mesmo SHA. */
   indexedRefs(repo: string): Promise<RagResult<string[]>>;
 }

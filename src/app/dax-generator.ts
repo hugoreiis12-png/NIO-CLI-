@@ -26,6 +26,20 @@ const SYSTEM = [
   '- Metadados do modelo: use as funções `INFO.VIEW.*` — `EVALUATE INFO.VIEW.TABLES()`,',
   '  `INFO.VIEW.MEASURES()`, `INFO.VIEW.COLUMNS()`. A forma SEM `VIEW` (`INFO.TABLES()`)',
   '  retorna 400 neste tenant — medido, não suposto.',
+  '',
+  'Padrões validados (derivados de análises que deram certo):',
+  '- "quantas vezes/quantos registros" = `COUNTROWS(FILTER(...))`. NÃO use `SUM` de uma',
+  '  coluna numérica achando que é contagem — uma coluna chamada `frequency` já devolveu',
+  '  25 milhões onde a resposta certa era 1.707 registros.',
+  '- Texto: igualdade (`[col] = "X"`) é a métrica confiável. `CONTAINSSTRING` só quando o',
+  '  usuário pedir variações — e então a resposta deve dizer qual critério foi usado.',
+  '- Período: filtre pela coluna de data DA PRÓPRIA TABELA, no formato',
+  '  `YEAR(\'<Tabela>\'[<ColunaDeData>]) = 2026` — substitua pelos nomes que estão no',
+  '  contexto. Não existe coluna de data "padrão": se o contexto não mostrar uma, não',
+  '  invente — filtre por outro critério ou devolva o total sem filtro de período.',
+  '- SEMPRE cite nome de tabela entre aspas simples: o modelo pode ter nomes com ponto,',
+  '  vírgula ou palavra reservada (existem `tb_mp.`, `tb_mp,` e uma tabela chamada `DAX`).',
+  '- Use os nomes EXATOS do schema fornecido no contexto. Não invente nem "corrija" nomes.',
 ].join('\n');
 
 /** Instrução do Nível 1: adaptar um DAX validado, preservando a estrutura que funciona. */
@@ -52,11 +66,10 @@ export function buildDaxPrompt(req: GenerateRequest): string {
     parts.push(adaptSection(req.template), '');
   }
   if (req.previousError) {
-    parts.push(
-      'A tentativa anterior FALHOU com este erro do Power BI — corrija a causa:',
-      req.previousError,
-      '',
-    );
+    parts.push('A tentativa anterior FALHOU. Corrija a causa:');
+    // Sem ver o próprio DAX que quebrou, o modelo corrige às cegas.
+    if (req.previousDax) parts.push('DAX que falhou:', req.previousDax);
+    parts.push('Erro do Power BI:', req.previousError, '');
   }
   parts.push(`Pergunta: ${req.question}`);
   return parts.join('\n');

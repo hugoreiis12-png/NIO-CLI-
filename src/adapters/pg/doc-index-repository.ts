@@ -82,17 +82,20 @@ export function createDocIndexRepository(): DocIndex {
       }
     },
 
-    async search(embedding, topK) {
+    async search(repo, embedding, topK) {
       if (embedding.length !== EMBEDDING_DIMS) {
         return { status: 'failed', error: `embedding com ${embedding.length} dimensões` };
       }
       try {
+        // O filtro por `repo` não é opcional: sem ele a busca varre TODOS os modelos
+        // indexados e devolve tabela de outro dataset como se fosse deste.
         const res = await query<ChunkRow>(
           `SELECT repo, ref, path, heading, content, 1 - (embedding <=> $1::vector) AS score
              FROM dax_doc_chunk
+            WHERE repo = $2
             ORDER BY embedding <=> $1::vector
-            LIMIT $2`,
-          [toVector(embedding), Math.max(1, topK)],
+            LIMIT $3`,
+          [toVector(embedding), repo, Math.max(1, topK)],
         );
         return { status: 'ok', data: res.rows.map((r) => mapRow(r, Number(r.score ?? 0))) };
       } catch (err) {
@@ -131,6 +134,37 @@ export async function findChunkByPath(repo: string, path: string): Promise<RagRe
   }
 }
 
+/**
+ * Top-N **restrito aos chunks de tabela** (`path` começa com `tabela/`).
+ *
+ * Existe porque o top-k geral é dominado por medidas: numa pergunta como "quantas linhas
+ * a VISAO_COMERCIAL tem em 2026", os 5 primeiros vinham todos como `Medida: 2024_QTDE…`
+ * (o nome delas casa com "ano/2024") e **nenhuma coluna** chegava ao contexto — então o
+ * modelo inventava a coluna de data e levava 400. Tabela é o que carrega as colunas.
+ */
+export async function searchTables(
+  repo: string,
+  embedding: number[],
+  topN: number,
+): Promise<RagResult<ScoredChunk[]>> {
+  if (embedding.length !== EMBEDDING_DIMS) {
+    return { status: 'failed', error: `embedding com ${embedding.length} dimensões` };
+  }
+  try {
+    const res = await query<ChunkRow>(
+      `SELECT repo, ref, path, heading, content, 1 - (embedding <=> $1::vector) AS score
+         FROM dax_doc_chunk
+        WHERE repo = $2 AND path LIKE 'tabela/%'
+        ORDER BY embedding <=> $1::vector
+        LIMIT $3`,
+      [toVector(embedding), repo, Math.max(1, topN)],
+    );
+    return { status: 'ok', data: res.rows.map((r) => mapRow(r, Number(r.score ?? 0))) };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 /** Quantos chunks há indexados para um modelo. Usado pelo `nio fabric rag status`. */
 export async function countChunks(repo: string): Promise<RagResult<number>> {
   try {
@@ -139,6 +173,22 @@ export async function countChunks(repo: string): Promise<RagResult<number>> {
       [repo],
     );
     return { status: 'ok', data: Number(res.rows[0]?.n ?? 0) };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Quantas medidas indexadas carregam a fórmula DAX — diagnóstico do `rag status`. */
+export async function countMeasuresWithExpression(repo: string): Promise<RagResult<{ total: number; comFormula: number }>> {
+  try {
+    const res = await query<{ total: string; com: string }>(
+      `SELECT count(*)::int AS total,
+              count(*) FILTER (WHERE content LIKE '%Expressão DAX:%')::int AS com
+         FROM dax_doc_chunk WHERE repo = $1 AND path LIKE 'medida/%'`,
+      [repo],
+    );
+    const row = res.rows[0];
+    return { status: 'ok', data: { total: Number(row?.total ?? 0), comFormula: Number(row?.com ?? 0) } };
   } catch (err) {
     return fail(err);
   }

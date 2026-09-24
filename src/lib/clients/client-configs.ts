@@ -201,6 +201,32 @@ export const NIO_FABRIC_RAG_TEMPLATE_MIN = envNum('FABRIC_RAG_TEMPLATE_MIN', 0.8
  */
 export const NIO_FABRIC_RAG_TOPK = envNum('FABRIC_RAG_TOPK', 5);
 
+/**
+ * Teto de linhas devolvidas ao agente por consulta. A API permite 100k; despejar isso
+ * no contexto é desperdício e ainda estoura a janela. O `row_count` real é **sempre**
+ * reportado, e a truncagem é explícita — o agente deve agregar no DAX, não varrer.
+ */
+export const NIO_FABRIC_MAX_ROWS = envNum('FABRIC_MAX_ROWS', 100);
+
+/**
+ * Teto de **tamanho** do bloco de linhas. Contagem sozinha não limita o payload:
+ * medido, 100 linhas de `INFO.VIEW.MEASURES()` (16 colunas) dão ~13k tokens. O que
+ * vier primeiro — linhas ou caracteres — encerra a lista.
+ */
+export const NIO_FABRIC_MAX_ROW_CHARS = envNum('FABRIC_MAX_ROW_CHARS', 20_000);
+
+/**
+ * Piso de similaridade do grounding. Pergunta em pt-BR contra chunk de schema fica na
+ * faixa 0,72–0,85; abaixo de 0,60 o vizinho é ruído e só gasta token.
+ */
+export const NIO_FABRIC_RAG_MIN_SCORE = envNum('FABRIC_RAG_MIN_SCORE', 0.6);
+
+/** Teto de caracteres por chunk de grounding (tabela larga vira string enorme). */
+export const NIO_FABRIC_RAG_MAX_CHUNK_CHARS = envNum('FABRIC_RAG_MAX_CHUNK_CHARS', 1200);
+
+/** Teto total do bloco de grounding injetado no prompt. */
+export const NIO_FABRIC_RAG_MAX_TOTAL_CHARS = envNum('FABRIC_RAG_MAX_TOTAL_CHARS', 6000);
+
 /** Ref completo `<provider>/<id>` gravado no `model` do `opencode.json` e usado no `opencode run`. */
 export const NIO_OPERATOR_MODEL = `${NIO_AI_PROVIDER}/${NIO_AI_MODEL_ID}`;
 

@@ -4,7 +4,7 @@ import type { Tool, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolContext } from './index.js';
 import { jsonResult, errorResult } from '../lib/tool-result.js';
 import { brand } from '../brand.js';
-import { fabricGateway, fabricErrorResult, orEnvDefault } from './fabric-shared.js';
+import { fabricGateway, fabricErrorResult, orEnvDefault, leanList } from './fabric-shared.js';
 
 const ArgsSchema = z.object({ workspace_id: z.string().min(1).optional() }).strict();
 
@@ -31,5 +31,5 @@ export async function handler(args: unknown, _ctx: ToolContext): Promise<CallToo
 
   const out = await fabricGateway().listDatasets(workspaceId);
   if (out.status !== 'ok') return fabricErrorResult(out.status, out.error);
-  return jsonResult({ datasets: out.data ?? [] });
+  return jsonResult({ datasets: leanList(out.data ?? []) });
 }

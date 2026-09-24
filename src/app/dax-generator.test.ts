@@ -48,10 +48,21 @@ test('buildDaxPrompt: Nível 2 injeta a documentação', () => {
   expect(p).toContain('CALCULATE altera o contexto de filtro.');
 });
 
-test('buildDaxPrompt: retry carrega o erro anterior pro modelo corrigir', () => {
-  const p = buildDaxPrompt({ ...base, previousError: "Cannot find table 'Metas'." });
+test('buildDaxPrompt: retry carrega o erro E o DAX que falhou', () => {
+  const p = buildDaxPrompt({
+    ...base,
+    previousError: "Cannot find table 'Metas'.",
+    previousDax: "EVALUATE 'Metas'",
+  });
   expect(p).toContain('tentativa anterior FALHOU');
   expect(p).toContain("Cannot find table 'Metas'.");
+  expect(p).toContain("EVALUATE 'Metas'"); // sem isso o modelo corrige às cegas
+});
+
+test('buildDaxPrompt: retry sem o DAX anterior ainda funciona (campo opcional)', () => {
+  const p = buildDaxPrompt({ ...base, previousError: 'erro X' });
+  expect(p).toContain('tentativa anterior FALHOU');
+  expect(p).not.toContain('DAX que falhou');
 });
 
 test('system prompt carrega os limites REAIS do executeQueries', async () => {
@@ -64,7 +75,27 @@ test('system prompt carrega os limites REAIS do executeQueries', async () => {
   // regressão: sem estas regras o modelo volta a gerar os erros que vimos em produção
   expect(system).toContain('$System'); // DMV não funciona aqui
   expect(system).toContain('EVALUATE ROW("Linhas", COUNTROWS'); // escalar precisa embrulhar
-  expect(system).toContain('INFO.TABLES()'); // metadados sem XMLA
+  // medido no tenant: INFO.VIEW.TABLES() funciona, INFO.TABLES() devolve 400
+  expect(system).toContain('INFO.VIEW.TABLES()');
+  expect(system).toContain('retorna 400 neste tenant');
+});
+
+test('system prompt carrega os padrões validados (contagem, texto, período, aspas)', async () => {
+  let system = '';
+  const gen = createDaxGenerator(async (_p, opts) => {
+    system = opts?.system ?? '';
+    return 'EVALUATE ROW("a",1)';
+  });
+  await gen(base);
+
+  // o caso real: SUM(frequency) deu 25M onde COUNTROWS dava 1.707
+  expect(system).toContain('COUNTROWS(FILTER(...))');
+  expect(system).toContain('1.707');
+  expect(system).toContain('CONTAINSSTRING');
+  expect(system).toContain('YEAR(');
+  // o modelo tem tabelas chamadas `tb_mp.`, `tb_mp,` e `DAX` — aspas não são opcionais
+  expect(system).toContain('aspas simples');
+  expect(system).toContain('Não invente'); // nomes vêm do schema no contexto
 });
 
 test('createDaxGenerator: sucesso devolve o DAX limpo', async () => {

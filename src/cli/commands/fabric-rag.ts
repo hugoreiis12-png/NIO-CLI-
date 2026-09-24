@@ -11,6 +11,7 @@ import { createLocalEmbedder, embedderStatus } from "../../adapters/embed/local-
 import {
   createDocIndexRepository,
   countChunks,
+  countMeasuresWithExpression,
   pruneOldRefs,
 } from "../../adapters/pg/doc-index-repository.js";
 import { ingestSchema } from "../../app/schema-ingest.js";
@@ -105,6 +106,30 @@ async function runRagStatus(): Promise<void> {
     `${c.green(sym.ok)} acervo: ${c.cyan(String(n))} chunks do modelo ` +
       `${c.dim(datasetId)}${versoes > 1 ? c.dim(` (${versoes} versões — use --prune)`) : ""}`,
   );
+
+  await reportMeasureExpressions(repo);
+}
+
+/**
+ * As fórmulas das medidas são o que permite ao modelo **conferir** um cálculo em vez de
+ * só chamar a medida. Elas não vêm do `INFO.VIEW.MEASURES()` (medido: `[Expression]`
+ * nulo) e dependem de configuração do tenant — dizer isso é melhor que o agente
+ * responder "não consigo" sem explicar.
+ */
+async function reportMeasureExpressions(repo: string): Promise<void> {
+  const medidas = await countMeasuresWithExpression(repo);
+  if (medidas.status !== "ok" || !medidas.data || medidas.data.total === 0) return;
+
+  const { total, comFormula } = medidas.data;
+  if (comFormula > 0) {
+    console.log(`${c.green(sym.ok)} fórmulas DAX: ${c.cyan(`${comFormula}/${total}`)} medidas`);
+    return;
+  }
+  console.log(`${c.yellow(sym.warn)} fórmulas DAX: ${c.cyan("0")} de ${total} medidas`);
+  console.log(c.dim("  o modelo chama as medidas, mas não lê a definição delas."));
+  console.log(c.dim("  habilite no portal admin do Power BI → Configurações do locatário → API de administrador:"));
+  console.log(c.dim("    · Metadados detalhados do conjunto de dados"));
+  console.log(c.dim("    · Expressões DAX e mashup do conjunto de dados"));
 }
 
 export function registerFabricRagCommands(fabric: Command): void {

@@ -10,10 +10,12 @@ import { askDax, type DaxRagDeps } from '../app/dax-rag.js';
 import { createDaxGenerator } from '../app/dax-generator.js';
 import { createDaxMemoryRepository } from '../adapters/pg/dax-memory-repository.js';
 import { createLocalEmbedder } from '../adapters/embed/local-embedder.js';
-import { createDocIndexRepository, findChunkByPath } from '../adapters/pg/doc-index-repository.js';
+import { createDocIndexRepository, findChunkByPath, searchTables } from '../adapters/pg/doc-index-repository.js';
 import { createSchemaSearch } from '../app/schema-search.js';
+import { schemaRepo } from '../app/schema-chunker.js';
+import { ensureSchemaIndexed } from '../app/ensure-schema.js';
 import { NIO_FABRIC_RAG_TOPK } from '../lib/clients/client-configs.js';
-import { fabricGateway, orEnvDefault } from './fabric-shared.js';
+import { fabricGateway, orEnvDefault, capRows } from './fabric-shared.js';
 
 const ArgsSchema = z
   .object({
@@ -75,8 +77,7 @@ export async function runFabricAsk(
   return jsonResult({
     origem: TIER_LABEL[tier],
     dax, // sempre devolvido: o agente pode conferir e reusar via nio_fabric_query
-    row_count: rows.length,
-    rows,
+    ...capRows(rows), // row_count real + lista com teto
     ...(score !== undefined ? { similaridade: Number(score.toFixed(4)) } : {}),
   });
 }
@@ -91,7 +92,13 @@ function productionDeps(datasetId: string): DaxRagDeps {
     // Nível 2: grounding no schema do modelo (inventário de tabelas + top-k).
     // Sem acervo sincronizado devolve vazio e a geração segue sem contexto.
     searchDocs: createSchemaSearch(
-      { index: createDocIndexRepository(), byPath: findChunkByPath, topK: NIO_FABRIC_RAG_TOPK },
+      {
+        index: createDocIndexRepository(),
+        byPath: findChunkByPath,
+        topK: NIO_FABRIC_RAG_TOPK,
+        // reserva de tabelas: garante COLUNAS no contexto
+        searchTables: (e) => searchTables(schemaRepo(datasetId), e, 3),
+      },
       datasetId,
     ),
   };
@@ -105,6 +112,14 @@ export async function handler(args: unknown, _ctx: ToolContext): Promise<CallToo
   const datasetId = orEnvDefault(parsed.data.dataset_id, 'NIO_FABRIC_DATASET');
   if (!workspaceId) return errorResult('workspace_id ausente e NIO_FABRIC_WORKSPACE não definido.');
   if (!datasetId) return errorResult('dataset_id ausente e NIO_FABRIC_DATASET não definido.');
+
+  // Grounding sob demanda: sem o schema DESTE dataset o modelo inventa nome de tabela
+  // e leva 400. Só a primeira pergunta de cada modelo paga a indexação (~15s).
+  // Falhar aqui não impede responder — segue sem grounding, que é o comportamento antigo.
+  await ensureSchemaIndexed(
+    { fabric: fabricGateway(), embedder: createLocalEmbedder(), index: createDocIndexRepository() },
+    { workspaceId, datasetId },
+  );
 
   return runFabricAsk(
     productionDeps(datasetId),

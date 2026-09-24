@@ -5,7 +5,7 @@ import type { FabricGateway } from '../core/fabric.js';
 import type { ToolContext } from './index.js';
 import { jsonResult, errorResult } from '../lib/tool-result.js';
 import { brand } from '../brand.js';
-import { fabricGateway, fabricErrorResult, orEnvDefault } from './fabric-shared.js';
+import { fabricGateway, fabricErrorResult, orEnvDefault, capRows } from './fabric-shared.js';
 
 const ArgsSchema = z
   .object({
@@ -44,7 +44,7 @@ export async function runFabricQuery(
 ): Promise<CallToolResult> {
   const out = await gw.executeDax(workspaceId, datasetId, dax);
   if (out.status !== 'ok') return fabricErrorResult(out.status, out.error);
-  return jsonResult({ row_count: out.data?.length ?? 0, rows: out.data ?? [] });
+  return jsonResult(capRows(out.data ?? []));
 }
 
 export async function handler(args: unknown, _ctx: ToolContext): Promise<CallToolResult> {

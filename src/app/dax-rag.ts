@@ -44,6 +44,8 @@ export interface GenerateRequest {
   docs?: string[];
   /** Retry: o erro legível da tentativa anterior. */
   previousError?: string;
+  /** Retry: o DAX que falhou. Sem ele o modelo corrige às cegas o que não vê. */
+  previousDax?: string;
 }
 
 export type DaxGenerator = (req: GenerateRequest) => Promise<RagResult<string>>;
@@ -89,7 +91,14 @@ async function runWithRetry(
   // Só erro de DAX merece nova tentativa; falta de permissão ou rede não melhora repetindo.
   if (first.status !== 'failed') return { status: 'unavailable', error: first.error };
 
-  const retry = await deps.generate({ ...request, previousError: first.error });
+  // Retry enxuto: o grounding já foi usado e não impediu o erro — reenviá-lo só
+  // duplica token. O que o modelo precisa é ver **o próprio DAX que falhou** e o motivo.
+  const retry = await deps.generate({
+    ...request,
+    docs: undefined,
+    previousDax: dax,
+    previousError: first.error,
+  });
   if (retry.status !== 'ok' || !retry.data) {
     return { status: 'failed', error: first.error };
   }

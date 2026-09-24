@@ -142,6 +142,7 @@ test('Nível 2: sem template → usa documentação e gera do zero', async () =>
 
 test('retry: 400 legível volta pro modelo COM o erro e a 2ª tentativa vale', async () => {
   const { deps, spy } = makeDeps({ similar: null, generated: 'EVALUATE RUIM', failDax: 'EVALUATE RUIM' });
+  deps.searchDocs = async () => ({ status: 'ok', data: ['Tabela: VENDAS | Colunas: VALOR'] });
   let call = 0;
   deps.generate = async (req) => {
     spy.generated.push(req);
@@ -150,7 +151,12 @@ test('retry: 400 legível volta pro modelo COM o erro e a 2ª tentativa vale', a
   };
   const out = await askDax(deps, ask);
 
+  expect(spy.generated[0]!.docs).toBeDefined(); // 1ª tentativa recebe o grounding
   expect(spy.generated[1]!.previousError).toContain("Cannot find table 'X'");
+  // o grounding já falhou uma vez — reenviá-lo só duplica token
+  expect(spy.generated[1]!.docs).toBeUndefined();
+  // e o modelo precisa ver o DAX que ELE escreveu e quebrou
+  expect(spy.generated[1]!.previousDax).toBe('EVALUATE RUIM');
   expect(out.data!.dax).toBe('EVALUATE BOM');
   expect(spy.executed).toEqual(['EVALUATE RUIM', 'EVALUATE BOM']);
 });
