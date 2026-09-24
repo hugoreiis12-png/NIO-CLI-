@@ -5,6 +5,7 @@
 import type { Command } from "commander";
 import { c, sym } from "../../lib/colors.js";
 import { CONFIG_FILE, checkConfig, probeAiBackend, runConfigWizard } from "../../lib/auth/nio-config.js";
+import { describeFabricConfig, fabricConfigStatus } from "../../lib/auth/fabric-config.js";
 import { continueChain } from "../flows/onboarding.js";
 
 const LABEL = { missing: "faltando", invalid: "inválido", unreachable: "sem conexão" } as const;
@@ -13,8 +14,10 @@ async function runCheck(opts: { json?: boolean }): Promise<void> {
   const problems = await checkConfig();
   // Backend de IA é consultivo: entra no --json, mas nunca reprova (comandos sem IA seguem ok).
   const ai = await probeAiBackend();
+  // Fabric é consultivo pelo mesmo motivo do backend de IA: nem todo perfil usa.
+  const fabric = fabricConfigStatus();
   if (opts.json) {
-    console.log(JSON.stringify({ ok: problems.length === 0, problems, aiBackend: ai }));
+    console.log(JSON.stringify({ ok: problems.length === 0, problems, aiBackend: ai, fabric }));
     process.exit(problems.length ? 1 : 0);
   }
   if (problems.length === 0) {
@@ -34,6 +37,7 @@ async function runCheck(opts: { json?: boolean }): Promise<void> {
         `${c.dim("nio ai/exec/plan precisam dele; ajuste NIO_AI_BASE_URL/MODEL em ~/.nio/config.env.")}`,
     );
   }
+  console.log(describeFabricConfig(fabric));
   if (problems.length) process.exit(1);
 }
 

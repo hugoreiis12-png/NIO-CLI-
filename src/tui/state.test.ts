@@ -434,3 +434,35 @@ test('Sprint 7.2 — tui.toast.show vira um toast (variant + message + teto de 5
   expect(s.toasts.length).toBeLessThanOrEqual(5);
   expect(s.toasts.at(-1)).toMatchObject({ message: 'm7', variant: 'info' });
 });
+
+test('ACEITE: estouro de contexto é normalizado, mesmo chegando como APIError cru', () => {
+  // O caso real veio como a mensagem crua do vLLM. Sem normalizar aqui, a TUI mostrava
+  // "erro no motor" e ninguém disparava a recuperação — a sessão morria de vez.
+  const cru =
+    "This model's maximum context length is 98304 tokens. However, you requested 2048 " +
+    'output tokens and your prompt contains at least 96257 input tokens';
+  const s = applyEvent(
+    { ...emptyChat, busy: true },
+    ev('session.error', { error: { name: 'APIError', data: { message: cru } } }),
+  );
+
+  expect(s.error?.name).toBe('ContextOverflowError'); // é o que dispara a recuperação
+  expect(s.error?.message).toContain('janela de contexto estourou');
+  expect(s.busy).toBe(false);
+});
+
+test('estouro nomeado pelo motor também é reconhecido', () => {
+  const s = applyEvent(
+    emptyChat,
+    ev('session.error', { error: { name: 'ContextOverflowError', data: { message: 'x' } } }),
+  );
+  expect(s.error?.name).toBe('ContextOverflowError');
+});
+
+test('APIError comum não vira estouro (a recuperação não pode disparar à toa)', () => {
+  const s = applyEvent(
+    emptyChat,
+    ev('session.error', { error: { name: 'APIError', data: { message: 'connection reset' } } }),
+  );
+  expect(s.error?.name).toBe('APIError');
+});

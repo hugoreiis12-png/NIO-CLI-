@@ -46,6 +46,7 @@ import {
 import { NIO_AI_CONTEXT, compactionReserved } from '../lib/clients/client-configs.js';
 import { compactInput } from '../lib/exec/map-reduce.js';
 import { buildAttachedInput, detectPaths } from './attachments.js';
+import { buildHandoffDigest } from './context-recovery.js';
 import type { FilePartInput } from '@opencode-ai/sdk';
 
 type Overlay =
@@ -260,6 +261,40 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
       .prompt({ path: { id: sessionId.current }, body: { model, agent: mode, parts: [...fileParts, { type: 'text', text: payload }] } })
       .catch((err) => tlog('prompt falhou', (err as Error).message));
   };
+
+  /**
+   * Janela estourada: cria uma sessão nova e semeia com um resumo montado LOCALMENTE.
+   *
+   * Não dá pra usar o `session.summarize` aqui — é ele que estoura, porque reenvia o
+   * histórico inteiro pro modelo resumir. Era isso que deixava a sessão morta: a
+   * recuperação falhava pelo mesmo motivo do erro original, em toda request seguinte.
+   */
+  const recoverFromOverflow = async () => {
+    const digest = buildHandoffDigest(chat.messages);
+    try {
+      const created = await handle.client.session.create({ body: { title: `${cwd.split('/').pop() ?? 'nio'} (cont.)` } });
+      const novaId = (created as { data?: { id?: string } }).data?.id ?? '';
+      if (!novaId) throw new Error('sessão nova sem id');
+      sessionId.current = novaId;
+      setChat((prev) => ({ ...prev, error: null, busy: false }));
+      toast('janela zerada — sessão nova com o resumo da anterior');
+      if (digest) {
+        await handle.client.session.prompt({
+          path: { id: novaId },
+          body: { model, agent: mode, parts: [{ type: 'text', text: digest }] },
+        });
+      }
+    } catch (err) {
+      tlog('recuperação do overflow falhou', (err as Error).message);
+      toast('não consegui zerar a janela — saia e entre de novo', 'warning');
+    }
+  };
+
+  // Recupera sozinho: deixar o usuário reenviar só repetiria o mesmo erro.
+  useEffect(() => {
+    if (chat.error?.name === 'ContextOverflowError') void recoverFromOverflow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.error?.name]);
 
   // Sprint 5: Tab cicla o modo do agente (build ⇄ plan ⇄ …).
   const cycleMode = (reverse: boolean) => {

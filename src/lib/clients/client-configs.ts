@@ -257,6 +257,45 @@ export const NIO_AI_CONTEXT = envNum('AI_CONTEXT', 65536);
 export const NIO_AI_OUTPUT = envNum('AI_OUTPUT', 2048);
 
 /**
+ * Margem sobre a janela real, porque o orçamento do OpenCode é **estimado** e o do
+ * vLLM é o tokenizer de verdade. Medido num estouro real: o prompt chegou a 96.257
+ * tokens reais enquanto o OpenCode ainda não tinha disparado a compactação prevista
+ * para ~90.304 — subestimativa de ao menos 6%. 10% cobre isso com folga.
+ */
+const CONTEXT_SAFETY_RATIO = 0.1;
+
+/**
+ * Converte a janela **real** do modelo na janela **declarada** ao OpenCode.
+ *
+ * O servidor conta `prompt + max_tokens` contra o `max_model_len`: declarar a janela
+ * cheia autoriza um prompt que, somado ao output, estoura por construção — foi
+ * exatamente o `96257 + 2048 = 98305` contra um teto de 98304. Some-se a isso a
+ * subestimativa do contador e o resultado é a compactação falhando, que é o que
+ * mata a sessão (ela reenvia o histórico inteiro pra resumir).
+ */
+/**
+ * O backend aceita imagem? **Medido** contra o vLLM local: sem `attachment: true` na
+ * entrada do modelo, o OpenCode descarta a part de imagem e o que chega ao servidor é só
+ * texto — o modelo então responde "não aceito imagens" e o usuário culpa o modelo.
+ *
+ * Com a flag: `image_url` chega e a imagem é descrita corretamente. `NIO_AI_VISION=false`
+ * desliga, para quem apontar `NIO_AI_BASE_URL` a um backend texto-only.
+ */
+export const NIO_AI_VISION = !/^(0|false|no|off)$/i.test((env('AI_VISION') ?? '').trim());
+
+/** Capacidades do modelo no `opencode.json`. Chaves do schema oficial — inventar quebra tudo. */
+export function modelCapabilities(vision: boolean = NIO_AI_VISION): Partial<OpencodeModelEntry> {
+  if (!vision) return {};
+  return { attachment: true, modalities: { input: ['text', 'image'], output: ['text'] } };
+}
+
+export function declaredContextWindow(context: number, output: number): number {
+  if (context <= 0) return context; // 0 = não declarar (usa o catálogo do provider)
+  const usable = context - output - Math.ceil(context * CONTEXT_SAFETY_RATIO);
+  return Math.max(1, usable);
+}
+
+/**
  * Chain-of-thought (reasoning) do modelo nos caminhos headless (`nio exec`/`plan`/
  * `validate-plan`). **Off por padrão**: em tarefa determinística o "pensar" só soma
  * ~2x de latência e pode esvaziar o output (o raciocínio consome o teto antes da
@@ -316,10 +355,13 @@ export function contextConfigWarning(
   context = NIO_AI_CONTEXT,
   output = NIO_AI_OUTPUT,
 ): string | null {
-  if (context > 0 && context <= output + COMPACTION_FLOOR) {
+  // Avalia a janela DECLARADA (com margem), que é contra o que o opencode orça.
+  const declared = declaredContextWindow(context, output);
+  if (context > 0 && declared <= output + COMPACTION_FLOOR) {
     return (
-      `NIO_AI_CONTEXT=${context} é pequeno demais (≤ output ${output} + folga ${COMPACTION_FLOOR}): ` +
-      'o opencode pode auto-compactar em loop. Ajuste NIO_AI_CONTEXT ao --max-model-len real do vLLM.'
+      `NIO_AI_CONTEXT=${context} é pequeno demais (declarado ${declared} ≤ output ${output} + ` +
+      `folga ${COMPACTION_FLOOR}): o opencode pode auto-compactar em loop. ` +
+      'Ajuste NIO_AI_CONTEXT ao --max-model-len real do vLLM.'
     );
   }
   return null;
@@ -400,6 +442,9 @@ function opencodeMcpOk(spec: McpSpec, cur?: OpencodeServerEntry): boolean {
 interface OpencodeModelEntry {
   name?: string;
   limit?: { context?: number; output?: number };
+  /** Capacidade de anexo — sem ela o OpenCode **descarta** a part de imagem (medido). */
+  attachment?: boolean;
+  modalities?: { input?: string[]; output?: string[] };
   [k: string]: unknown;
 }
 
@@ -428,8 +473,18 @@ export function planNioAiProvider(
   const providers = { ...((existing.provider ?? {}) as Record<string, OpencodeProviderEntry | undefined>) };
   const cur = providers[provider] ?? {};
   const models = { ...(cur.models ?? {}) } as Record<string, OpencodeModelEntry>;
-  const limit = context > 0 ? { ...models[modelId]?.limit, context, output } : models[modelId]?.limit;
-  models[modelId] = { name: 'NIO local (vLLM)', ...models[modelId], ...(limit ? { limit } : {}) };
+  // Declara a janela COM margem: `context` é a real do modelo, não a orçável.
+  const declared = declaredContextWindow(context, output);
+  const limit =
+    context > 0 ? { ...models[modelId]?.limit, context: declared, output } : models[modelId]?.limit;
+  // As capacidades vêm DEPOIS do que já existe: um modelo local não está no catálogo
+  // models.dev, então sem declaração o OpenCode assume que ele não aceita anexo.
+  models[modelId] = {
+    name: 'NIO local (vLLM)',
+    ...models[modelId],
+    ...(limit ? { limit } : {}),
+    ...modelCapabilities(),
+  };
   providers[provider] = {
     ...cur,
     npm: cur.npm ?? '@ai-sdk/openai-compatible',
@@ -451,9 +506,14 @@ function nioAiProviderOk(
 ): boolean {
   const p = (existing.provider as Record<string, OpencodeProviderEntry | undefined> | undefined)?.[provider];
   if (!p || p.options?.baseURL !== baseURL) return false;
-  if (context <= 0) return Boolean(p.models?.[modelId]);
-  const lim = p.models?.[modelId]?.limit;
-  return lim?.context === context && lim?.output === output;
+  // Capacidade também entra na comparação: sem isto o config JÁ EXISTENTE do usuário nunca
+  // ganharia `attachment` e a imagem seguiria sendo descartada em silêncio.
+  const entry = p.models?.[modelId];
+  if (Boolean(entry?.attachment) !== NIO_AI_VISION) return false;
+  if (context <= 0) return Boolean(entry);
+  const lim = entry?.limit;
+  // Compara com a janela DECLARADA — senão o config em disco nunca bate e reescreve sempre.
+  return lim?.context === declaredContextWindow(context, output) && lim?.output === output;
 }
 
 /** Tem um `baseURL` de provider `opencode` gravado? (legado do hijack — não deve mais ter). */

@@ -3,7 +3,7 @@
  * `JWT_SECRET`). Ler/gravar (chmod 600), validar, e o wizard que `nio init`/
  * `register`/`login` disparam quando falta algo. `load-env.ts` carrega no boot.
  */
-import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { brand, homePath } from '../../brand.js';
 import { shutdown } from '../shutdown.js';
@@ -13,6 +13,8 @@ import { generateJwtSecret, jwtSecretWeakness } from '../../gateway/config.js';
 import { input, password, confirm, select } from '../prompts.js';
 import { c, sym, box, cmd } from '../colors.js';
 import { dlog } from '../debug.js';
+import { hardenSecretFile } from '../secure-file.js';
+import { promptFabricCredentials, verifyFabricCredentials } from './fabric-config.js';
 
 export const CONFIG_FILE = homePath('config.env');
 const PG_URL = /^postgres(ql)?:\/\/.+/i;
@@ -91,13 +93,16 @@ export function writeConfigFile(updates: Record<string, string>, path = CONFIG_F
       .join('\n') +
     '\n';
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  // `mode` fecha a janela do arquivo novo em 0644 (auditoria L-4); o chmod cobre
-  // um arquivo pré-existente com permissão frouxa.
+  // `mode` fecha a janela do arquivo novo em 0644 (auditoria L-4); o harden cobre
+  // um arquivo pré-existente com permissão frouxa — e a ACL no Windows, onde o
+  // modo POSIX é inócuo.
   writeFileSync(path, body, { encoding: 'utf8', mode: 0o600 });
-  try {
-    chmodSync(path, 0o600);
-  } catch {
-    /* chmod não existe no Windows */
+  const hard = hardenSecretFile(path);
+  if (hard.outcome !== 'ok') {
+    console.error(
+      `${c.yellow(sym.warn)} não consegui restringir ${path} ao seu usuário ` +
+        `${c.dim(`(${hard.error ?? hard.outcome})`)} — o arquivo guarda segredos do time.`,
+    );
   }
 }
 
@@ -292,9 +297,29 @@ export async function runConfigWizard(): Promise<boolean> {
     NIO_DATABASE_SSL: ssl === 'off' ? 'false' : 'true',
     NIO_DATABASE_SSL_INSECURE: ssl === 'insecure' ? '1' : '',
   };
+  Object.assign(updates, await collectFabricSection());
   writeConfigFile(updates);
   console.log(`  ${c.green(sym.ok)} salvo em ${cmd(CONFIG_FILE)}`);
   return true;
+}
+
+/**
+ * Passo do Power BI/Fabric. Credencial que não autentica **não** reprova o wizard: o
+ * banco e o JWT já foram validados e são o que a maioria dos comandos usa — barrar
+ * tudo aqui deixaria a pessoa sem config nenhuma por causa de um segredo digitado
+ * errado. Grava assim mesmo e avisa.
+ */
+async function collectFabricSection(): Promise<Record<string, string>> {
+  console.log(`\n  ${c.bold('Power BI / Fabric')} ${c.dim('— credenciais da equipe')}`);
+  const fabric = await promptFabricCredentials(readConfigFile());
+  if (!fabric) return {};
+
+  process.stdout.write(c.dim('  testando a credencial no Azure AD… '));
+  const check = await verifyFabricCredentials(fabric);
+  console.log(check.ok ? c.green(sym.ok) : c.yellow(sym.warn));
+  console.log(`  ${c.dim(check.detail)}`);
+  if (!check.ok) console.log(`  ${c.dim('salvo assim mesmo — corrija com `nio config setup`.')}`);
+  return fabric;
 }
 
 function problemsBox(problems: ConfigProblem[]): string {

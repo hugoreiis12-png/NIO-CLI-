@@ -10,6 +10,7 @@
  */
 import type { Event } from '@opencode-ai/sdk';
 import { tlog } from './debug.js';
+import { isContextOverflow } from './context-recovery.js';
 
 export interface ChatPart {
   id: string;
@@ -237,6 +238,8 @@ export interface ChatState {
 /** Dica humana por tipo de erro do motor. */
 function errorHint(name: string): string {
   switch (name) {
+    case 'ContextOverflowError':
+      return 'a janela de contexto estourou — zerando e seguindo com um resumo da conversa';
     case 'ProviderAuthError':
       return 'credencial do provedor inválida — rode `opencode auth login`';
     case 'MessageOutputLengthError':
@@ -523,12 +526,19 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
       if (err?.name && err.name !== 'MessageAbortedError') {
         const data = err.data ?? {};
         const raw = typeof data.message === 'string' ? data.message : '';
-        const hint = errorHint(err.name);
-        const useHint = err.name === 'ProviderAuthError' || err.name === 'MessageOutputLengthError' || !raw;
+        // Estouro de janela chega ora nomeado, ora como APIError com a mensagem crua do
+        // provider. Normaliza aqui pra quem trata a recuperação não repetir a heurística.
+        const name = isContextOverflow(err.name, raw) ? 'ContextOverflowError' : err.name;
+        const hint = errorHint(name);
+        const useHint =
+          name === 'ProviderAuthError' ||
+          name === 'MessageOutputLengthError' ||
+          name === 'ContextOverflowError' ||
+          !raw;
         state.error = {
-          name: err.name,
+          name,
           message: useHint ? hint : raw,
-          retryable: err.name === 'APIError' && Boolean(data.isRetryable),
+          retryable: name === 'APIError' && Boolean(data.isRetryable),
         };
       }
       break;
