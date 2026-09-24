@@ -21,7 +21,8 @@ import {
   AttachChips,
   type PaletteAction,
 } from './components.js';
-import { InfoPanel, CommandRunner, PermissionModal, QuestionModal } from './palette.js';
+import { InfoPanel, CommandRunner, PermissionModal } from './palette.js';
+import { QuestionModal } from './question-modal.js';
 import { buildPalette, type PaletteItem } from './palette-source.js';
 import {
   applyEvent,

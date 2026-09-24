@@ -466,3 +466,42 @@ test('APIError comum não vira estouro (a recuperação não pode disparar à to
   );
   expect(s.error?.name).toBe('APIError');
 });
+
+test('ACEITE: custom:true chega ao estado — é a saída pra opção que não cobre o caso', () => {
+  // Sem isto, uma pergunta mal formulada prende o usuário nas opções oferecidas.
+  const s = applyEvent(emptyChat, ev('question.asked', {
+    requestID: 'req_1', sessionID: 'ses_1',
+    questions: [{ question: 'Qual dataset?', custom: true, options: [{ label: 'COMERCIAL' }] }],
+  }));
+  expect(s.questions[0]!.questions[0]!.custom).toBe(true);
+});
+
+test('pergunta sem custom não vira campo livre por acidente', () => {
+  const s = applyEvent(emptyChat, ev('question.asked', {
+    requestID: 'req_2', sessionID: 'ses_1',
+    questions: [{ question: 'Apagar?', options: [{ label: 'sim' }, { label: 'não' }] }],
+  }));
+  expect(s.questions[0]!.questions[0]!.custom).toBe(false);
+});
+
+test('question.rejected tira a pergunta da fila (antes ficava órfã)', () => {
+  let s = applyEvent(emptyChat, ev('question.asked', {
+    requestID: 'req_3', sessionID: 'ses_1',
+    questions: [{ question: 'x', options: [{ label: 'a' }] }],
+  }));
+  expect(s.questions).toHaveLength(1);
+  s = applyEvent(s, ev('question.rejected', { requestID: 'req_3' }));
+  expect(s.questions).toHaveLength(0);
+});
+
+test('família question.v2.* é tratada igual à v1 (o motor emite qualquer uma)', () => {
+  let s = applyEvent(emptyChat, ev('question.v2.asked', {
+    requestID: 'req_4', sessionID: 'ses_1',
+    questions: [{ question: 'Qual período?', multiple: true, options: [{ label: '2025' }, { label: '2026' }] }],
+  }));
+  expect(s.questions).toHaveLength(1);
+  expect(s.questions[0]!.questions[0]!.multi).toBe(true);
+
+  s = applyEvent(s, ev('question.v2.replied', { requestID: 'req_4' }));
+  expect(s.questions).toHaveLength(0);
+});

@@ -77,6 +77,11 @@ export interface QuestionItem {
   header?: string;
   /** `true` = múltipla escolha; senão single-select. */
   multi?: boolean;
+  /**
+   * `true` = o usuário pode escrever uma resposta fora das opções. Sem isso, uma
+   * pergunta mal formulada vira beco sem saída — não há como dizer "nenhuma dessas".
+   */
+  custom?: boolean;
   options: QuestionOption[];
 }
 
@@ -182,6 +187,7 @@ export function toQuestionReq(raw: Record<string, unknown>): QuestionReq | null 
     question: String(q.question ?? ''),
     header: q.header ? String(q.header) : undefined,
     multi: Boolean(q.multi ?? q.multiple),
+    custom: Boolean(q.custom),
     options: ((q.options as Array<Record<string, unknown>>) ?? []).map((o) => ({
       label: String(o.label ?? o.value ?? o ?? ''),
       description: o.description ? String(o.description) : undefined,
@@ -444,14 +450,19 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
 
   // Tool `question` — mesmo padrão de fila que a permissão. Sem isto o turno trava
   // em `running` esperando a resposta que a TUI nunca enviava.
-  if (etype === 'question.asked' || etype === 'question.updated') {
+  // O SDK expõe a família `question.*` e uma `question.v2.*` paralela; o motor pode
+  // emitir qualquer uma. Normaliza o prefixo em vez de listar os dois conjuntos.
+  const qtype = etype.startsWith('question.v2.') ? etype.replace('.v2.', '.') : etype;
+  if (qtype === 'question.asked' || qtype === 'question.updated') {
     const req = toQuestionReq(p);
     if (req && !state.questions.some((x) => x.id === req.id)) {
       state.questions = [...state.questions, req];
     }
     return state;
   }
-  if (etype === 'question.replied' || etype === 'question.answered') {
+  // `rejected` some junto com `replied`: a pergunta saiu do ar de qualquer modo, e sem
+  // isto um reject externo deixava o modal órfão na fila.
+  if (qtype === 'question.replied' || qtype === 'question.answered' || qtype === 'question.rejected') {
     const id = (p.requestID ?? p.questionID) as string | undefined;
     state.questions = id ? state.questions.filter((x) => x.id !== id) : [];
     return state;
