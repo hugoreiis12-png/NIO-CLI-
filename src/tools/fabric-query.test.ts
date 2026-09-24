@@ -50,3 +50,43 @@ test('handler: sem ids e sem env default → erro claro, sem tocar a rede', asyn
     if (savedD === undefined) delete process.env.NIO_FABRIC_DATASET; else process.env.NIO_FABRIC_DATASET = savedD;
   }
 });
+
+test('ACEITE: tabela inventada é barrada ANTES de gastar request no Fabric', () => {
+  // O 400 do Fabric (`Cannot find table`) não diz o que existe, então o modelo chuta
+  // de novo e queima as 120 req/min. Aqui a recusa é local e traz os nomes reais.
+  let bateu = false;
+  const gw = { executeDax: async () => { bateu = true; return { status: 'ok' as const, data: [] }; } };
+  return runFabricQuery(
+    gw as never, 'ws', 'ds', "EVALUATE 'Metas'",
+    async () => ['VISAO_COMERCIAL', 'CALENDARIO'],
+  ).then((res) => {
+    expect(bateu).toBe(false); // não chegou a chamar a API
+    expect(res.isError).toBe(true);
+    expect(String(res.content[0]?.text)).toContain('VISAO_COMERCIAL'); // mostra o que existe
+  });
+});
+
+test('tabela real passa e executa normalmente', async () => {
+  let bateu = false;
+  const gw = { executeDax: async () => { bateu = true; return { status: 'ok' as const, data: [{ a: 1 }] }; } };
+  const res = await runFabricQuery(
+    gw as never, 'ws', 'ds', "EVALUATE 'VISAO_COMERCIAL'",
+    async () => ['VISAO_COMERCIAL'],
+  );
+  expect(bateu).toBe(true);
+  expect(res.isError).toBeFalsy();
+});
+
+test('sem acervo indexado não bloqueia — executa e deixa o Fabric decidir', async () => {
+  let bateu = false;
+  const gw = { executeDax: async () => { bateu = true; return { status: 'ok' as const, data: [] }; } };
+  await runFabricQuery(gw as never, 'ws', 'ds', "EVALUATE 'QualquerCoisa'", async () => []);
+  expect(bateu).toBe(true);
+});
+
+test('sem loader de inventário o comportamento antigo se mantém', async () => {
+  let bateu = false;
+  const gw = { executeDax: async () => { bateu = true; return { status: 'ok' as const, data: [] }; } };
+  await runFabricQuery(gw as never, 'ws', 'ds', "EVALUATE 'Metas'");
+  expect(bateu).toBe(true);
+});

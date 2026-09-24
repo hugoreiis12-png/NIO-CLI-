@@ -78,8 +78,11 @@ test('buildAttachedInput: imagem vira FilePartInput data-URI (Item 4b)', async (
 test('buildAttachedInput: arquivo grande NÃO-imagem (lixo) → aviso rápido, sem travar o jimp', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'nio-attach-big-'));
   const big = join(dir, 'grande.png');
-  writeFileSync(big, Buffer.alloc(2_000_000, 1)); // 2 MB de lixo (sem assinatura de imagem) > teto
-  const { fileParts, text } = await buildAttachedInput(`analisa ${big}`);
+  // Lixo pequeno + teto pequeno exercita o MESMO ramo (size > teto → guard de assinatura)
+  // sem gravar 2 MB: com o fixture grande o teste levava ~10s sob carga e estourava o
+  // timeout do bun, falhando ~1 em 9 execuções — flake que derrubaria o gate do CI.
+  writeFileSync(big, Buffer.alloc(2_000, 1));
+  const { fileParts, text } = await buildAttachedInput(`analisa ${big}`, { maxImageBytes: 1_000 });
   expect(fileParts).toEqual([]); // guard de assinatura → não vira part
   expect(text).toContain('grande demais');
   expect(text).toContain('grande.png');
