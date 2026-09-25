@@ -8,6 +8,7 @@ import { c, sym } from "../../lib/colors.js";
 import { fabricGrant, type TokenGrant } from "../../adapters/fabric/token.js";
 import { createFabricGateway } from "../../adapters/fabric/client.js";
 import { registerFabricRagCommands } from "./fabric-rag.js";
+import { discoverLocalXmla } from "../../adapters/powerbi/local-endpoint.js";
 
 const HINT =
   "Configure AZURE_TENANT_ID/AZURE_CLIENT_ID e (NIO_FABRIC_USERNAME/PASSWORD p/ token de usuário com RLS, " +
@@ -38,20 +39,35 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
   if (r.status === "ok") {
     const via = r.grant === "user" ? "token de usuário (RLS aplicado)" : "service principal";
     console.log(`${c.green(sym.ok)} Fabric conectado via ${via} — ${r.workspaceCount} workspace(s) visível(is).`);
-    return;
-  }
-  if (r.status === "unconfigured") {
+  } else if (r.status === "unconfigured") {
     console.log(`${c.yellow(sym.warn)} Fabric não configurado. ${c.dim(HINT)}`);
-    process.exit(1);
+  } else {
+    const label =
+      r.status === "unauthorized"
+        ? "sem acesso (service principal sem permissão, tenant setting desabilitado, ou RLS/SSO no dataset)"
+        : r.status === "unavailable"
+          ? "indisponível (rede/timeout)"
+          : "falhou";
+    console.log(`${c.red(sym.err)} Fabric ${label}. ${c.dim(r.error ?? "")}`);
   }
-  const label =
-    r.status === "unauthorized"
-      ? "sem acesso (service principal sem permissão, tenant setting desabilitado, ou RLS/SSO no dataset)"
-      : r.status === "unavailable"
-        ? "indisponível (rede/timeout)"
-        : "falhou";
-  console.log(`${c.red(sym.err)} Fabric ${label}. ${c.dim(r.error ?? "")}`);
-  process.exit(1);
+
+  // Independe da nuvem, e é **quando a credencial falha** que saber do Desktop aberto
+  // mais importa: é a alternativa que resta. Reportar só no sucesso a escondia.
+  await reportLocalXmla();
+  if (r.status !== "ok") process.exit(1);
+}
+
+/**
+ * Endpoint XMLA local, quando há Desktop aberto. Consultivo: o caminho REST não depende
+ * dele. A porta é efêmera — imprimi-la evita o chute de `55100` que já custou uma sessão.
+ */
+async function reportLocalXmla(): Promise<void> {
+  const local = await discoverLocalXmla();
+  if (local.status === "ok") {
+    console.log(`${c.green(sym.ok)} Power BI Desktop local — XMLA em ${c.cyan(local.endpoint ?? "")} ${c.dim("(porta muda a cada abertura)")}`);
+  } else if (local.status === "not_running") {
+    console.log(`${c.dim("  sem Desktop local com modelo aberto — o modo `--local` não tem onde conectar.")}`);
+  }
 }
 
 export function registerFabricCommand(program: Command): void {

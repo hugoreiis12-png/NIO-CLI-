@@ -1,6 +1,6 @@
 import type { ProfileDefinition } from '../core/environment.js';
 import { pythonToolchain } from './toolchains.js';
-import { postgresMcp, powerbiMcp, excelMcp } from './mcps.js';
+import { postgresMcp, excelMcp } from './mcps.js';
 
 /**
  * Analyst — análise de dados em Python/SQL. Postgres pro operador consultar +
@@ -13,6 +13,6 @@ export const analystProfile: ProfileDefinition = {
   languages: ['python', 'sql'],
   toolchains: [pythonToolchain],
   frameworks: ['pandas', 'jupyter'],
-  mcps: [postgresMcp, powerbiMcp, excelMcp],
+  mcps: [postgresMcp, excelMcp],
   inheritGlobalMcpIds: ['excel'],
 };

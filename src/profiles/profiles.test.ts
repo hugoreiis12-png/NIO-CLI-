@@ -19,20 +19,39 @@ test('ProfileCatalog.get: os 6 perfis resolvem e batem o próprio nome', () => {
   }
 });
 
-test('powerbi-modeling + excel(modelado + herdado) nos perfis analytics; fora de fullstack/qa', () => {
+test('excel(modelado + herdado) nos perfis analytics; fora de fullstack/qa', () => {
   const catalog = createProfileCatalog();
-  const hasPowerbi = (p: Profile) => catalog.get(p).mcps.some((m) => m.id === 'powerbi-modeling');
   const hasExcel = (p: Profile) => catalog.get(p).mcps.some((m) => m.id === 'excel');
   const inheritsExcel = (p: Profile) => (catalog.get(p).inheritGlobalMcpIds ?? []).includes('excel');
   for (const p of ['analyst', 'bi', 'scientist', 'dba'] as Profile[]) {
-    expect(hasPowerbi(p)).toBe(true);
     expect(hasExcel(p)).toBe(true); // modelado (semeado no global), não só herdado
     expect(inheritsExcel(p)).toBe(true);
   }
   for (const p of ['fullstack', 'qa'] as Profile[]) {
-    expect(hasPowerbi(p)).toBe(false);
     expect(hasExcel(p)).toBe(false);
     expect(inheritsExcel(p)).toBe(false);
+  }
+});
+
+test('ACEITE: powerbi-modeling é SÓ do perfil bi', () => {
+  // Ele modela o arquivo aberto no Power BI Desktop — é trabalho de BI, não de análise
+  // nem de DBA. Os outros perfis acessam o Power BI pela nuvem, via nio_fabric_* (REST),
+  // que não exige XMLA nem modelo aberto. Cada tool a menos é prefixo que não se paga.
+  const catalog = createProfileCatalog();
+  const temPowerbi = (p: Profile) => catalog.get(p).mcps.some((m) => m.id === 'powerbi-modeling');
+
+  expect(temPowerbi('bi')).toBe(true);
+  for (const p of ['analyst', 'scientist', 'dba', 'fullstack', 'qa'] as Profile[]) {
+    expect(temPowerbi(p)).toBe(false);
+  }
+});
+
+test('as tools nio_fabric_* seguem valendo para TODO perfil (vêm do MCP nio, não do perfil)', () => {
+  // A mudança acima não tira Fabric de ninguém: o acesso REST vem do MCP `nio`, que é
+  // registrado sempre. Só o caminho XMLA/local ficou restrito ao bi.
+  const catalog = createProfileCatalog();
+  for (const p of ['analyst', 'bi', 'scientist', 'dba', 'fullstack', 'qa'] as Profile[]) {
+    expect(catalog.get(p).mcps.some((m) => m.id === 'nio')).toBe(false); // não é do perfil…
   }
 });
 

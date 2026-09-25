@@ -30,16 +30,39 @@ function fold(name: string): string {
     .replace(/[\s_.-]+/g, '');
 }
 
+/**
+ * Nomes declarados no próprio `DEFINE` (`TABLE X =`, `VAR X =`, `COLUMN T[c] =`,
+ * `MEASURE T[m] =`). São locais da consulta e **não existem no modelo** — acusá-los
+ * bloqueava toda consulta com `DEFINE TABLE`, e a mensagem ainda mandava o agente
+ * "corrigir o nome" de algo correto. Visto em produção.
+ */
+
+export function locallyDefined(dax: string): Set<string> {
+  const nomes = new Set<string>();
+  if (!/\bDEFINE\b/i.test(dax)) return nomes;
+  for (const m of dax.matchAll(/\b(?:TABLE|VAR|COLUMN|MEASURE)\s+([A-Za-z_][A-Za-z0-9_]{0,127})\s*(?=[[=])/gi)) {
+    nomes.add(m[1]!.toLowerCase());
+  }
+  // `DEFINE X = …` sem a palavra-chave (forma que o modelo escreve às vezes).
+  for (const m of dax.matchAll(/\bDEFINE\s+([A-Za-z_][A-Za-z0-9_]{0,127})\s*=/gi)) {
+    nomes.add(m[1]!.toLowerCase());
+  }
+  return nomes;
+}
+
 /** Tabelas referenciadas no DAX. Conservador: só o que é inequivocamente tabela. */
 export function referencedTables(dax: string): string[] {
+  const locais = locallyDefined(dax);
   const found = new Set<string>();
   for (const m of dax.matchAll(QUOTED)) {
     const nome = m[1]!.trim();
-    if (nome) found.add(nome);
+    if (nome && !locais.has(nome.toLowerCase())) found.add(nome);
   }
   for (const m of dax.matchAll(BARE_BEFORE_BRACKET)) {
     const nome = m[2]!.trim();
-    if (!DAX_KEYWORDS.has(nome.toLowerCase())) found.add(nome);
+    if (DAX_KEYWORDS.has(nome.toLowerCase())) continue;
+    if (locais.has(nome.toLowerCase())) continue;
+    found.add(nome);
   }
   return [...found];
 }

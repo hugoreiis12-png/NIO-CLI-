@@ -76,3 +76,30 @@ test('função com ponto não vira tabela (INFO.VIEW.TABLES)', () => {
   // Regressão possível: `INFO.VIEW.TABLES()` não tem colchete nem aspas, mas garante.
   expect(checkDaxTables('EVALUATE INFO.VIEW.TABLES()', INVENTARIO).unknown).toEqual([]);
 });
+
+test('ACEITE: tabela declarada no DEFINE não é acusada (falso positivo visto em prod)', () => {
+  // O agente escrevia `DEFINE C = SELECTCOLUMNS(...)` e depois `C[Table]`. O guard via
+  // `C[` e bloqueava, mandando "corrigir o nome" de algo correto — travando TODA
+  // consulta com DEFINE antes de sair da máquina.
+  const dax = 'DEFINE C = SELECTCOLUMNS(INFO.VIEW.COLUMNS(), "t", [Table]) EVALUATE FILTER(C, C[Table] = "X")';
+  expect(checkDaxTables(dax, INVENTARIO).unknown).toEqual([]);
+});
+
+test('DEFINE TABLE/VAR/MEASURE/COLUMN: todos os nomes locais são reconhecidos', () => {
+  const dax = `DEFINE
+    TABLE Z = ADDCOLUMNS(VISAO_COMERCIAL, "x", 1)
+    VAR N = 1
+    MEASURE VISAO_COMERCIAL[M] = SUM(VISAO_COMERCIAL[total_linha])
+  EVALUATE FILTER(Z, Z[x] = N)`;
+  expect(checkDaxTables(dax, INVENTARIO).unknown).toEqual([]);
+});
+
+test('ACEITE: com DEFINE presente, tabela REALMENTE inexistente continua barrada', () => {
+  // A correção não pode virar salvo-conduto: o DEFINE isenta só o que ele declara.
+  const dax = 'DEFINE TABLE Z = FILTER(Metas, Metas[v] > 0) EVALUATE Z';
+  expect(checkDaxTables(dax, INVENTARIO).unknown).toEqual(['Metas']);
+});
+
+test('nome local não vaza entre consultas (a isenção é por DAX)', () => {
+  expect(checkDaxTables('EVALUATE FILTER(C, C[x] = 1)', INVENTARIO).unknown).toEqual(['C']);
+});

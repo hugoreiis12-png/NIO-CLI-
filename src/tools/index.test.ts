@@ -25,6 +25,7 @@ const NIO_CLI_TOOLS = [
   'nio_fabric_query',
   'nio_fabric_schema_sync',
   'nio_fabric_workspaces',
+  'nio_pbi_local',
   'nio_plan',
   'nio_profile_get',
   'nio_session_activate',

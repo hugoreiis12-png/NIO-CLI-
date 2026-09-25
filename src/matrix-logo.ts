@@ -166,6 +166,19 @@ export function renderMatrixLogo(opts: MatrixLogoOptions = {}): string {
   return renderFrame(opts, opts.seed ?? ANIM.settleSeed, 0);
 }
 
+/**
+ * Vale desenhar a decoração agora? O logo é **para humano em terminal**. Fora de TTY
+ * (pipe, captura por agente, CI) ele vira ruído: medido em produção, `nio --help`
+ * capturado dava 144 linhas, as **24 primeiras** de katakana meia-largura antes do
+ * `Usage:`. Com a saída truncada num preview, quem lê enxerga só o lixo e conclui que
+ * o comando não devolveu nada.
+ *
+ * Fica aqui, e não dentro do render, para o render seguir puro e testável.
+ */
+export function shouldDrawLogo(): boolean {
+  return Boolean(process.stdout.isTTY) && !process.env.CI;
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 function animationDisabled(width: number, height: number): boolean {
@@ -186,7 +199,9 @@ export async function animateMatrixLogo(opts: MatrixLogoOptions = {}): Promise<v
   const width = opts.width ?? 70;
   const height = opts.height ?? 24;
   if (animationDisabled(width, height)) {
-    process.stdout.write(renderMatrixLogo(opts) + '\n');
+    // Animação desligada tem duas causas diferentes: terminal pequeno (aí ainda vale o
+    // frame estático) e ausência de TTY (aí não há humano — o logo só polui a captura).
+    if (shouldDrawLogo()) process.stdout.write(renderMatrixLogo(opts) + '\n');
     return;
   }
 

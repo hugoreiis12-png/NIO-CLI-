@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { fabricConfigStatus, describeFabricConfig } from './fabric-config.js';
+import { fabricConfigStatus, describeFabricConfig, GRANT_CHOICES } from './fabric-config.js';
 
 const SP = {
   AZURE_TENANT_ID: 't',
@@ -45,4 +45,24 @@ test('token de usuário é anunciado como tal (RLS depende disso)', () => {
 test('service principal configurado mas sem alvo default avisa', () => {
   const linha = describeFabricConfig({ grant: 'service_principal', hasTarget: false });
   expect(linha).toContain('sem workspace/dataset default');
+});
+
+test('ACEITE: token de usuário vem primeiro e é o default — o SP não consulta aqui', () => {
+  // Bug de prod: a 1ª opção era "service principal — o mesmo pra toda a equipe". Medido
+  // no tenant: ele LISTA 24 workspaces e sincroniza schema, mas o executeQueries devolve
+  // 401 PowerBINotAuthorizedException. O colaborador escolheu o que soava de time e
+  // ficou sem conseguir consultar.
+  expect(GRANT_CHOICES[0]!.value).toBe('user');
+  expect(GRANT_CHOICES[1]!.value).toBe('service_principal');
+});
+
+test('a opção do service principal avisa do 401 em vez de parecer a escolha de time', () => {
+  const sp = GRANT_CHOICES.find((o) => o.value === 'service_principal')!;
+  expect(sp.name).toContain('401');
+  expect(sp.name).not.toContain('toda a equipe');
+});
+
+test('o rótulo do usuário diz que ele executa consulta (é o diferencial real)', () => {
+  const u = GRANT_CHOICES.find((o) => o.value === 'user')!;
+  expect(u.name).toContain('executa');
 });

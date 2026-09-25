@@ -42,14 +42,21 @@ export function describeFabricConfig(status: FabricConfigStatus): string {
   return `${c.green(sym.ok)} Fabric — ${c.dim(modo)}${alvo}.`;
 }
 
-const GRANT_CHOICES = [
+/**
+ * Ordem e textos medidos, não supostos: no tenant da NaturalFarms o service principal
+ * **lista** workspaces/datasets e sincroniza schema, mas o `executeQueries` devolve
+ * `401 PowerBINotAuthorizedException`. O token de usuário executa. Por isso ele vem
+ * primeiro e é o default — a opção anterior ("o mesmo pra toda a equipe") soava como a
+ * escolha de time e levava direto ao caminho que não consulta.
+ */
+export const GRANT_CHOICES = [
   {
-    name: 'Service principal — app registrado, o mesmo pra toda a equipe',
-    value: 'service_principal' as const,
+    name: 'Token de usuário — executa consultas e respeita o RLS (recomendado)',
+    value: 'user' as const,
   },
   {
-    name: 'Token de usuário — roda como a pessoa e respeita o RLS do modelo',
-    value: 'user' as const,
+    name: 'Service principal — lista e sincroniza schema; CONSULTA pode dar 401',
+    value: 'service_principal' as const,
   },
   { name: 'Pular — não uso Power BI/Fabric', value: 'skip' as const },
 ];
@@ -57,7 +64,7 @@ const GRANT_CHOICES = [
 async function promptGrant(current: FabricConfigStatus): Promise<FabricGrantChoice> {
   return select<FabricGrantChoice>({
     message: 'Como autenticar no Power BI/Fabric?',
-    default: current.grant ?? 'service_principal',
+    default: current.grant ?? 'user',
     choices: GRANT_CHOICES,
   });
 }
@@ -156,11 +163,43 @@ export async function promptFabricCredentials(
 export async function verifyFabricCredentials(
   updates: Record<string, string>,
 ): Promise<{ ok: boolean; detail: string }> {
-  const auth = readFabricAuthEnv({ ...process.env, ...updates } as NodeJS.ProcessEnv);
+  const env = { ...process.env, ...updates } as NodeJS.ProcessEnv;
+  const auth = readFabricAuthEnv(env);
   const res = await createTokenProvider(auth).get();
-  if (res.status === 'ok') {
-    const modo = res.grant === 'user' ? 'token de usuário' : 'service principal';
-    return { ok: true, detail: `credencial válida (${modo})` };
-  }
-  return { ok: false, detail: res.error ?? res.status };
+  if (res.status !== 'ok') return { ok: false, detail: res.error ?? res.status };
+
+  const modo = res.grant === 'user' ? 'token de usuário' : 'service principal';
+  const consulta = await verifyCanQuery(env);
+  if (consulta === null) return { ok: true, detail: `credencial válida (${modo})` };
+  if (consulta.ok) return { ok: true, detail: `credencial válida (${modo}) e consulta executada` };
+  return { ok: false, detail: consulta.detail };
+}
+
+/**
+ * Pegar token não prova que dá pra consultar: **medido** neste tenant, o service
+ * principal obtém token e lista tudo, mas `executeQueries` devolve 401. Validar só a
+ * porta de entrada deixava o erro estourar no meio de uma sessão, horas depois.
+ *
+ * `null` quando não há workspace/dataset para testar — aí não dá pra afirmar nada.
+ */
+async function verifyCanQuery(
+  env: NodeJS.ProcessEnv,
+): Promise<{ ok: boolean; detail: string } | null> {
+  const workspaceId = env.NIO_FABRIC_WORKSPACE?.trim();
+  const datasetId = env.NIO_FABRIC_DATASET?.trim();
+  if (!workspaceId || !datasetId) return null;
+
+  const { createFabricGateway } = await import('../../adapters/fabric/client.js');
+  const { createTokenProvider: novoProvider } = await import('../../adapters/fabric/token.js');
+  const gw = createFabricGateway({ token: novoProvider(readFabricAuthEnv(env)) });
+  const out = await gw.executeDax(workspaceId, datasetId, 'EVALUATE ROW("nio", 1)');
+  if (out.status === 'ok') return { ok: true, detail: 'consulta executada' };
+
+  const grant = fabricGrant(readFabricAuthEnv(env));
+  const dica =
+    grant === 'service_principal'
+      ? ' — o service principal lista, mas não executa consulta neste locatário. ' +
+        'Rode de novo e escolha "Token de usuário".'
+      : '';
+  return { ok: false, detail: `autenticou, mas a consulta falhou: ${out.error ?? out.status}${dica}` };
 }

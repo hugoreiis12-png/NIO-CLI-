@@ -14,6 +14,7 @@ import * as envMaterialize from './env-materialize.js';
 import * as envDetectDeps from './env-detect-deps.js';
 import * as fabricAsk from './fabric-ask.js';
 import * as fabricMeasure from './fabric-measure.js';
+import * as pbiLocal from './pbi-local.js';
 import * as fabricQuery from './fabric-query.js';
 import * as fabricSchemaSync from './fabric-schema-sync.js';
 import * as fabricWorkspaces from './fabric-workspaces.js';
@@ -44,6 +45,7 @@ export const tools: Record<string, ToolModule> = {
   [envDetectDeps.definition.name]: envDetectDeps,
   [fabricAsk.definition.name]: fabricAsk,
   [fabricMeasure.definition.name]: fabricMeasure,
+  [pbiLocal.definition.name]: pbiLocal,
   [fabricQuery.definition.name]: fabricQuery,
   [fabricSchemaSync.definition.name]: fabricSchemaSync,
   [fabricWorkspaces.definition.name]: fabricWorkspaces,
