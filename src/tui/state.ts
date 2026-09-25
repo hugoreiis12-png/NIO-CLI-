@@ -11,6 +11,7 @@
 import type { Event } from '@opencode-ai/sdk';
 import { tlog } from './debug.js';
 import { isContextOverflow } from './context-recovery.js';
+import type { ToolAttempt } from '../core/learning.js';
 
 export interface ChatPart {
   id: string;
@@ -775,4 +776,67 @@ export function questionOptions(state: ChatState): string[] {
     if (m?.[1]) opts.push(m[1].trim());
   }
   return opts.length >= 2 ? opts.slice(0, 8) : [];
+}
+
+/**
+ * A compactação que chegou deve ser abortada?
+ *
+ * Bug de produção: a TUI dispara `session.summarize` proativamente **quando a sessão
+ * está ociosa** (é o momento certo — não atrapalha ninguém). Mas `userTurnActive` é
+ * falso justamente por estar ociosa, então o guard de "emenda não solicitada" matava a
+ * compactação que a própria TUI tinha pedido. Efeito: o contexto nunca compactava,
+ * crescia até estourar a janela, e o turno morria.
+ *
+ * O sinal que faltava é **quem pediu**. Emenda que ninguém pediu segue sendo abortada.
+ */
+export function shouldAbortCompaction(opts: {
+  /** Há um turno do usuário em curso? */
+  userTurnActive: boolean;
+  /** A TUI pediu esta compactação (proativa ou `/compact`)? */
+  requestedByTui: boolean;
+  /** Há prompt enviado e ainda sem resposta (livro-caixa: `pending > 0`)? */
+  workInFlight?: boolean;
+}): boolean {
+  if (opts.userTurnActive) return false; // turno vivo: nunca matar
+  if (opts.workInFlight) return false; // request pendente: idem — ela não pode morrer
+  return !opts.requestedByTui;
+}
+
+/**
+ * Converte o histórico em tentativas de tool, para o aprendizado contínuo.
+ *
+ * O raciocínio atribuído a cada chamada é o **imediatamente anterior a ela na mesma
+ * mensagem** — é o que o modelo pensou ANTES de chamar, ou seja, o que levou ao erro.
+ * Pegar o raciocínio posterior seria pegar a consequência, não a causa.
+ */
+export function toolAttempts(messages: readonly ChatMessage[]): ToolAttempt[] {
+  const out: ToolAttempt[] = [];
+  for (const msg of messages) {
+    let reasoning = '';
+    for (const part of msg.parts) {
+      if (part.kind === 'reasoning') {
+        reasoning = part.text.trim();
+        continue;
+      }
+      if (part.kind !== 'tool' || !part.tool) continue;
+      out.push({
+        tool: part.tool.name,
+        status: part.tool.status,
+        input: part.tool.input,
+        output: part.tool.output,
+        reasoning: reasoning || undefined,
+      });
+      reasoning = ''; // consumido: não vaza pra próxima chamada da mesma mensagem
+    }
+  }
+  return out;
+}
+
+/** Tools que falharam nesta sessão — o recall só lembra do que já mordeu aqui. */
+export function failedTools(messages: readonly ChatMessage[]): string[] {
+  const falhas = new Set<string>();
+  for (const a of toolAttempts(messages)) {
+    if (a.status === 'error' || a.status === 'failed') falhas.add(a.tool);
+  }
+  return [...falhas];
 }

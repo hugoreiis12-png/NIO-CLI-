@@ -1,5 +1,8 @@
 import { test, expect } from 'bun:test';
 import {
+  shouldAbortCompaction,
+  toolAttempts,
+  failedTools,
   applyEvent,
   reconcilePendingPermissions,
   reconcilePendingQuestions,
@@ -504,4 +507,77 @@ test('família question.v2.* é tratada igual à v1 (o motor emite qualquer uma)
 
   s = applyEvent(s, ev('question.v2.replied', { requestID: 'req_4' }));
   expect(s.questions).toHaveLength(0);
+});
+
+test('ACEITE: compactação pedida pela TUI não é abortada (bug de prod)', () => {
+  // A proativa roda com a sessão OCIOSA — userTurnActive falso é a condição normal
+  // dela, não sinal de emenda intrusa. Abortar aqui impedia qualquer compactação.
+  expect(shouldAbortCompaction({ userTurnActive: false, requestedByTui: true })).toBe(false);
+});
+
+test('emenda que ninguém pediu continua sendo abortada', () => {
+  expect(shouldAbortCompaction({ userTurnActive: false, requestedByTui: false })).toBe(true);
+});
+
+test('turno do usuário em curso nunca é morto, venha o que vier', () => {
+  expect(shouldAbortCompaction({ userTurnActive: true, requestedByTui: false })).toBe(false);
+  expect(shouldAbortCompaction({ userTurnActive: true, requestedByTui: true })).toBe(false);
+});
+
+const toolPart = (name: string, status: string, input: Record<string, unknown>, output = '') =>
+  ({ id: `t-${name}-${status}`, kind: 'tool' as const, text: name, tool: { name, status, input, output } });
+const reasoningPart = (t: string) => ({ id: `r-${t.slice(0, 5)}`, kind: 'reasoning' as const, text: t });
+
+test('ACEITE: o raciocínio atribuído é o ANTERIOR à chamada (a causa, não a consequência)', () => {
+  const msgs = [{
+    id: 'm1', role: 'assistant' as const,
+    parts: [
+      reasoningPart('vou supor que a tabela é VENDAS'),
+      toolPart('nio_fabric_query', 'error', { dax: 'a' }, 'Cannot find table'),
+      reasoningPart('agora entendi, é VISAO_COMERCIAL'),
+      toolPart('nio_fabric_query', 'completed', { dax: 'b' }),
+    ],
+  }];
+  const attempts = toolAttempts(msgs);
+
+  expect(attempts).toHaveLength(2);
+  expect(attempts[0]!.reasoning).toBe('vou supor que a tabela é VENDAS'); // causa do erro
+  expect(attempts[1]!.reasoning).toBe('agora entendi, é VISAO_COMERCIAL');
+});
+
+test('raciocínio não vaza para a chamada seguinte quando não há um novo', () => {
+  const msgs = [{
+    id: 'm1', role: 'assistant' as const,
+    parts: [reasoningPart('pensei uma vez'), toolPart('a', 'completed', {}), toolPart('b', 'completed', {})],
+  }];
+  const attempts = toolAttempts(msgs);
+  expect(attempts[0]!.reasoning).toBe('pensei uma vez');
+  expect(attempts[1]!.reasoning).toBeUndefined();
+});
+
+test('failedTools lista só o que realmente falhou nesta sessão', () => {
+  const msgs = [{
+    id: 'm1', role: 'assistant' as const,
+    parts: [toolPart('bash', 'error', {}, 'x'), toolPart('read', 'completed', {}), toolPart('bash', 'error', {}, 'y')],
+  }];
+  expect(failedTools(msgs)).toEqual(['bash']);
+});
+
+test('histórico sem tool nenhuma → nada a aprender', () => {
+  expect(toolAttempts([{ id: 'm', role: 'assistant', parts: [reasoningPart('só pensei')] }])).toEqual([]);
+});
+
+test('ACEITE: request em voo nunca é morta, mesmo sem turno marcado como ativo', () => {
+  // A regra que o dono pediu: enquanto houver o que processar com retorno pendente,
+  // a request não pode morrer. `userTurnActive` sozinho não cobre — ele é zerado no
+  // primeiro `idle`, que pode chegar entre passos de um turno agêntico.
+  expect(
+    shouldAbortCompaction({ userTurnActive: false, requestedByTui: false, workInFlight: true }),
+  ).toBe(false);
+});
+
+test('sem nada em voo e sem pedido, a emenda intrusa segue sendo abortada', () => {
+  expect(
+    shouldAbortCompaction({ userTurnActive: false, requestedByTui: false, workInFlight: false }),
+  ).toBe(true);
 });

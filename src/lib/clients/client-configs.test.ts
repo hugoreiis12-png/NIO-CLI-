@@ -16,6 +16,7 @@ import {
   declaredContextWindow,
   modelCapabilities,
   contextConfigWarning,
+  toolOutputLimits,
   compactionReserved,
 } from './client-configs.js';
 import type { McpSpec } from '../../core/environment.js';
@@ -242,4 +243,12 @@ test('config antigo sem attachment é considerado desatualizado (força a reescr
   delete p[NIO_AI_PROVIDER].models[NIO_AI_MODEL_ID].attachment;
 
   expect(planOpencodeUpdate(seeded, NIO_ENTRY, [], NIO_AI_BASE_URL).alreadyConfigured).toBe(false);
+});
+
+test('tool_output: teto padrão corta o que entraria no contexto, sem perder o dado', () => {
+  // O opencode grava o texto inteiro em disco e devolve preview — apertar é barato.
+  const lim = toolOutputLimits()!;
+  expect(lim.max_bytes).toBe(20_000);
+  expect(lim.max_lines).toBe(800);
+  expect(lim.max_bytes!).toBeLessThan(51_200); // mais apertado que o default do opencode
 });

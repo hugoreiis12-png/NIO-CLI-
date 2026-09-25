@@ -16,6 +16,7 @@ import {
 } from "../../adapters/pg/doc-index-repository.js";
 import { ingestSchema } from "../../app/schema-ingest.js";
 import { schemaRepo } from "../../app/schema-chunker.js";
+import { createFabricScanner } from '../../adapters/fabric/scanner.js';
 
 /** Ids do modelo a sincronizar — do env, como as tools `nio_fabric_*`. */
 function target(): { workspaceId?: string; datasetId?: string } {
@@ -41,9 +42,9 @@ async function runSchemaSync(opts: { force?: boolean; prune?: boolean }): Promis
     return;
   }
 
-  console.log(c.dim("  lendo o schema do modelo (INFO.VIEW.*)…"));
+  console.log(c.dim("  lendo o schema do modelo (scanner admin, com queda pro INFO.VIEW)…"));
   const out = await ingestSchema(
-    { fabric: createFabricGateway(), embedder: createLocalEmbedder(), index: createDocIndexRepository() },
+    { fabric: createFabricGateway(), embedder: createLocalEmbedder(), index: createDocIndexRepository(), scanner: createFabricScanner() },
     { ...ids, force: opts.force },
   );
 
@@ -59,14 +60,16 @@ async function runSchemaSync(opts: { force?: boolean; prune?: boolean }): Promis
   const r = out.data;
   if (r.unchanged) {
     console.log(`${c.green(sym.ok)} schema inalterado (ref ${c.dim(r.ref)}) — nada a reembedar`);
-    return;
+  } else {
+    console.log(
+      `${c.green(sym.ok)} schema indexado: ${c.cyan(String(r.tables))} tabelas · ` +
+        `${c.cyan(String(r.measures))} medidas · ${c.cyan(String(r.chunks))} chunks ` +
+        `(${r.inserted} novos) ${c.dim(`ref ${r.ref}`)}`,
+    );
   }
-  console.log(
-    `${c.green(sym.ok)} schema indexado: ${c.cyan(String(r.tables))} tabelas · ` +
-      `${c.cyan(String(r.measures))} medidas · ${c.cyan(String(r.chunks))} chunks ` +
-      `(${r.inserted} novos) ${c.dim(`ref ${r.ref}`)}`,
-  );
 
+  // A poda roda mesmo com o schema inalterado: é justamente aí que sobram versões
+  // antigas convivendo — antes o `return` do "inalterado" engolia o `--prune`.
   if (opts.prune) {
     const gone = await pruneOldRefs(schemaRepo(ids.datasetId), r.ref);
     if (gone.status === "ok") console.log(c.dim(`  versões antigas removidas: ${gone.data ?? 0} chunks`));

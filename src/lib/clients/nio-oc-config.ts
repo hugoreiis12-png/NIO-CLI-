@@ -13,6 +13,7 @@ import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { writeJson } from '../file-merge.js';
+import { mergeToolBudget } from './tool-budget.js';
 import { brand, envName } from '../../brand.js';
 import type { McpSpec, ProfileDefinition } from '../../core/environment.js';
 import { nioLangMcp, resolveFabricMcps, excelMcp } from '../../profiles/mcps.js';
@@ -31,6 +32,7 @@ import {
   planNioAiProvider,
   opencodeGlobalPath,
   readJsonSafe,
+  toolOutputLimits,
 } from './client-configs.js';
 
 /** Dir a passar em `XDG_CONFIG_HOME` — o opencode lê `<dir>/opencode/opencode.json`. */
@@ -203,6 +205,10 @@ export function buildNioOpencodeConfig(
     mcp,
     instructions,
     agent,
+    // Corta as tools que o fluxo não usa (ver `tool-budget.ts`) — o do usuário vence.
+    tools: mergeToolBudget(global.tools),
+    // Saída de tool gigante entra no contexto e fica lá o resto da sessão.
+    tool_output: global.tool_output ?? toolOutputLimits(),
     permission: global.permission ?? DEFAULT_OPENCODE_PERMISSION,
     compaction: global.compaction ?? DEFAULT_OPENCODE_COMPACTION,
     watcher: global.watcher ?? DEFAULT_OPENCODE_WATCHER,

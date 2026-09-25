@@ -672,3 +672,38 @@ export function upsertOpencodeMcp(
   writeJson(path, { ...existing, mcp: servers });
   return { status: 'updated', path, backup };
 }
+
+/**
+ * Aquecer o cache de prefixo do backend na subida da TUI? Medido: a 1ª request custa
+ * ~31s (prefill de ~21k tokens num KV cache frio) e a 2ª ~1,6s. O aquecimento paga esse
+ * custo enquanto a pessoa ainda digita. `NIO_AI_WARMUP=false` desliga — útil em backend
+ * cobrado por request, onde a chamada extra não compensa.
+ */
+export const NIO_AI_WARMUP = !/^(0|false|no|off)$/i.test((env('AI_WARMUP') ?? '').trim());
+
+/**
+ * Teto de saída de tool (`tool_output`). O default do opencode é 2000 linhas / 50 KB —
+ * 50 KB é ~12.500 tokens de UMA chamada, num orçamento total de 86.425. O que passa do
+ * teto **não se perde**: o opencode grava o texto inteiro em disco e devolve um preview.
+ * Por isso apertar aqui é barato — tira do contexto sem tirar do alcance.
+ */
+export const NIO_AI_TOOL_OUTPUT_BYTES = envNum('AI_TOOL_OUTPUT_BYTES', 20_000);
+export const NIO_AI_TOOL_OUTPUT_LINES = envNum('AI_TOOL_OUTPUT_LINES', 800);
+
+/** Bloco `tool_output` do config. `0` em qualquer um desliga aquele teto. */
+export function toolOutputLimits(): { max_bytes?: number; max_lines?: number } | undefined {
+  const out: { max_bytes?: number; max_lines?: number } = {};
+  if (NIO_AI_TOOL_OUTPUT_BYTES > 0) out.max_bytes = NIO_AI_TOOL_OUTPUT_BYTES;
+  if (NIO_AI_TOOL_OUTPUT_LINES > 0) out.max_lines = NIO_AI_TOOL_OUTPUT_LINES;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Aprendizado contínuo. O piso de score é **alto de propósito**: medimos no RAG de DAX
+ * que pergunta errada pontua 0,955 e paráfrase legítima 0,928 — similaridade não separa
+ * caso certo de caso parecido. Lição irrelevante no prompt é pior que lição nenhuma,
+ * porque desvia o modelo com ar de autoridade. `NIO_LEARN=false` desliga tudo.
+ */
+export const NIO_LEARN = !/^(0|false|no|off)$/i.test((env('LEARN') ?? '').trim());
+export const NIO_LEARN_MIN_SCORE = envNum('LEARN_MIN_SCORE', 0.82);
+export const NIO_LEARN_TOPK = envNum('LEARN_TOPK', 3);

@@ -11,6 +11,7 @@ import { ingestSchema, type SchemaIngestDeps } from '../app/schema-ingest.js';
 import { createLocalEmbedder } from '../adapters/embed/local-embedder.js';
 import { createDocIndexRepository } from '../adapters/pg/doc-index-repository.js';
 import { fabricGateway, orEnvDefault } from './fabric-shared.js';
+import { createFabricScanner } from '../adapters/fabric/scanner.js';
 
 const ArgsSchema = z
   .object({
@@ -83,7 +84,7 @@ export async function handler(args: unknown, _ctx: ToolContext): Promise<CallToo
   if (!datasetId) return errorResult('dataset_id ausente e NIO_FABRIC_DATASET não definido.');
 
   return runSchemaSync(
-    { fabric: fabricGateway(), embedder: createLocalEmbedder(), index: createDocIndexRepository() },
+    { fabric: fabricGateway(), embedder: createLocalEmbedder(), index: createDocIndexRepository(), scanner: createFabricScanner() },
     workspaceId,
     datasetId,
     parsed.data.force,

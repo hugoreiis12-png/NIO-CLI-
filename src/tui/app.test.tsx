@@ -391,3 +391,47 @@ test('App: resposta gigante em andamento NÃO estoura o frame (Static + LiveMess
   expect(lines.length).toBeLessThan(40); // não vira uma parede de 80+ linhas
   unmount();
 });
+
+/** Handle com stream controlável + espião de abort/summarize. */
+function handleComStream(eventos: unknown[]) {
+  const espiao = { aborts: 0, summarizes: 0 };
+  const client = {
+    session: {
+      create: async () => ({ data: { id: 'ses_fake' } }),
+      abort: async () => { espiao.aborts += 1; return {}; },
+      prompt: async () => ({}),
+      summarize: async () => { espiao.summarizes += 1; return {}; },
+      status: async () => ({ data: {} }),
+      messages: async () => ({ data: [] }),
+      delete: async () => ({}),
+    },
+    app: { agents: async () => ({ data: [{ name: 'build', mode: 'primary' }] }) },
+    event: {
+      subscribe: async () => ({
+        stream: (async function* () {
+          await new Promise((r) => setTimeout(r, 30));
+          for (const e of eventos) { yield e; await new Promise((r) => setTimeout(r, 10)); }
+          await new Promise((r) => setTimeout(r, 400));
+        })(),
+      }),
+    },
+    postSessionIdPermissionsPermissionId: async () => ({}),
+  };
+  const handle = { client: client as unknown as OpencodeHandle['client'], url: 'http://127.0.0.1:4096', close: () => {} };
+  return { handle, espiao };
+}
+
+test('emenda NÃO solicitada pelo usuário nem pela TUI segue sendo abortada', async () => {
+  // O guard existe por um motivo real: o motor emendava um turno sozinho após a
+  // resposta e a sessão ficava `busy` pra sempre. A correção não pode desligá-lo.
+  const { handle, espiao } = handleComStream([
+    { type: 'session.idle', properties: {} },
+    { type: 'message.updated', properties: { info: { mode: 'compaction' } } },
+  ]);
+  const { unmount } = render(
+    <App handle={handle} program={buildProgram()} cwd="/tmp/p" session={null} splashMs={0} />,
+  );
+  await new Promise((r) => setTimeout(r, 250));
+  unmount();
+  expect(espiao.aborts).toBe(1);
+});

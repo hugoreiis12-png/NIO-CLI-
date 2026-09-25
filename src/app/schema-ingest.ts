@@ -8,7 +8,9 @@
  */
 import type { FabricGateway, FabricRow } from '../core/fabric.js';
 import type { DocIndex, EmbeddingProvider, RagResult } from '../core/rag.js';
-import { buildSchemaChunks, schemaRepo } from './schema-chunker.js';
+import { buildSchemaChunks, schemaRepo, type SchemaRows } from './schema-chunker.js';
+import { scanToSchemaRows } from './scan-to-schema.js';
+import type { FabricScanner } from '../adapters/fabric/scanner.js';
 
 /**
  * `INFO.VIEW.*` (e não `INFO.*`): medimos que a forma sem `VIEW` devolve 400 neste
@@ -24,6 +26,12 @@ export interface SchemaIngestDeps {
   fabric: FabricGateway;
   embedder: EmbeddingProvider;
   index: DocIndex;
+  /**
+   * Scanner admin — a ÚNICA rota que entrega a fórmula das medidas (o `INFO.VIEW`
+   * devolve `[Expression]` nulo, medido em 381 de 381). Opcional: sem ele, ou com os
+   * toggles do locatário desligados, cai no `INFO.VIEW` e o grounding segue sem fórmula.
+   */
+  scanner?: FabricScanner;
 }
 
 export interface SchemaIngestInput {
@@ -71,6 +79,22 @@ async function readSchema(
 }
 
 /**
+ * Tenta o scanner (traz fórmula); qualquer problema dele cai no `INFO.VIEW`, que sempre
+ * funciona mas vem sem fórmula. Degradar em silêncio seria errado — quem quer saber por
+ * que não há fórmula usa `nio fabric rag status`.
+ */
+async function readSchemaPreferindoScanner(
+  deps: SchemaIngestDeps,
+  input: SchemaIngestInput,
+): Promise<RagResult<SchemaRows>> {
+  if (deps.scanner) {
+    const scan = await deps.scanner.scanDataset(input.workspaceId, input.datasetId);
+    if (scan.status === 'ok' && scan.data) return { status: 'ok', data: scanToSchemaRows(scan.data) };
+  }
+  return readSchema(deps.fabric, input.workspaceId, input.datasetId);
+}
+
+/**
  * Sincroniza o schema do modelo para o índice vetorial. Devolve o relatório pro CLI
  * imprimir. Nunca lança.
  */
@@ -78,7 +102,7 @@ export async function ingestSchema(
   deps: SchemaIngestDeps,
   input: SchemaIngestInput,
 ): Promise<RagResult<SchemaIngestReport>> {
-  const schema = await readSchema(deps.fabric, input.workspaceId, input.datasetId);
+  const schema = await readSchemaPreferindoScanner(deps, input);
   if (schema.status !== 'ok' || !schema.data) return propagate<SchemaIngestReport>(schema);
 
   const chunks = buildSchemaChunks(schema.data, input.datasetId);

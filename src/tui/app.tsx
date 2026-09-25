@@ -31,6 +31,9 @@ import {
   pendingQuestion,
   questionOptions,
   pushUserMessage,
+  shouldAbortCompaction,
+  toolAttempts,
+  failedTools,
   syncMessages,
   reconcilePendingPermissions,
   reconcilePendingQuestions,
@@ -44,10 +47,14 @@ import {
   fetchPendingQuestions,
   type OpencodeHandle,
 } from './opencode.js';
-import { NIO_AI_CONTEXT, compactionReserved } from '../lib/clients/client-configs.js';
+import { NIO_AI_CONTEXT, NIO_AI_WARMUP, compactionReserved } from '../lib/clients/client-configs.js';
 import { compactInput } from '../lib/exec/map-reduce.js';
 import { buildAttachedInput, detectPaths } from './attachments.js';
 import { buildHandoffDigest } from './context-recovery.js';
+import { warmPrefixCache, eventSessionId } from './warmup.js';
+import { buildLedger, ledgerTotal, hasWorkInFlight } from './token-ledger.js';
+import { learnTurn, remindLessons, creditLessons } from './learning-wire.js';
+import type { InjectedLesson } from '../app/lesson-outcome.js';
 import type { FilePartInput } from '@opencode-ai/sdk';
 
 type Overlay =
@@ -99,6 +106,17 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   const busyStartedAt = useRef<number>(0); // pro tempo decorrido no StatusLine
   const tuiCommandRef = useRef<(cmd: string) => void>(() => {}); // Sprint 7.2 — closures frescas
   const userTurnActive = useRef(false); // turno em curso foi pedido pelo usuário? (senão = compactação/emenda → aborta)
+  // O loop de eventos vive num closure criado na montagem: sem este ref ele leria um
+  // `chat` velho pra sempre. Atualizado a cada render.
+  const chatRef = useRef(chat);
+  chatRef.current = chat;
+  // Lições injetadas no prompt atual + quantas tentativas já existiam quando ele saiu:
+  // o crédito só olha o que aconteceu DEPOIS da injeção.
+  const injectedLessons = useRef<InjectedLesson[]>([]);
+  const attemptsAtSend = useRef(0);
+  /** Chars do prompt em voo — vira o `pending` do livro-caixa. 0 = nada pendente. */
+  const inFlightChars = useRef(0);
+  const warmupSessionId = useRef(''); // sessão descartável do aquecimento — eventos dela são ignorados
   const compactingRef = useRef(false); // Frente 5 — já disparou a compactação proativa? (evita duplicar)
 
   const [splash, setSplash] = useState(splashMs > 0);
@@ -154,6 +172,16 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
         tlog('falha ao criar sessão', (err as Error).message);
       }
       setReady(true);
+      // Aquece o prefixo ENQUANTO a pessoa digita: paga o prefill de ~21k tokens numa
+      // sessão descartável pra a 1ª request real cair no cache (medido: 31s → ~1,6s).
+      if (model && NIO_AI_WARMUP) {
+        void warmPrefixCache({
+          client: handle.client,
+          model,
+          agent: mode,
+          onSession: (id) => { warmupSessionId.current = id; },
+        }).then((ok) => tlog('aquecimento', ok ? 'ok' : 'falhou'));
+      }
       for await (const evt of subscribeEvents(handle.client, ac.signal)) {
         if (!alive) break;
         if (evt === null) {
@@ -165,14 +193,35 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
         // Sprint — "respondeu = parou": o turno do usuário fecha no idle; se o motor
         // emenda OUTRO turno (compactação/continuação) sem prompt novo, encerra e fica idle.
         const props = (evt as { properties?: Record<string, unknown> }).properties ?? {};
+        // O aquecimento roda numa sessão própria; `applyEvent` não filtra por sessão,
+        // então sem isto a resposta descartável dele apareceria no chat do usuário.
+        if (warmupSessionId.current && eventSessionId(props) === warmupSessionId.current) continue;
         const stType = (props.status as { type?: string } | undefined)?.type;
         if (et === 'session.idle' || (et === 'session.status' && stType === 'idle')) {
           userTurnActive.current = false;
+          // Turno fechado: o que errou e depois acertou vira lição. Assíncrono e
+          // silencioso — aprender não pode atrasar nem derrubar a interface.
+          void learnTurn(chatRef.current.messages, session?.profile);
+          // Credita as lições do prompt que acabou de fechar, olhando só o que veio
+          // depois dele — e zera, pra não creditar duas vezes no próximo idle.
+          if (injectedLessons.current.length > 0) {
+            const novas = toolAttempts(chatRef.current.messages).slice(attemptsAtSend.current);
+            void creditLessons(injectedLessons.current, novas);
+            injectedLessons.current = [];
+          }
         }
         const info = (props.info ?? props) as { mode?: string };
         // emenda não-solicitada = compactação/resumo que o motor dispara sozinho após
         // a resposta (o modelo não inicia turno novo por conta própria fora disso).
-        if (et === 'message.updated' && info.mode === 'compaction' && !userTurnActive.current) {
+        if (
+          et === 'message.updated' &&
+          info.mode === 'compaction' &&
+          shouldAbortCompaction({
+            userTurnActive: userTurnActive.current,
+            requestedByTui: compactingRef.current,
+            workInFlight: inFlightChars.current > 0,
+          })
+        ) {
           if (sessionId.current) handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
           setChat((prev) => ({ ...prev, busy: false }));
           continue;
@@ -247,6 +296,18 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     } catch (err) {
       tlog('buildAttachedInput falhou, texto cru', (err as Error).message);
     }
+    // Lição das tools que já falharam NESTA sessão — o filtro por tool é o que impede
+    // a lição de uma ferramenta de contaminar outra (similaridade sozinha não separa).
+    try {
+      attemptsAtSend.current = toolAttempts(chat.messages).length;
+      const pista = await remindLessons(failedTools(chat.messages), text);
+      injectedLessons.current = pista.injected;
+      if (pista.text) enriched = `${pista.text}
+
+${enriched}`;
+    } catch (err) {
+      tlog('recall de lições falhou', (err as Error).message);
+    }
     // Map-reduce: input grande é compactado (lossy) antes de enviar; erro → manda cru.
     let payload = enriched;
     try {
@@ -258,9 +319,11 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     }
     // Sem o antigo sufixo `/no_think` (poluía o contexto). O reasoning do Qwen não é
     // suprimível via config do opencode (ver client-configs) — a Camada B não o mostra no output.
+    inFlightChars.current = payload.length; // em voo até a resposta (ou o erro) voltar
     handle.client.session
       .prompt({ path: { id: sessionId.current }, body: { model, agent: mode, parts: [...fileParts, { type: 'text', text: payload }] } })
-      .catch((err) => tlog('prompt falhou', (err as Error).message));
+      .catch((err) => tlog('prompt falhou', (err as Error).message))
+      .finally(() => { inFlightChars.current = 0; }); // voltou (ou falhou): nada pendente
   };
 
   /**
@@ -324,8 +387,11 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   // de "demora pra continuar após estourar"). Mesma sessão, contexto vira resumo.
   useEffect(() => {
     if (chat.busy || !sessionId.current) return;
-    const { tokensIn, tokensOut } = contextUsage(chat.messages);
-    if (!shouldCompact(tokensIn + tokensOut, NIO_AI_CONTEXT, compactionReserved())) {
+    // Livro-caixa: conta a partir do ÚLTIMO RESUMO, não do início da sessão. Somar o
+    // histórico inteiro faria o orçamento parecer estourado logo após compactar.
+    const ledger = buildLedger(chat.messages, inFlightChars.current);
+    if (hasWorkInFlight(ledger)) return; // há request em voo: não mexer na sessão
+    if (!shouldCompact(ledgerTotal(ledger), NIO_AI_CONTEXT, compactionReserved())) {
       compactingRef.current = false; // abaixo do teto (pós-compactação) → re-arma
       return;
     }
@@ -352,8 +418,12 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
           handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
         return setChat((prev) => ({ ...prev, busy: false }));
       case 'session.compact':
-        if (sessionId.current)
-          handle.client.session.summarize({ path: { id: sessionId.current } }).catch(() => {});
+        if (sessionId.current) {
+          compactingRef.current = true; // fomos nós: o guard abaixo não pode matar
+          handle.client.session
+            .summarize({ path: { id: sessionId.current } })
+            .catch(() => { compactingRef.current = false; });
+        }
         return toast('compactando o contexto…');
       default:
         return toast(`comando do motor ignorado: ${cmd}`);
