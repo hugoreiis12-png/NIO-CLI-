@@ -203,3 +203,29 @@ export async function pruneOldRefs(repo: string, keepRef: string): Promise<RagRe
     return fail(err);
   }
 }
+
+/**
+ * Chunks de medida cujo nome casa com `termo` (busca literal, não semântica).
+ *
+ * Existe porque o acervo guarda as fórmulas desde que o scanner admin entrou, mas
+ * nenhuma tool as devolvia ao agente: o grounding era consumido só pelo gerador de DAX,
+ * internamente. O modelo dizia, com razão, que "não expõem o endpoint de metadados".
+ */
+export async function findMeasureChunks(
+  repo: string,
+  termo: string,
+  limit = 10,
+): Promise<RagResult<string[]>> {
+  try {
+    const like = `%${termo.trim().toLowerCase()}%`;
+    const res = await query<{ content: string }>(
+      `SELECT content FROM dax_doc_chunk
+        WHERE repo = $1 AND path LIKE 'medida/%' AND lower(path) LIKE $2
+        ORDER BY length(path) LIMIT $3`,
+      [repo, like, Math.max(1, limit)],
+    );
+    return { status: 'ok', data: res.rows.map((r) => r.content) };
+  } catch (err) {
+    return fail(err);
+  }
+}

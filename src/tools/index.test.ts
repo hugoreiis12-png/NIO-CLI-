@@ -21,6 +21,7 @@ const NIO_CLI_TOOLS = [
   'nio_exec_status',
   'nio_fabric_ask',
   'nio_fabric_datasets',
+  'nio_fabric_measure',
   'nio_fabric_query',
   'nio_fabric_schema_sync',
   'nio_fabric_workspaces',

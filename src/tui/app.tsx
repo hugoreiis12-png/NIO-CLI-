@@ -143,7 +143,7 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
         handle.client.session.status(),
         handle.client.session.messages({ path: { id } }),
         fetchPendingPermissions(handle.url),
-        fetchPendingQuestions(handle.url, id),
+        fetchPendingQuestions(handle.url),
       ]);
       const status = (st as { data?: Record<string, { type?: string }> }).data?.[id]?.type;
       const busy = status === 'busy' || status === 'retry';

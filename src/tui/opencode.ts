@@ -71,11 +71,17 @@ export async function fetchPendingPermissions(
  */
 export async function fetchPendingQuestions(
   baseUrl: string,
-  sessionId: string,
 ): Promise<Array<Record<string, unknown>> | null> {
-  if (!sessionId) return null; // sem sessão pra consultar → não reconcilia
   try {
-    const res = await fetch(new URL(`/session/${sessionId}/question`, baseUrl), {
+    // `/question` é GLOBAL, como `/permission`. A rota por sessão
+    // (`/session/:id/question`) **não existe** no opencode 1.18: ela devolve o HTML do
+    // web UI, o `JSON.parse` estoura, e a reconciliação nunca recuperava uma pergunta
+    // cujo evento SSE se perdeu — o turno ficava pendurado para sempre. Medido em prod.
+    //
+    // Não filtramos por sessão de propósito: pergunta de **sub-agente** vem com outro
+    // `sessionID`, e o reply é feito na sessão que a pergunta carrega. Mesma decisão já
+    // tomada para permissões.
+    const res = await fetch(new URL('/question', baseUrl), {
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(2000),
     });
