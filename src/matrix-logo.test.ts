@@ -48,26 +48,32 @@ test('ACEITE: fora de TTY não escreve NADA — nem o frame estático', async ()
 test('terminal pequeno COM TTY ainda recebe o estático (há humano lendo)', async () => {
   // Animação desligada tem duas causas; só a ausência de TTY significa "ninguém olhando".
   const linhas = process.stdout.rows;
+  const ci = process.env.CI;
   Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
   Object.defineProperty(process.stdout, 'rows', { value: 5, configurable: true });
   try {
+    delete process.env.CI;
     const out = await capture(() => animateMatrixLogo({ colored: false }));
     expect(out).toBe(renderMatrixLogo({ colored: false }) + '\n');
   } finally {
     Object.defineProperty(process.stdout, 'isTTY', { value: undefined, configurable: true });
     Object.defineProperty(process.stdout, 'rows', { value: linhas, configurable: true });
+    if (ci === undefined) delete process.env.CI; else process.env.CI = ci;
   }
 });
 
 test('animateMatrixLogo: NIO_NO_ANIM força o estático mesmo com TTY', async () => {
+  const ci = process.env.CI;
   Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
   process.env.NIO_NO_ANIM = '1';
   try {
+    delete process.env.CI;
     const out = await capture(() => animateMatrixLogo({ colored: false }));
     expect(out).toBe(renderMatrixLogo({ colored: false }) + '\n');
   } finally {
     delete process.env.NIO_NO_ANIM;
     Object.defineProperty(process.stdout, 'isTTY', { value: undefined, configurable: true });
+    if (ci === undefined) delete process.env.CI; else process.env.CI = ci;
   }
 });
 
