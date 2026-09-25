@@ -263,8 +263,6 @@ COMMENT ON COLUMN agent_lesson.tool IS
 COMMENT ON COLUMN agent_lesson.acertos IS
   'Sobe quando o turno após injetar a lição deu certo. Lição que nunca acerta deve ser podada.';
 
-GRANT SELECT, INSERT, UPDATE ON agent_lesson TO nio_cli;
-GRANT USAGE, SELECT ON SEQUENCE agent_lesson_id_seq TO nio_cli;
 
 -- ───────────────────────────────────────────────
 -- Comentários documentais
@@ -303,3 +301,5 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON user_cli, auth_sessions, login_challenge
 GRANT USAGE, SELECT ON SEQUENCE user_cli_id_seq, auth_events_id_seq TO nio_gateway;
 GRANT SELECT, INSERT, UPDATE, DELETE ON dax_doc_chunk, dax_query_template TO nio_cli;
 GRANT USAGE, SELECT ON SEQUENCE dax_doc_chunk_id_seq, dax_query_template_id_seq TO nio_cli;
+GRANT SELECT, INSERT, UPDATE ON agent_lesson TO nio_cli;
+GRANT USAGE, SELECT ON SEQUENCE agent_lesson_id_seq TO nio_cli;
