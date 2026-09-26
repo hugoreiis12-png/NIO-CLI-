@@ -1,4 +1,4 @@
-/*
+/**
  * Config e URLs da camada Docker da NIO-CLI — infra (`docker/docker-compose.yml`:
  * Docker MCP Gateway + Portainer). Checagens de disponibilidade/health ficam em
  * `./health.ts`. Espelha `src/gateway/config.ts`.

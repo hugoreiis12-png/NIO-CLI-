@@ -1,4 +1,4 @@
-/*
+/**
  * Disponibilidade/health da camada Docker da NIO-CLI — detecção do `docker` no
  * host, estado do Swarm, e checagem TCP dos containers de infra. Config/URLs
  * ficam em `./config.ts`.

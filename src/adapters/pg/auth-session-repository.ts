@@ -22,6 +22,14 @@ export interface AuthSessionRow {
 
 const COLS = 'id, user_id, expires_at, revoked_at, created_at';
 
+// ponytail: teto defensivo, não paginação real. `pruneExcessSessions`
+// (gateway/services/login.ts) precisa ver TODAS as ativas pra podar o excedente
+// de MAX_SESSIONS_PER_USER (default 5, sem teto superior via env) — este limite
+// só existe pra não devolver uma lista ilimitada, fica bem acima de qualquer
+// MAX_SESSIONS_PER_USER razoável. Sobe pra paginação real se algum dia precisar
+// configurar mais sessões ativas por usuário do que isso.
+const LIST_CEILING = 200;
+
 /** Mapeia a linha crua para a entidade de domínio. */
 export function mapAuthSessionRow(row: AuthSessionRow): AuthSession {
   return {
@@ -62,8 +70,8 @@ export function createAuthSessionRepository(): AuthSessionRepository {
       const res = await query<AuthSessionRow>(
         `SELECT ${COLS} FROM auth_sessions
          WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > NOW()
-         ORDER BY created_at DESC`,
-        [userId],
+         ORDER BY created_at DESC LIMIT $2`,
+        [userId, LIST_CEILING],
       );
       return res.rows.map(mapAuthSessionRow);
     },

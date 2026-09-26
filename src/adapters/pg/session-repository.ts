@@ -26,6 +26,11 @@ export interface SessionRow {
 const COLS =
   'id, user_id, name, profile, status, project_path, ide, config, created_at, updated_at';
 
+// ponytail: teto defensivo, não paginação real — listByUser não tem cursor/offset.
+// Sobe pra paginação de verdade se algum usuário acumular >LIST_CEILING sessões
+// (hoje improvável: sessões antigas ficam 'archived' mas nunca são podadas).
+const LIST_CEILING = 200;
+
 /** Mapeia a linha crua para a entidade de domínio. Parse tolerante do JSONB. */
 export function mapSessionRow(row: SessionRow): Session {
   return {
@@ -76,8 +81,8 @@ export function createSessionRepository(): SessionRepository {
 
     async listByUser(userId) {
       const res = await query<SessionRow>(
-        `SELECT ${COLS} FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC`,
-        [userId],
+        `SELECT ${COLS} FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2`,
+        [userId, LIST_CEILING],
       );
       return res.rows.map(mapSessionRow);
     },
