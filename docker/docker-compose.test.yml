@@ -1,0 +1,58 @@
+# Docker Compose for test environment
+# Usage: docker compose -f docker/docker-compose.test.yml up
+
+name: nio-test
+
+networks:
+  nio-test:
+    name: nio-test
+    driver: bridge
+
+volumes:
+  nio_test_postgres_data:
+    name: nio_test_postgres_data
+
+services:
+  # PostgreSQL with pgvector (required for migrations + RAG)
+  postgres:
+    image: pgvector/pgvector:pg16-v0.8.0
+    container_name: nio-postgres-test
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: nio_cli_test
+      POSTGRES_INITDB_ARGS: >
+        -U postgres
+        -c ssl=on
+        -c ssl_cert_file=/var/lib/postgresql/server.crt
+        -c ssl_key_file=/var/lib/postgresql/server.key
+    volumes:
+      - nio_test_postgres_data:/var/lib/postgresql/data
+      # Mount SSL certs (must be generated beforehand)
+      # - ./fixtures/db-server.crt:/var/lib/postgresql/server.crt:ro
+      # - ./fixtures/db-server.key:/var/lib/postgresql/server.key:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U postgres -d nio_cli_test || exit 1
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - nio-test
+
+  # Optional: Headroom (IA proxy) for local testing
+  # headroom:
+  #   image: ghcr.io/headroomlabs-ai/headroom:latest
+  #   container_name: nio-headroom-test
+  #   restart: unless-stopped
+  #   environment:
+  #     OPENAI_TARGET_API_URL: "https://opencode.ai/zen/v1"
+  #     HEADROOM_UPDATE_CHECK: "off"
+  #   ports:
+  #     - "127.0.0.1:8787:8787"
+  #   networks:
+  #     - nio-test
