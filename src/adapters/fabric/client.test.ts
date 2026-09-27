@@ -136,6 +136,74 @@ test('executeDax: 403 → unauthorized', async () => {
   expect((await gw.executeDax('ws', 'ds', 'EVALUATE T')).status).toBe('unauthorized');
 });
 
+test('executeDax: 401 traz os 3 checks reais (tenant setting, Build, RLS/SSO)', async () => {
+  const gw = createFabricGateway({
+    token: okToken,
+    fetchImpl: (async () => jsonRes({ error: { code: 'PowerBINotAuthorizedException' } }, 401)) as unknown as typeof fetch,
+  });
+  const out = await gw.executeDax('ws', 'ds', 'EVALUATE T');
+  expect(out.status).toBe('unauthorized');
+  expect(out.error).toContain('PowerBINotAuthorizedException');
+  expect(out.error).toContain('Dataset Execute Queries REST API');
+  expect(out.error).toContain('Build');
+  expect(out.error).toContain('RLS/SSO');
+});
+
+test('executeDax: 429 → throttled com o Retry-After, sem tentar de novo', async () => {
+  let calls = 0;
+  const gw = createFabricGateway({
+    token: okToken,
+    fetchImpl: (async () => { calls++; return new Response('{}', { status: 429, headers: { 'Retry-After': '42' } }); }) as unknown as typeof fetch,
+  });
+  const out = await gw.executeDax('ws', 'ds', 'EVALUATE T');
+  expect(out.status).toBe('throttled');
+  expect(out.error).toContain('aguarde 42s');
+  expect(calls).toBe(1);
+});
+
+test('executeDax: 401 com token em cache → invalida e repete UMA vez (token expirado)', async () => {
+  let invalidated = 0;
+  let calls = 0;
+  const token: TokenProvider = {
+    get: async () => ({ status: 'ok', token: invalidated ? 'fresh' : 'stale' }),
+    invalidate: () => { invalidated++; },
+  };
+  const seenAuth: string[] = [];
+  const gw = createFabricGateway({
+    token,
+    fetchImpl: (async (_url: string, init: RequestInit) => {
+      calls++;
+      seenAuth.push((init.headers as Record<string, string>).Authorization);
+      return calls === 1 ? jsonRes({}, 401) : jsonRes({ results: [{ tables: [{ rows: [{ a: 1 }] }] }] });
+    }) as unknown as typeof fetch,
+  });
+  const out = await gw.executeDax('ws', 'ds', 'EVALUATE T');
+  expect(out.status).toBe('ok');
+  expect(invalidated).toBe(1);
+  expect(seenAuth).toEqual(['Bearer stale', 'Bearer fresh']);
+});
+
+test('executeDax: 401 duas vezes → unauthorized, só 2 chamadas (sem loop)', async () => {
+  let calls = 0;
+  const token: TokenProvider = { get: async () => ({ status: 'ok', token: 'tok' }), invalidate: () => {} };
+  const gw = createFabricGateway({
+    token,
+    fetchImpl: (async () => { calls++; return jsonRes({}, 401); }) as unknown as typeof fetch,
+  });
+  expect((await gw.executeDax('ws', 'ds', 'EVALUATE T')).status).toBe('unauthorized');
+  expect(calls).toBe(2);
+});
+
+test('listWorkspaces: 429 → throttled', async () => {
+  const gw = createFabricGateway({
+    token: okToken,
+    fetchImpl: (async () => new Response('', { status: 429 })) as unknown as typeof fetch,
+  });
+  const out = await gw.listWorkspaces();
+  expect(out.status).toBe('throttled');
+  expect(out.error).toContain('429');
+});
+
 test('executeDax: token não configurado → failed, sem tocar a rede', async () => {
   let called = false;
   const gw = createFabricGateway({

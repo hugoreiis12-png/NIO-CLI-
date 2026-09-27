@@ -20,9 +20,10 @@ export type FabricRow = Record<string, unknown>;
 
 /**
  * `ok` = sucesso; `unauthorized` = SP sem acesso ao workspace ou credencial inválida;
- * `unavailable` = Fabric fora do ar / rede; `failed` = demais erros (inclui não configurado).
+ * `unavailable` = Fabric fora do ar / rede; `throttled` = 429 (a mensagem traz o Retry-After);
+ * `failed` = demais erros (inclui não configurado).
  */
-export type FabricStatus = 'ok' | 'unauthorized' | 'unavailable' | 'failed';
+export type FabricStatus = 'ok' | 'unauthorized' | 'unavailable' | 'throttled' | 'failed';
 
 export interface FabricResult<T> {
   status: FabricStatus;

@@ -7,6 +7,7 @@ import type { Command } from "commander";
 import { c, sym } from "../../lib/colors.js";
 import { fabricGrant, type TokenGrant } from "../../adapters/fabric/token.js";
 import { createFabricGateway } from "../../adapters/fabric/client.js";
+import type { FabricStatus } from "../../core/fabric.js";
 import { registerFabricRagCommands } from "./fabric-rag.js";
 import { discoverLocalXmla } from "../../adapters/powerbi/local-endpoint.js";
 
@@ -17,7 +18,7 @@ const HINT =
 interface FabricStatusReport {
   configured: boolean;
   grant?: TokenGrant;
-  status: "ok" | "unconfigured" | "unauthorized" | "unavailable" | "failed";
+  status: FabricStatus | "unconfigured";
   workspaceCount?: number;
   error?: string;
 }
@@ -47,7 +48,9 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
         ? "sem acesso (service principal sem permissão, tenant setting desabilitado, ou RLS/SSO no dataset)"
         : r.status === "unavailable"
           ? "indisponível (rede/timeout)"
-          : "falhou";
+          : r.status === "throttled"
+            ? "limitado (429) — aguarde antes de repetir"
+            : "falhou";
     console.log(`${c.red(sym.err)} Fabric ${label}. ${c.dim(r.error ?? "")}`);
   }
 

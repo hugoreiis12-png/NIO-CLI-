@@ -1,5 +1,7 @@
 import { test, expect } from 'bun:test';
-import { createTokenProvider, readFabricAuthEnv, fabricGrant } from './token.js';
+import {
+  createTokenProvider, readFabricAuthEnv, fabricGrant, describeAadFailure, retryAfterSeconds, sharedTokenProvider,
+} from './token.js';
 
 const SP = { tenantId: 't', clientId: 'c', clientSecret: 's' };
 const USER = { tenantId: 't', clientId: 'c', clientSecret: 's', username: 'u@x.com', password: 'pw' };
@@ -67,4 +69,58 @@ test('get: exceção de rede → unavailable', async () => {
   const out = await p.get();
   expect(out.status).toBe('unavailable');
   expect(out.error).toContain('ECONNREFUSED');
+});
+
+test('get (ROPC): MFA/Conditional Access (AADSTS50076) → unauthorized com dica de usar SP', async () => {
+  const body = { error: 'invalid_grant', error_description: 'AADSTS50076: Due to a configuration change made by the admin, the user must use multi-factor authentication.' };
+  const out = await createTokenProvider(USER, (async () => jsonRes(body, 400)) as unknown as typeof fetch).get();
+  expect(out.status).toBe('unauthorized');
+  expect(out.error).toContain('AADSTS50076');
+  expect(out.error).toContain('MFA');
+  expect(out.error).toContain('service principal');
+});
+
+test('get (SP): secret expirado (AADSTS7000222) → diz EXPIRADO, não "senha errada"', async () => {
+  const body = { error: 'invalid_client', error_description: 'AADSTS7000222: The provided client secret keys for app are expired.' };
+  const out = await createTokenProvider(SP, (async () => jsonRes(body, 401)) as unknown as typeof fetch).get();
+  expect(out.status).toBe('unauthorized');
+  expect(out.error).toContain('EXPIRADO');
+  expect(out.error).toContain('AZURE_CLIENT_SECRET');
+});
+
+test('get: 429 no /token → unavailable com o Retry-After em segundos', async () => {
+  const res = new Response('{}', { status: 429, headers: { 'Retry-After': '17' } });
+  const out = await createTokenProvider(SP, (async () => res) as unknown as typeof fetch).get();
+  expect(out.status).toBe('unavailable');
+  expect(out.error).toContain('aguarde 17s');
+});
+
+test('describeAadFailure: corpo não-JSON não quebra e o AADSTS ainda é achado', () => {
+  expect(describeAadFailure(400, '<html>AADSTS50126 bla</html>')).toContain('AADSTS50126');
+  expect(describeAadFailure(502, 'Bad Gateway')).toBe('token endpoint respondeu 502 Bad Gateway');
+});
+
+test('retryAfterSeconds: número, data HTTP e ausente', () => {
+  expect(retryAfterSeconds(new Response('', { headers: { 'Retry-After': '30' } }))).toBe(30);
+  const future = new Date(Date.now() + 65_000).toUTCString();
+  const fromDate = retryAfterSeconds(new Response('', { headers: { 'Retry-After': future } }));
+  expect(fromDate).toBeGreaterThanOrEqual(60);
+  expect(fromDate).toBeLessThanOrEqual(66);
+  expect(retryAfterSeconds(new Response(''))).toBeNull();
+});
+
+test('invalidate: descarta o cache e o próximo get vai à rede', async () => {
+  let calls = 0;
+  const p = createTokenProvider(SP, (async () => { calls++; return jsonRes({ access_token: `t${calls}`, expires_in: 3600 }); }) as unknown as typeof fetch);
+  expect((await p.get()).token).toBe('t1');
+  p.invalidate?.();
+  expect((await p.get()).token).toBe('t2');
+  expect(calls).toBe(2);
+});
+
+test('sharedTokenProvider: mesma credencial → mesma instância; credencial diferente → outra', () => {
+  const a = sharedTokenProvider(SP);
+  expect(sharedTokenProvider({ ...SP })).toBe(a);
+  expect(sharedTokenProvider({ ...SP, clientSecret: 'rotacionado' })).not.toBe(a);
+  expect(sharedTokenProvider(USER)).not.toBe(a);
 });

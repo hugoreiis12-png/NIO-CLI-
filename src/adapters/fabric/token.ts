@@ -14,6 +14,9 @@ const TOKEN_ENDPOINT = (tenant: string): string =>
 const SCOPE = 'https://analysis.windows.net/powerbi/api/.default';
 const EXPIRY_SKEW_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 10_000;
+/** Corpo lido para parse (o `error_description` do Entra é longo) e teto exibido. */
+const ERROR_BODY_CHARS = 2_000;
+const ERROR_DETAIL_CHARS = 300;
 
 export interface FabricAuthEnv {
   tenantId?: string;
@@ -33,7 +36,7 @@ export function readFabricAuthEnv(env: NodeJS.ProcessEnv = process.env): FabricA
   };
 }
 
-// Exporta só para teste; o resto da CLI não precisa saber do grant nem do endpoint 
+// Exporta só para teste; o resto da CLI não precisa saber do grant nem do endpoint
 export type TokenGrant = 'user' | 'service_principal';
 export type TokenStatus = 'ok' | 'unconfigured' | 'unauthorized' | 'unavailable';
 
@@ -46,6 +49,8 @@ export interface TokenResult {
 
 export interface TokenProvider {
   get(): Promise<TokenResult>;
+  /** Descarta o token em cache — 401/403 da API significa expirado ou revogado. */
+  invalidate?(): void;
 }
 
 /** Qual grant o env habilita (usuário vence SP), ou `null` se falta credencial. */
@@ -77,6 +82,62 @@ function grantBody(grant: TokenGrant, auth: FabricAuthEnv): URLSearchParams {
   });
 }
 
+/** Dicas por código AADSTS — só os que mudam a ação do usuário (doc: reference-error-codes). */
+const AAD_HINTS: ReadonlyArray<[RegExp, string]> = [
+  [/AADSTS5007[69]|AADSTS53003|AADSTS50158/, 'a conta exige MFA/Conditional Access — o grant de usuário (ROPC) não passa por MFA; use service principal ou peça exceção ao admin'],
+  [/AADSTS7000222/, 'client secret EXPIRADO — gere outro em Entra → App registrations → Certificates & secrets e atualize AZURE_CLIENT_SECRET'],
+  [/AADSTS7000215|AADSTS7000218/, 'client secret inválido ou ausente — AZURE_CLIENT_SECRET é o Value do segredo, não o Secret ID'],
+  [/AADSTS50126/, 'usuário ou senha inválidos (NIO_FABRIC_USERNAME/NIO_FABRIC_PASSWORD)'],
+  [/AADSTS50053/, 'conta bloqueada por tentativas repetidas — aguarde antes de tentar de novo'],
+  [/AADSTS5005[57]|AADSTS50034/, 'conta desabilitada, senha expirada ou usuário fora do tenant'],
+  [/AADSTS65001|AADSTS90094/, 'app sem consentimento — o admin precisa conceder as permissões (Power BI Service) ao app'],
+  [/AADSTS700016|AADSTS90002|AADSTS500011/, 'tenant ou client id errado — confira AZURE_TENANT_ID/AZURE_CLIENT_ID'],
+];
+
+/** Traduz o corpo de erro do Entra em mensagem acionável, preservando o código AADSTS. */
+export function describeAadFailure(status: number, body: string): string {
+  let desc = body;
+  try {
+    const j = JSON.parse(body) as { error?: string; error_description?: string };
+    desc = [j.error, j.error_description].filter(Boolean).join(': ') || body;
+  } catch {
+    desc = body; // corpo não-JSON (HTML de proxy, etc.): mostra cru
+  }
+  const code = /AADSTS\d+/.exec(desc)?.[0];
+  const hint = code ? AAD_HINTS.find(([re]) => re.test(code))?.[1] : undefined;
+  const head = `token endpoint respondeu ${status}${code ? ` (${code})` : ''}`;
+  return hint ? `${head}: ${hint}` : `${head} ${desc.slice(0, ERROR_DETAIL_CHARS)}`.trim();
+}
+
+/** Segundos do header `Retry-After` (429) — número ou data HTTP; `null` se ausente. */
+export function retryAfterSeconds(res: Response): number | null {
+  const raw = res.headers.get('retry-after');
+  if (!raw) return null;
+  const n = Number(raw);
+  if (Number.isFinite(n)) return Math.max(0, Math.ceil(n));
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.max(0, Math.ceil((at - Date.now()) / 1000)) : null;
+}
+
+function unconfiguredResult(): TokenResult {
+  return {
+    status: 'unconfigured',
+    error:
+      'Fabric não configurado: defina AZURE_TENANT_ID/AZURE_CLIENT_ID e ' +
+      '(NIO_FABRIC_USERNAME/NIO_FABRIC_PASSWORD p/ token de usuário com RLS, ' +
+      'ou AZURE_CLIENT_SECRET p/ service principal).',
+  };
+}
+
+function failureResult(res: Response, body: string): TokenResult {
+  if (res.status === 429) {
+    const s = retryAfterSeconds(res);
+    return { status: 'unavailable', error: `token endpoint limitou (429)${s !== null ? ` — aguarde ${s}s` : ''}` };
+  }
+  const status: TokenStatus = res.status === 400 || res.status === 401 ? 'unauthorized' : 'unavailable';
+  return { status, error: describeAadFailure(res.status, body) };
+}
+
 /** Provider com cache em memória. `fetchImpl` é seam pra teste (default = `fetch` global). */
 export function createTokenProvider(
   auth: FabricAuthEnv = readFabricAuthEnv(),
@@ -85,17 +146,10 @@ export function createTokenProvider(
   let cached: { token: string; expiresAt: number; grant: TokenGrant } | null = null;
 
   return {
+    invalidate: () => { cached = null; },
     async get(): Promise<TokenResult> {
       const grant = fabricGrant(auth);
-      if (!auth.tenantId || !grant) {
-        return {
-          status: 'unconfigured',
-          error:
-            'Fabric não configurado: defina AZURE_TENANT_ID/AZURE_CLIENT_ID e ' +
-            '(NIO_FABRIC_USERNAME/NIO_FABRIC_PASSWORD p/ token de usuário com RLS, ' +
-            'ou AZURE_CLIENT_SECRET p/ service principal).',
-        };
-      }
+      if (!auth.tenantId || !grant) return unconfiguredResult();
       if (cached && cached.expiresAt > Date.now()) {
         return { status: 'ok', token: cached.token, grant: cached.grant };
       }
@@ -106,11 +160,7 @@ export function createTokenProvider(
           body: grantBody(grant, auth),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
-        if (!res.ok) {
-          const detail = (await res.text().catch(() => '')).slice(0, 300);
-          const status: TokenStatus = res.status === 400 || res.status === 401 ? 'unauthorized' : 'unavailable';
-          return { status, error: `token endpoint respondeu ${res.status} ${detail}`.trim() };
-        }
+        if (!res.ok) return failureResult(res, (await res.text().catch(() => '')).slice(0, ERROR_BODY_CHARS));
         const json = (await res.json()) as { access_token?: string; expires_in?: number };
         if (!json.access_token) return { status: 'unavailable', error: 'resposta do token sem access_token' };
         const ttlMs = (json.expires_in ?? 3600) * 1000;
@@ -121,4 +171,17 @@ export function createTokenProvider(
       }
     },
   };
+}
+
+const shared = new Map<string, TokenProvider>();
+
+/** Um provider por credencial no processo: o cache do token vale entre tool calls. */
+export function sharedTokenProvider(auth: FabricAuthEnv = readFabricAuthEnv()): TokenProvider {
+  const key = JSON.stringify([auth.tenantId, auth.clientId, auth.username, auth.clientSecret, auth.password]);
+  let provider = shared.get(key);
+  if (!provider) {
+    provider = createTokenProvider(auth);
+    shared.set(key, provider);
+  }
+  return provider;
 }

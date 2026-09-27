@@ -11,8 +11,9 @@ export function fabricGateway(): FabricGateway {
 }
 
 const FABRIC_ERROR_LABEL: Record<Exclude<FabricStatus, 'ok'>, string> = {
-  unauthorized: 'Sem acesso ao Fabric (service principal sem permissão, RLS/SSO no dataset, ou credencial inválida)',
+  unauthorized: 'Sem acesso ao Fabric (tenant setting, papel no workspace/Build, RLS/SSO no dataset, ou credencial inválida)',
   unavailable: 'Fabric indisponível (rede/timeout)',
+  throttled: 'Fabric limitou as chamadas — NÃO repita agora; espere o tempo indicado',
   failed: 'Falha na consulta ao Fabric',
 };
 

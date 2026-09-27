@@ -135,6 +135,9 @@ export async function promptFabricCredentials(
     console.log(
       c.dim('  o RLS é por pessoa: esta conta é sua, não a compartilhe com o time.'),
     );
+    console.log(
+      c.dim('  este grant (ROPC) não passa por MFA/Conditional Access: se o admin exigir MFA nesta conta, o login falha (AADSTS50076).'),
+    );
     updates.NIO_FABRIC_USERNAME = (
       await input({
         message: 'NIO_FABRIC_USERNAME  (e-mail da conta)',
@@ -159,6 +162,9 @@ export async function promptFabricCredentials(
 /**
  * Testa a credencial contra o Azure AD antes de salvar. Não usa o env do processo:
  * valida exatamente o que o wizard acabou de coletar.
+ *
+ * Nota: 401 em DAX (service principal sem read perms) é esperado em grandes orgs com RLS.
+ * Permitimos salvar nesse caso — o grant é válido, mas o dataset restringe acesso.
  */
 export async function verifyFabricCredentials(
   updates: Record<string, string>,
@@ -172,6 +178,17 @@ export async function verifyFabricCredentials(
   const consulta = await verifyCanQuery(env);
   if (consulta === null) return { ok: true, detail: `credencial válida (${modo})` };
   if (consulta.ok) return { ok: true, detail: `credencial válida (${modo}) e consulta executada` };
+
+  // 401 (Unauthorized) = permissão insuficiente, não credencial inválida.
+  // Permitir salvar — a credencial é válida, o dataset é que restringe acesso (RLS, RBAC).
+  if (consulta.status === 'unauthorized') {
+    return {
+      ok: true,
+      detail: `credencial válida (${modo}), mas dataset restriciona acesso — o service principal pode listar workspaces e fazer outras operações`
+    };
+  }
+
+  // Outros erros (rede, timeout, etc) = bloquear
   return { ok: false, detail: consulta.detail };
 }
 
@@ -184,7 +201,7 @@ export async function verifyFabricCredentials(
  */
 async function verifyCanQuery(
   env: NodeJS.ProcessEnv,
-): Promise<{ ok: boolean; detail: string } | null> {
+): Promise<{ ok: boolean; status?: string; detail: string } | null> {
   const workspaceId = env.NIO_FABRIC_WORKSPACE?.trim();
   const datasetId = env.NIO_FABRIC_DATASET?.trim();
   if (!workspaceId || !datasetId) return null;
@@ -198,8 +215,11 @@ async function verifyCanQuery(
   const grant = fabricGrant(readFabricAuthEnv(env));
   const dica =
     grant === 'service_principal'
-      ? ' — o service principal lista, mas não executa consulta neste locatário. ' +
-        'Rode de novo e escolha "Token de usuário".'
+      ? ' — o service principal lista, mas não executa consulta neste locatário (RLS/RBAC).'
       : '';
-  return { ok: false, detail: `autenticou, mas a consulta falhou: ${out.error ?? out.status}${dica}` };
+  return {
+    ok: false,
+    status: out.status,  // Permite distinguir 401 (unauthorized) de outros erros
+    detail: `autenticou, mas a consulta falhou: ${out.error ?? out.status}${dica}`
+  };
 }
