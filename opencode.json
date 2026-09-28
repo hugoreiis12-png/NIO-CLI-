@@ -34,16 +34,7 @@
     "permission":  {
                        "read":  "allow",
                        "edit":  "ask",
-                       "bash":  {
-                                    "bun *":  "allow",
-                                    "bunx *":  "allow",
-                                    "git *":  "allow",
-                                    "ls *":  "allow",
-                                    "dir *":  "allow",
-                                    "cat *":  "allow",
-                                    "type *":  "allow",
-                                    "*":  "ask"
-                                },
+                       "bash":  "ask",
                        "glob":  "allow",
                        "grep":  "allow",
                        "list":  "allow",

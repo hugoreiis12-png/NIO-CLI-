@@ -395,22 +395,20 @@ export const DEFAULT_OPENCODE_WATCHER: Record<string, unknown> = {
 };
 
 /**
- * Defaults de permissão do `opencode.json` (Sprint 7.5 de UI/UX). Libera os
- * comandos de shell só-leitura (o grosso dos prompts na TUI) e mantém `ask` pro
- * resto: edições, rede, e qualquer bash fora da allowlist. Só é semeado quando
- * o config ainda não tem um bloco `permission` (nunca sobrescreve o do usuário).
+ * Defaults de permissão do `opencode.json` (Sprint 7.5 de UI/UX).
+ *
+ * `bash` é `ask` sem allowlist, e isso é deliberado: uma allowlist de leitura
+ * (`ls`, `git status`, `cat`) tirava o modal de aprovação justamente nos comandos
+ * mais usados, e quem filtra por substring erra fácil — `git status` e
+ * `git push` casam com o mesmo prefixo. O atalho legítimo continua sendo
+ * responder `s` ("sempre") no próprio modal, que grava a regra de forma
+ * consciente e visível.
+ *
+ * Só é semeado quando o config ainda não tem um bloco `permission` (nunca
+ * sobrescreve o do usuário).
  */
 export const DEFAULT_OPENCODE_PERMISSION: Record<string, unknown> = {
-  bash: {
-    'ls *': 'allow', ls: 'allow', pwd: 'allow', whoami: 'allow', date: 'allow',
-    'cat *': 'allow', 'head *': 'allow', 'tail *': 'allow', 'wc *': 'allow',
-    'file *': 'allow', 'stat *': 'allow', 'which *': 'allow', 'echo *': 'allow',
-    'find *': 'allow', 'grep *': 'allow', 'rg *': 'allow', 'tree *': 'allow',
-    'git status*': 'allow', 'git log*': 'allow', 'git diff*': 'allow',
-    'git show*': 'allow', 'git branch*': 'allow', 'git remote*': 'allow',
-    'git rev-parse*': 'allow',
-    '*': 'ask',
-  },
+  bash: 'ask',
   edit: 'ask',
   webfetch: 'ask',
   external_directory: 'ask',

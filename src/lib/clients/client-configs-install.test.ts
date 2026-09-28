@@ -87,8 +87,9 @@ test('planOpencodeUpdate (Sprint 7.5): semeia `permission` quando ausente, prese
     opencodeEntry,
   );
   expect(seeded.alreadyConfigured).toBe(false);
-  expect((seeded.next.permission as any).bash['ls *']).toBe('allow');
-  expect((seeded.next.permission as any).bash['*']).toBe('ask');
+  // Todo bash passa por aprovação — sem allowlist, senão os comandos mais
+  // usados (e os mais perigosos) rodavam sem modal nenhum.
+  expect((seeded.next.permission as any).bash).toBe('ask');
   expect((seeded.next.permission as any).edit).toBe('ask');
 
   // já presente → NÃO sobrescreve (e com compaction/watcher em dia, fica configurado)
