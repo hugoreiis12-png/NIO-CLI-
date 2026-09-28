@@ -18,7 +18,10 @@ import type { QuestionReq } from './state.js';
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** Rodapé de atalhos — muda com o modo da pergunta. */
-function hints(multi: boolean, custom: boolean, digitando: boolean): string {
+function hints(multi: boolean, custom: boolean, digitando: boolean, semSaida: boolean): string {
+  // Pergunta sem opção e sem texto livre não tem resposta possível: dizer isso é
+  // melhor que deixar o ↵ parecer quebrado.
+  if (semSaida) return 'esta pergunta veio sem opções — Esc para cancelar';
   if (digitando) return '↵ enviar o texto · ⌫ apagar · Esc cancelar';
   const base = multi ? '↑↓ mover · Espaço marcar · ↵ enviar' : '↑↓ escolher · ↵ responder';
   return custom ? `${base} · digite para responder livremente · Esc cancelar` : `${base} · Esc cancelar`;
@@ -57,7 +60,11 @@ export function QuestionModal({
   };
 
   const advance = (): void => {
-    const next = [...picked, currentAnswer()];
+    const resposta = currentAnswer();
+    // Resposta vazia o motor recusa, e a pergunta volta na fila — o usuário
+    // responderia de novo no mesmo vazio, sem saída. Melhor o ↵ não fazer nada.
+    if (resposta.every((s) => s.trim() === '')) return;
+    const next = [...picked, resposta];
     if (qIdx + 1 >= total) return onAnswer(next);
     setPicked(next);
     setQIdx(qIdx + 1);
@@ -71,7 +78,8 @@ export function QuestionModal({
     if (key.return) return advance();
     if (key.backspace || key.delete) return setDraft((d) => d.slice(0, -1));
     if (key.upArrow) return setSel((n) => Math.max(0, n - 1));
-    if (key.downArrow) return setSel((n) => Math.min(opts.length - 1, n + 1));
+    // `Math.max(0, …)`: sem opções, `opts.length - 1` é -1 e o índice ficaria inválido.
+    if (key.downArrow) return setSel((n) => Math.min(Math.max(0, opts.length - 1), n + 1));
     if (multi && input === ' ') {
       return setMarks((prev) => {
         const next = new Set(prev);
@@ -115,7 +123,7 @@ export function QuestionModal({
           {` ${sym.bullet} outra resposta: ${draft || '(digite para escrever)'}`}
         </Text>
       ) : null}
-      <Text color={theme.dim}>{hints(multi, custom, digitando)}</Text>
+      <Text color={theme.dim}>{hints(multi, custom, digitando, opts.length === 0 && !custom)}</Text>
     </Box>
   );
 }

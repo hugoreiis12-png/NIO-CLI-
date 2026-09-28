@@ -135,6 +135,15 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   }, [chat.busy]);
 
   /** Re-sincroniza com o server (fonte da verdade): status + mensagens. */
+  /**
+   * Ids já respondidos, aguardando o servidor refletir. Sem isto o `resync` logo
+   * depois da resposta relista o pedido e o modal ressuscita — o usuário responde
+   * de novo e cai no mesmo ciclo, sem saída. Separados por domínio para não
+   * depender de ids de permissão e de pergunta nunca coincidirem.
+   */
+  const settledPerms = React.useRef<Set<string>>(new Set());
+  const settledQuestions = React.useRef<Set<string>>(new Set());
+
   const resync = React.useCallback(async () => {
     const id = sessionId.current;
     if (!id) return;
@@ -149,7 +158,11 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
       const busy = status === 'busy' || status === 'retry';
       const raw = ((msgs as { data?: unknown[] }).data ?? []) as Parameters<typeof syncMessages>[1];
       setChat((prev) =>
-        reconcilePendingQuestions(reconcilePendingPermissions(syncMessages(prev, raw, busy), perms), ques),
+        reconcilePendingQuestions(
+          reconcilePendingPermissions(syncMessages(prev, raw, busy), perms, settledPerms.current),
+          ques,
+          settledQuestions.current,
+        ),
       );
     } catch (err) {
       tlog('resync falhou', (err as Error).message);
@@ -445,10 +458,15 @@ ${enriched}`;
   const respondPermission = (r: 'once' | 'always' | 'reject') => {
     const perm = chat.permissions[0];
     if (!perm) return;
+    settledPerms.current.add(perm.id);
     setChat((prev) => ({ ...prev, permissions: prev.permissions.slice(1) }));
     handle.client
       .postSessionIdPermissionsPermissionId({ path: { id: perm.sessionId, permissionID: perm.id }, body: { response: r } })
-      .catch((err) => tlog('permission respond falhou', (err as Error).message))
+      .catch((err) => {
+        // Falhou de verdade: solta o tombstone para o resync trazer o pedido de volta.
+        settledPerms.current.delete(perm.id);
+        tlog('permission respond falhou', (err as Error).message);
+      })
       .finally(() => {
         void resync();
       });
@@ -459,13 +477,24 @@ ${enriched}`;
   const settleQuestion = (path: 'reply' | 'reject', answers?: string[][]) => {
     const q = chat.questions[0];
     if (!q) return;
+    settledQuestions.current.add(q.id);
     setChat((prev) => ({ ...prev, questions: prev.questions.slice(1) }));
+    /** Não respondeu de fato: solta o tombstone para a pergunta voltar e ser refeita. */
+    const desfazer = (motivo: string, detalhe: string): void => {
+      settledQuestions.current.delete(q.id);
+      tlog('question respond', motivo, detalhe);
+    };
     fetch(new URL(`/session/${q.sessionId}/question/${q.id}/${path}`, handle.url), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: answers ? JSON.stringify({ answers }) : undefined,
     })
-      .catch((err) => tlog('question respond falhou', (err as Error).message))
+      .then(async (res) => {
+        // `fetch` só rejeita em erro de rede — um 4xx chegaria aqui como sucesso,
+        // a pergunta voltaria no resync e não haveria uma linha sobre o motivo.
+        if (!res.ok) desfazer(`recusado ${res.status}`, (await res.text().catch(() => '')).slice(0, 200));
+      })
+      .catch((err) => desfazer('falhou', (err as Error).message))
       .finally(() => void resync());
   };
 

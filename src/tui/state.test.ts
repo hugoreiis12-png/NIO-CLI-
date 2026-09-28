@@ -581,3 +581,43 @@ test('sem nada em voo e sem pedido, a emenda intrusa segue sendo abortada', () =
     shouldAbortCompaction({ userTurnActive: false, requestedByTui: false, workInFlight: false }),
   ).toBe(true);
 });
+
+// Bug de produção (28/09): a fila é esvaziada na hora ao responder, mas o resync
+// logo em seguida ainda via o pedido no servidor e o RESSUSCITAVA. O modal voltava
+// e responder de novo repetia o ciclo — sem saída.
+test('resync não ressuscita permissão já respondida (tombstone)', () => {
+  const asked = applyEvent(
+    emptyChat,
+    ev('permission.asked', { id: 'p1', sessionID: 's', permission: 'bash', metadata: { command: 'ls' } }),
+  );
+  // o usuário respondeu: some da fila local e o id entra no tombstone
+  const respondido = { ...asked, permissions: [] };
+  const settled = new Set(['p1']);
+  const doServidor = [{ id: 'p1', sessionID: 's', permission: 'bash' }];
+
+  const depois = reconcilePendingPermissions(respondido, doServidor, settled);
+  expect(depois.permissions).toHaveLength(0); // não voltou
+});
+
+test('resync não ressuscita pergunta já respondida (tombstone)', () => {
+  const respondido = { ...emptyChat, questions: [] };
+  const settled = new Set(['q1']);
+  const doServidor = [{ requestID: 'q1', sessionID: 's', questions: [{ question: 'qual?', options: [] }] }];
+
+  expect(reconcilePendingQuestions(respondido, doServidor, settled).questions).toHaveLength(0);
+});
+
+test('tombstone é liberado quando o servidor esquece o id', () => {
+  const settled = new Set(['q1']);
+  // servidor não lista mais q1 → pode sair do tombstone, senão cresce para sempre
+  reconcilePendingQuestions({ ...emptyChat, questions: [] }, [], settled);
+  expect(settled.has('q1')).toBe(false);
+});
+
+test('sem tombstone, pedido novo do servidor ainda entra na fila', () => {
+  const settled = new Set(['outro-id']);
+  const doServidor = [{ requestID: 'q2', sessionID: 's', questions: [{ question: 'nova?', options: [] }] }];
+  const depois = reconcilePendingQuestions({ ...emptyChat, questions: [] }, doServidor, settled);
+  expect(depois.questions).toHaveLength(1);
+  expect(depois.questions[0]!.id).toBe('q2');
+});

@@ -156,16 +156,36 @@ export function toPermissionReq(raw: Record<string, unknown>): PermissionReq | n
  * "processando" — não há evento de repetição. Chamado no `resync` (a cada 4s
  * enquanto `busy`). Adiciona as novas (dedup por id), tira as que sumiram.
  */
+/**
+ * Tira do tombstone o que o servidor já esqueceu — o `settled` existe só para
+ * cobrir a janela entre responder e o servidor refletir a resposta. Sem esta
+ * limpeza ele cresceria para sempre, e um id reaproveitado nunca mais entraria.
+ */
+function forgetSettled(settled: Set<string> | undefined, liveIds: ReadonlySet<string>): void {
+  if (!settled) return;
+  for (const id of settled) if (!liveIds.has(id)) settled.delete(id);
+}
+
+/**
+ * `settled` = ids já respondidos nesta TUI, aguardando o servidor processar.
+ *
+ * Sem ele o resync **ressuscita o que acabou de ser respondido**: a fila local é
+ * limpa na hora (otimista), mas o `GET /permission` logo em seguida ainda lista o
+ * pedido, e ele voltava como se fosse novo. O modal reaparecia e não havia como
+ * sair — responder de novo só repetia o ciclo.
+ */
 export function reconcilePendingPermissions(
   prev: ChatState,
   rawList: Array<Record<string, unknown>> | null,
+  settled?: Set<string>,
 ): ChatState {
   if (rawList === null) return prev; // fetch falhou → mantém a fila (não apaga o modal)
   const live = rawList.map(toPermissionReq).filter((r): r is PermissionReq => r !== null);
   const liveIds = new Set(live.map((r) => r.id));
+  forgetSettled(settled, liveIds);
   const kept = prev.permissions.filter((r) => liveIds.has(r.id));
   const known = new Set(kept.map((r) => r.id));
-  const added = live.filter((r) => !known.has(r.id));
+  const added = live.filter((r) => !known.has(r.id) && !settled?.has(r.id));
   if (added.length === 0 && kept.length === prev.permissions.length) return prev;
   return { ...prev, permissions: [...kept, ...added] };
 }
@@ -201,13 +221,15 @@ export function toQuestionReq(raw: Record<string, unknown>): QuestionReq | null 
 export function reconcilePendingQuestions(
   prev: ChatState,
   rawList: Array<Record<string, unknown>> | null,
+  settled?: Set<string>,
 ): ChatState {
   if (rawList === null) return prev; // fetch falhou → mantém a fila (não apaga a pergunta)
   const live = rawList.map(toQuestionReq).filter((r): r is QuestionReq => r !== null);
   const liveIds = new Set(live.map((r) => r.id));
+  forgetSettled(settled, liveIds);
   const kept = prev.questions.filter((r) => liveIds.has(r.id));
   const known = new Set(kept.map((r) => r.id));
-  const added = live.filter((r) => !known.has(r.id));
+  const added = live.filter((r) => !known.has(r.id) && !settled?.has(r.id));
   if (added.length === 0 && kept.length === prev.questions.length) return prev;
   return { ...prev, questions: [...kept, ...added] };
 }
