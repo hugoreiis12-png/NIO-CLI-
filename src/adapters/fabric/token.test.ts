@@ -124,3 +124,65 @@ test('sharedTokenProvider: mesma credencial → mesma instância; credencial dif
   expect(sharedTokenProvider({ ...SP, clientSecret: 'rotacionado' })).not.toBe(a);
   expect(sharedTokenProvider(USER)).not.toBe(a);
 });
+
+test('falha de credencial fica cacheada — a 2ª chamada não vai à rede', async () => {
+  let calls = 0;
+  const p = createTokenProvider(SP, (async () => {
+    calls++;
+    return jsonRes({ error: 'invalid_grant', error_description: 'AADSTS50126: bad password' }, 400);
+  }) as unknown as typeof fetch);
+
+  const first = await p.get();
+  const second = await p.get();
+  expect(first.status).toBe('unauthorized');
+  expect(second).toEqual(first); // mesma resposta, sem ir à rede
+  expect(calls).toBe(1);
+});
+
+test('invalidate derruba o bloqueio da falha — corrigir a credencial destrava na hora', async () => {
+  let calls = 0;
+  const p = createTokenProvider(SP, (async () => {
+    calls++;
+    return calls === 1
+      ? jsonRes({ error: 'invalid_grant', error_description: 'AADSTS50126: bad password' }, 400)
+      : jsonRes({ access_token: 'novo', expires_in: 3600 });
+  }) as unknown as typeof fetch);
+
+  expect((await p.get()).status).toBe('unauthorized');
+  expect((await p.get()).status).toBe('unauthorized'); // bloqueado, não repetiu
+  expect(calls).toBe(1);
+
+  p.invalidate?.();
+  expect((await p.get()).token).toBe('novo');
+  expect(calls).toBe(2);
+});
+
+test('429 é segurado e o Retry-After aparece na mensagem', async () => {
+  let calls = 0;
+  const p = createTokenProvider(SP, (async () => {
+    calls++;
+    return new Response('rate limited', { status: 429, headers: { 'Retry-After': '30' } });
+  }) as unknown as typeof fetch);
+
+  const r = await p.get();
+  expect(r.status).toBe('unavailable');
+  expect(r.error).toContain('30s');
+  await p.get();
+  expect(calls).toBe(1); // não martela o endpoint que acabou de limitar
+});
+
+test('sucesso depois de falha limpa o bloqueio', async () => {
+  let calls = 0;
+  const p = createTokenProvider(SP, (async () => {
+    calls++;
+    return calls === 1
+      ? new Response('boom', { status: 503 })
+      : jsonRes({ access_token: 'ok', expires_in: 3600 });
+  }) as unknown as typeof fetch);
+
+  expect((await p.get()).status).toBe('unavailable');
+  p.invalidate?.();
+  expect((await p.get()).token).toBe('ok');
+  expect((await p.get()).token).toBe('ok'); // agora serve do cache de sucesso
+  expect(calls).toBe(2);
+});

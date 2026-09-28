@@ -17,6 +17,10 @@ const REQUEST_TIMEOUT_MS = 10_000;
 /** Corpo lido para parse (o `error_description` do Entra é longo) e teto exibido. */
 const ERROR_BODY_CHARS = 2_000;
 const ERROR_DETAIL_CHARS = 300;
+/** Janelas em que a falha fica cacheada — ver `failureResult`. */
+const UNAUTHORIZED_BLOCK_MS = 60_000;
+const UNAVAILABLE_BLOCK_MS = 15_000;
+const DEFAULT_RETRY_AFTER_S = 30;
 
 export interface FabricAuthEnv {
   tenantId?: string;
@@ -129,13 +133,27 @@ function unconfiguredResult(): TokenResult {
   };
 }
 
-function failureResult(res: Response, body: string): TokenResult {
+/**
+ * Falha + por quanto tempo não vale a pena repetir. Repetir uma chamada que vai
+ * falhar igual não é resiliência: no 429 piora o limite, e no 400 gasta 10 s de
+ * timeout por tool do agente para receber a mesma resposta.
+ */
+function failureResult(res: Response, body: string): { result: TokenResult; blockMs: number } {
   if (res.status === 429) {
     const s = retryAfterSeconds(res);
-    return { status: 'unavailable', error: `token endpoint limitou (429)${s !== null ? ` — aguarde ${s}s` : ''}` };
+    return {
+      result: { status: 'unavailable', error: `token endpoint limitou (429)${s !== null ? ` — aguarde ${s}s` : ''}` },
+      // O servidor disse quando voltar; obedecer é o mínimo. Sem header, 30 s.
+      blockMs: (s ?? DEFAULT_RETRY_AFTER_S) * 1000,
+    };
   }
   const status: TokenStatus = res.status === 400 || res.status === 401 ? 'unauthorized' : 'unavailable';
-  return { status, error: describeAadFailure(res.status, body) };
+  return {
+    result: { status, error: describeAadFailure(res.status, body) },
+    // Credencial recusada não se conserta sozinha — só com `nio config setup`,
+    // que chama invalidate() e derruba este bloqueio na hora.
+    blockMs: status === 'unauthorized' ? UNAUTHORIZED_BLOCK_MS : UNAVAILABLE_BLOCK_MS,
+  };
 }
 
 /** Provider com cache em memória. `fetchImpl` é seam pra teste (default = `fetch` global). */
@@ -144,15 +162,24 @@ export function createTokenProvider(
   fetchImpl: typeof fetch = fetch,
 ): TokenProvider {
   let cached: { token: string; expiresAt: number; grant: TokenGrant } | null = null;
+  let blocked: { until: number; result: TokenResult } | null = null;
+
+  /** Guarda a falha e devolve — a próxima chamada dentro da janela reusa isto. */
+  const hold = (result: TokenResult, blockMs: number): TokenResult => {
+    blocked = { until: Date.now() + blockMs, result };
+    return result;
+  };
 
   return {
-    invalidate: () => { cached = null; },
+    // Também derruba o bloqueio: quem chama isto acabou de trocar a credencial.
+    invalidate: () => { cached = null; blocked = null; },
     async get(): Promise<TokenResult> {
       const grant = fabricGrant(auth);
       if (!auth.tenantId || !grant) return unconfiguredResult();
       if (cached && cached.expiresAt > Date.now()) {
         return { status: 'ok', token: cached.token, grant: cached.grant };
       }
+      if (blocked && blocked.until > Date.now()) return blocked.result;
       try {
         const res = await fetchImpl(TOKEN_ENDPOINT(auth.tenantId), {
           method: 'POST',
@@ -160,14 +187,19 @@ export function createTokenProvider(
           body: grantBody(grant, auth),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
-        if (!res.ok) return failureResult(res, (await res.text().catch(() => '')).slice(0, ERROR_BODY_CHARS));
+        if (!res.ok) {
+          const { result, blockMs } = failureResult(res, (await res.text().catch(() => '')).slice(0, ERROR_BODY_CHARS));
+          return hold(result, blockMs);
+        }
         const json = (await res.json()) as { access_token?: string; expires_in?: number };
         if (!json.access_token) return { status: 'unavailable', error: 'resposta do token sem access_token' };
         const ttlMs = (json.expires_in ?? 3600) * 1000;
         cached = { token: json.access_token, expiresAt: Date.now() + ttlMs - EXPIRY_SKEW_MS, grant };
+        blocked = null;
         return { status: 'ok', token: json.access_token, grant };
       } catch (err) {
-        return { status: 'unavailable', error: (err as Error).message };
+        // Timeout/DNS/rede: 10 s perdidos por tentativa — segurar vale ainda mais.
+        return hold({ status: 'unavailable', error: (err as Error).message }, UNAVAILABLE_BLOCK_MS);
       }
     },
   };
