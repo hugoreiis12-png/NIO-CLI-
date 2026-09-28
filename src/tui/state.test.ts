@@ -17,6 +17,8 @@ import {
   isInternalMessage,
   stripReasoningTags,
   shouldCompact,
+  replyFailed,
+  replyErrorDetail,
 } from './state.js';
 import type { ChatMessage } from './state.js';
 import type { Event } from '@opencode-ai/sdk';
@@ -620,4 +622,32 @@ test('sem tombstone, pedido novo do servidor ainda entra na fila', () => {
   const depois = reconcilePendingQuestions({ ...emptyChat, questions: [] }, doServidor, settled);
   expect(depois.questions).toHaveLength(1);
   expect(depois.questions[0]!.id).toBe('q2');
+});
+
+test('4xx do client do opencode conta como falha, mesmo vindo resolvido', () => {
+  // O SDK não lança em resposta não-2xx (`throwOnError` é falsy por padrão): um
+  // 4xx chega numa promessa cumprida. Se isto virar `false`, o tombstone fica
+  // preso e o modal some sem decisão enquanto o motor segue esperando.
+  expect(replyFailed({ error: { message: 'permission ja consumida' } })).toBe(true);
+  expect(replyFailed({ error: {} })).toBe(true);
+});
+
+test('reply aceito pelo server não é falha, mesmo com envelope do SDK', () => {
+  expect(replyFailed({ data: { reply: 'ok' }, request: {}, response: {} })).toBe(false);
+  expect(replyFailed({ data: undefined, error: undefined })).toBe(false);
+  expect(replyFailed(undefined)).toBe(false);
+  expect(replyFailed(null)).toBe(false);
+});
+
+test('fetch cru segue o ok, não o envelope', () => {
+  expect(replyFailed({ ok: false, status: 409 })).toBe(true);
+  expect(replyFailed({ ok: true, status: 200 })).toBe(false);
+});
+
+test('replyErrorDetail extrai a recusa e não inventa motivo no sucesso', () => {
+  expect(replyErrorDetail({ error: { message: 'permission ja consumida' } })).toBe('permission ja consumida');
+  expect(replyErrorDetail({ error: 'texto puro' })).toBe('texto puro');
+  expect(replyErrorDetail({ ok: false, status: 409 })).toBe(''); // sem corpo: o status já vai no log
+  expect(replyErrorDetail({ data: {} })).toBe('');
+  expect(replyErrorDetail({ error: { message: 'x'.repeat(500) } })).toHaveLength(200);
 });

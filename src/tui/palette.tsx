@@ -108,11 +108,17 @@ export function PermissionModal({
     else if (key.escape) onRespond('reject');
   });
 
-  const detail = req.command
+  // O engine nem sempre manda `metadata.command` — o `GET /permission` do resync
+  // (o caminho que salva quando o evento SSE se perde) costuma chegar sem ele. Aí
+  // sobram os `patterns`, que são a **regra** e não a linha que vai rodar: aprovar
+  // `ls -la` achando que é isso, quando o real era `cd x && rm y`, é o pior
+  // desfecho possível. Melhor dizer que a informação é parcial do que fingir.
+  const parcial = !req.command;
+  const detail: string[] = req.command
     ? [`$ ${req.command}`]
     : req.patterns.length
       ? req.patterns.slice(0, 4)
-      : [permGroupLabel(req.kind)];
+      : [sym.warn + ' o engine não informou o que é este pedido'];
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={theme.warn} paddingX={1}>
@@ -126,10 +132,25 @@ export function PermissionModal({
           {clip(d, 78)}
         </Text>
       ))}
+      {parcial && (
+        <Text color={theme.warn} wrap="truncate-end">
+          {'  '}
+          {sym.warn} comando exato não informado — você aprova pelo padrão
+        </Text>
+      )}
       {req.always.length > 0 && (
         <Text color={theme.dim} wrap="truncate-end">
           {'  sempre = '}
           {req.always.slice(0, 5).join(', ')}
+        </Text>
+      )}
+      {req.kind === 'bash' && (
+        // [s] grava uma regra permanente que dispensa os próximos comandos desta
+        // classe — inclusive os destrutivos. O atalho é legítimo, mas precisa de
+        // preço visível, senão um [s] distraído burla a aprovação de todo bash.
+        <Text color={theme.warn} wrap="truncate-end">
+          {'  '}
+          {sym.warn} [s] dispensa automaticamente os próximos comandos desta classe
         </Text>
       )}
       <Text color={theme.dim}>[a] permitir · [s] sempre · Esc pular</Text>

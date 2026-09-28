@@ -825,6 +825,34 @@ export function shouldAbortCompaction(opts: {
 }
 
 /**
+ * O servidor recusou o reply? — decide se o tombstone pode ser solto.
+ *
+ * Dois clientes, a mesma armadilha: `fetch` só rejeita em erro de rede, e o client
+ * do opencode também (`throwOnError` é falsy por padrão) — um 4xx chega numa promessa
+ * **cumprida**. Quem trata só `.catch` acredita que respondeu, o tombstone fica preso,
+ * e o reconcile passa a ignorar um pedido que o servidor continua listando: o modal
+ * some em silêncio e o motor trava sem uma linha no `tlog`.
+ *
+ * Aceita as duas formas: `Response` cru (`{ ok }`) e o envelope do SDK (`{ error }`).
+ */
+export function replyFailed(res: unknown): boolean {
+  if (typeof res !== 'object' || res === null) return false;
+  const r = res as { ok?: unknown; error?: unknown };
+  if (typeof r.ok === 'boolean') return !r.ok; // fetch cru
+  return r.error != null; // client do opencode: 4xx/5xx vem como `{ error }`
+}
+
+/** Motivo curto da recusa, pro `tlog`. Vazio quando o reply foi aceito. */
+export function replyErrorDetail(res: unknown): string {
+  if (!replyFailed(res) || typeof res !== 'object' || res === null) return '';
+  const err = (res as { error?: unknown }).error;
+  if (err == null) return '';
+  if (typeof err === 'string') return err.slice(0, 200);
+  const msg = (err as { message?: unknown }).message;
+  return typeof msg === 'string' ? msg.slice(0, 200) : JSON.stringify(err).slice(0, 200);
+}
+
+/**
  * Converte o histórico em tentativas de tool, para o aprendizado contínuo.
  *
  * O raciocínio atribuído a cada chamada é o **imediatamente anterior a ela na mesma
