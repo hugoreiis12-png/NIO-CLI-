@@ -7,18 +7,26 @@ import { join } from 'node:path';
  * filtra os três igual.
  *
  * Taxonomia (uniforme nos kinds versionados):
+ *   skills/core/<skill>/SKILL.md     (sem role — vai pra todo mundo)
  *   skills/<role>/<área|general>/<stack|general>/<skill>/SKILL.md
  *   rules/<role>/<área|general>/<stack|general>/rules.md
  *   dependencies/<role>/<área|general>/<stack|general>/*.md
  *   agents/<role>/<name>.md          (role, sem área/stack)
  *   commands/<name>.md  ·  hooks/*    (flat — sempre dev)
  *
- * Regra de inclusão: role selecionado; `general` do role entra sempre; uma área só
- * entra se selecionada, e dentro dela só o `general` da área + o **stack escolhido**.
+ * Regra de inclusão: `core` entra sempre; fora dele, role selecionado, `general` do
+ * role entra sempre, uma área só entra se selecionada, e dentro dela só o `general`
+ * da área + o **stack escolhido**.
  */
 
 export const GENERAL = 'general';
 export const DEV_ROLE = 'dev';
+/**
+ * Seção sem role: vale para qualquer perfil. Antes de existir, `skills/core/*` caía
+ * na checagem de role e era descartado em silêncio — o `senior-engineering-core`
+ * estava no repo e não chegava a ninguém.
+ */
+export const CORE = 'core';
 
 /** role(s) escolhidos + a stack de cada área selecionada (a área é a chave). */
 export interface Selection {
@@ -27,9 +35,12 @@ export interface Selection {
   stacks: Record<string, string>;
 }
 
-/** Roles = subpastas de topo de `skills/` (ex.: `dev`, `management`). */
+/**
+ * Roles = subpastas de topo de `skills/` (ex.: `dev`, `management`). `core` fica de
+ * fora: não é perfil escolhível — sem isto ele apareceria como opção no `nio init`.
+ */
 export function discoverRoles(dir: string): string[] {
-  return subdirs(join(dir, 'skills'));
+  return subdirs(join(dir, 'skills')).filter((r) => r !== CORE);
 }
 
 /** Áreas de um role = subpastas de `skills/<role>/` menos `general`. */
@@ -60,6 +71,7 @@ export function includePath(relPath: string, sel: Selection): boolean {
   const kind = parts[0];
 
   if (kind === 'commands' || kind === 'hooks') return sel.roles.includes(DEV_ROLE);
+  if (parts[1] === CORE) return true; // sem role: vale pra qualquer perfil
 
   const role = parts[1];
   if (!sel.roles.includes(role)) return false;
@@ -83,6 +95,7 @@ export function filterForSelection<T extends { relPath: string }>(
 
 /**
  * Achata os segmentos de taxonomia pro layout on-disk do cliente:
+ *   skills/core/<skill>/…                      → skills/<skill>/…
  *   skills/<role>/general/<skill>/…            → skills/<skill>/…
  *   skills/<role>/<área>/<stack>/<skill>/…      → skills/<skill>/…
  *   agents/<role>/<name>                        → agents/<name>
@@ -94,7 +107,9 @@ export function flattenSelection<T extends { relPath: string }>(docs: T[]): T[] 
     const kind = parts[0];
     if (kind === 'agents') return { ...d, relPath: `agents/${parts.slice(2).join('/')}` };
     if (kind === 'skills') {
-      const rest = parts[2] === GENERAL ? parts.slice(3) : parts.slice(4);
+      // `core` tem um nível a menos (não tem role/área/stack) — usar o slice dos
+      // outros ramos comeria o nome da skill e colapsaria tudo em `skills/SKILL.md`.
+      const rest = parts[1] === CORE ? parts.slice(2) : parts[2] === GENERAL ? parts.slice(3) : parts.slice(4);
       return { ...d, relPath: `skills/${rest.join('/')}` };
     }
     return d;

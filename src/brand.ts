@@ -67,7 +67,7 @@ export const brand = {
    * Bump: a cada release da CLI, apontar pro HEAD revisado do `NIO-SKILLS-`.
    * `NIO_SKILLS_REF` sobrescreve (dev / bump manual); a CLI avisa se não for SHA.
    */
-  skillsRef: '11980256cff5c261740e0abd0c549da9b1da3d95',
+  skillsRef: '52604f1c65534d7262eac056852210e18e6e6854',
   /** Pacote npm das skills — citado em mensagens de erro de "pacote não encontrado". ASSUME mesma org (`nio-cli`) do pacote da CLI — confirmar se as skills publicam em outro escopo. */
   skillsPackage: '@nio-cli/skills',
 
