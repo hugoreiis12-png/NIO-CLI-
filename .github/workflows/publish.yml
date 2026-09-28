@@ -33,10 +33,31 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Publish (pula se a versão já está no npm)
+      - name: Check tag and manifest agree
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME#v}"
+            if [ "$TAG" != "$VERSION" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} não bate com package.json ${VERSION}."
+              echo "Bump a versão no mesmo commit da tag, ou a tag v${VERSION} no commit certo."
+              exit 1
+            fi
+          fi
+          echo "manifest: $VERSION"
+
+      - name: Publish
         run: |
           VERSION=$(node -p "require('./package.json').version")
           if npm view "@nio-cli/cli@${VERSION}" version >/dev/null 2>&1; then
+            # Já existe no npm. Num push de tag isso é erro: a tag é imutável e
+            # diz que existe uma release que este repo não produziu — foi
+            # exatamente assim que a v0.16.1 passou sem publicar nada. Só o
+            # dispatch manual repete em silêncio.
+            if [ "${{ github.ref_type }}" = "tag" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} mas @nio-cli/cli@${VERSION} já existe no npm — a tag aponta pra uma release que não saiu daqui."
+              exit 1
+            fi
             echo "@nio-cli/cli@${VERSION} já publicado — nada a fazer."
             exit 0
           fi
