@@ -8,6 +8,7 @@ import { c, sym } from "../../lib/colors.js";
 import { fabricGrant, readFabricAuthEnv, type TokenGrant } from "../../adapters/fabric/token.js";
 import { startDeviceAuth, pollDeviceToken } from "../../adapters/fabric/device-code.js";
 import { saveRefreshToken, clearRefreshToken } from "../../adapters/fabric/refresh-store.js";
+import { GRANT_LABEL } from "../../lib/auth/fabric-config.js";
 import { createFabricGateway } from "../../adapters/fabric/client.js";
 import type { FabricStatus } from "../../core/fabric.js";
 import { registerFabricRagCommands } from "./fabric-rag.js";
@@ -57,7 +58,7 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
     process.exit(r.status === "ok" ? 0 : 1);
   }
   if (r.status === "ok") {
-    const via = r.grant === "user" ? "token de usuário (RLS aplicado)" : "service principal";
+    const via = GRANT_LABEL[r.grant ?? "service_principal"];
     console.log(`${c.green(sym.ok)} Fabric conectado via ${via} — ${r.workspaceCount} workspace(s) visível(is).`);
   } else if (r.status === "unconfigured") {
     console.log(`${c.yellow(sym.warn)} Fabric não configurado. ${c.dim(HINT)}`);

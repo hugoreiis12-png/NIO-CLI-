@@ -12,8 +12,8 @@ import { input, password, select } from '../prompts.js';
 import { c, sym } from '../colors.js';
 import { createTokenProvider, fabricGrant, readFabricAuthEnv, type TokenGrant } from '../../adapters/fabric/token.js';
 
-/** Como cada grant se chama na UI. */
-const GRANT_LABEL: Record<TokenGrant, string> = {
+/** Como cada grant se chama na UI. Fonte única — o `fabric status` usa o mesmo. */
+export const GRANT_LABEL: Record<TokenGrant, string> = {
   device: 'login de usuário (device code — respeita RLS)',
   user: 'token de usuário (respeita RLS)',
   service_principal: 'service principal',

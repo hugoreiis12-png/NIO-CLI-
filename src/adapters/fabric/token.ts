@@ -189,7 +189,11 @@ type Acquisition =
  * morrer sozinho na renovação seguinte.
  */
 async function acquireViaDevice(auth: FabricAuthEnv, fetchImpl: typeof fetch): Promise<Acquisition> {
-  const r = await refreshAccessToken(auth, auth.deviceRefreshToken ?? '', fetchImpl);
+  // Lê do store, e não de `auth`: em processo longo (MCP server) o refresh é
+  // rotacionado a cada renovação, então o que veio em `auth` fica obsoleto logo
+  // na primeira — e a segunda renovação falharia com um erro opaco do Entra.
+  const atual = readRefreshToken(auth.tenantId, auth.clientId) ?? auth.deviceRefreshToken ?? '';
+  const r = await refreshAccessToken(auth, atual, fetchImpl);
   if (r.status !== 'ok') {
     return {
       ok: false,
@@ -269,9 +273,22 @@ export function createTokenProvider(
 
 const shared = new Map<string, TokenProvider>();
 
-/** Um provider por credencial no processo: o cache do token vale entre tool calls. */
-export function sharedTokenProvider(auth: FabricAuthEnv = readFabricAuthEnv()): TokenProvider {
-  const key = JSON.stringify([auth.tenantId, auth.clientId, auth.username, auth.clientSecret, auth.password]);
+/**
+ * Um provider por credencial no processo: o cache do token vale entre tool calls.
+ *
+ * O default é `readFabricAuth` (com o login salvo), não `readFabricAuthEnv` — é
+ * por aqui que as tools MCP e o gateway REST pegam o token, e com o env puro elas
+ * ignorariam o `nio fabric login` e voltariam ao service principal em silêncio.
+ *
+ * O refresh entra na chave para que trocar de conta (logout + login) não reuse o
+ * provider da anterior: com RLS, isso significaria responder com os dados da
+ * pessoa errada até o access token expirar.
+ */
+export function sharedTokenProvider(auth: FabricAuthEnv = readFabricAuth()): TokenProvider {
+  const key = JSON.stringify([
+    auth.tenantId, auth.clientId, auth.username, auth.clientSecret, auth.password,
+    auth.deviceRefreshToken?.slice(-24),
+  ]);
   let provider = shared.get(key);
   if (!provider) {
     provider = createTokenProvider(auth);
