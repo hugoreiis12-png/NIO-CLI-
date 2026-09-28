@@ -31,6 +31,23 @@ async function probe(): Promise<FabricStatusReport> {
   return { configured: true, grant, status: out.status, error: out.error };
 }
 
+/**
+ * Rótulo da falha. Quando o Entra devolveu um AADSTS, ele **já disse a causa** —
+ * e um palpite genérico ao lado manda procurar no lugar errado: um AADSTS50126
+ * (usuário/senha) com "service principal sem permissão" na frente já custou uma
+ * sessão inteira de caça a permissão no portal do Azure.
+ */
+export function statusLabel(status: FabricStatusReport["status"], error?: string): string {
+  if (status === "unauthorized") {
+    return /AADSTS\d+/.test(error ?? "")
+      ? "recusou a credencial"
+      : "sem acesso (service principal sem permissão, tenant setting desabilitado, ou RLS/SSO no dataset)";
+  }
+  if (status === "unavailable") return "indisponível (rede/timeout)";
+  if (status === "throttled") return "limitado (429) — aguarde antes de repetir";
+  return "falhou";
+}
+
 async function runStatus(opts: { json?: boolean }): Promise<void> {
   const r = await probe();
   if (opts.json) {
@@ -43,15 +60,7 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
   } else if (r.status === "unconfigured") {
     console.log(`${c.yellow(sym.warn)} Fabric não configurado. ${c.dim(HINT)}`);
   } else {
-    const label =
-      r.status === "unauthorized"
-        ? "sem acesso (service principal sem permissão, tenant setting desabilitado, ou RLS/SSO no dataset)"
-        : r.status === "unavailable"
-          ? "indisponível (rede/timeout)"
-          : r.status === "throttled"
-            ? "limitado (429) — aguarde antes de repetir"
-            : "falhou";
-    console.log(`${c.red(sym.err)} Fabric ${label}. ${c.dim(r.error ?? "")}`);
+    console.log(`${c.red(sym.err)} Fabric ${statusLabel(r.status, r.error)}. ${c.dim(r.error ?? "")}`);
   }
 
   // Independe da nuvem, e é **quando a credencial falha** que saber do Desktop aberto
