@@ -2,6 +2,9 @@ import { test, expect } from 'bun:test';
 import { createFabricGateway } from './client.js';
 import type { TokenProvider } from './token.js';
 
+// O gateway grava métrica de cada consulta; nos testes isso sujaria ~/.nio.
+process.env.NIO_METRICS = '0';
+
 const okToken: TokenProvider = { get: async () => ({ status: 'ok', token: 'tok' }) };
 const jsonRes = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

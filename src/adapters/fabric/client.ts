@@ -12,6 +12,7 @@ import type {
   FabricRow,
 } from '../../core/fabric.js';
 import { retryAfterSeconds, sharedTokenProvider, type TokenProvider, type TokenResult } from './token.js';
+import { classifyOutcome, recordQuery, type QueryMetric } from './query-metrics.js';
 
 const API_BASE = 'https://api.powerbi.com/v1.0/myorg';
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -173,10 +174,35 @@ export function createFabricGateway(deps: FabricClientDeps = {}): FabricGateway 
     }
   }
 
+  /**
+   * Cronometra e categoriza o resultado. Envolve em vez de espalhar chamadas nos
+   * seis pontos de retorno do `executeDax` — e assim também pega o erro de DAX
+   * que chega com HTTP 200.
+   */
+  async function medido<T>(
+    op: QueryMetric['op'],
+    datasetId: string | undefined,
+    exec: () => Promise<FabricResult<T>>,
+  ): Promise<FabricResult<T>> {
+    const inicio = Date.now();
+    const out = await exec();
+    recordQuery({
+      ts: new Date().toISOString(),
+      op,
+      outcome: classifyOutcome(out.status, out.error),
+      ms: Date.now() - inicio,
+      datasetId,
+    });
+    return out;
+  }
+
   return {
-    listWorkspaces: () => getPaged<FabricWorkspace>('/groups'),
+    listWorkspaces: () => medido('listWorkspaces', undefined, () => getPaged<FabricWorkspace>('/groups')),
     listDatasets: (workspaceId) =>
-      getPaged<FabricDataset>(`/groups/${encodeURIComponent(workspaceId)}/datasets`),
-    executeDax,
+      medido('listDatasets', undefined, () =>
+        getPaged<FabricDataset>(`/groups/${encodeURIComponent(workspaceId)}/datasets`),
+      ),
+    executeDax: (workspaceId, datasetId, dax) =>
+      medido('executeDax', datasetId, () => executeDax(workspaceId, datasetId, dax)),
   };
 }

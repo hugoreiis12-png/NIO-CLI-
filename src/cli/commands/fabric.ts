@@ -9,6 +9,7 @@ import { fabricGrant, readFabricAuthEnv, type TokenGrant } from "../../adapters/
 import { startDeviceAuth, pollDeviceToken } from "../../adapters/fabric/device-code.js";
 import { saveRefreshToken, clearRefreshToken } from "../../adapters/fabric/refresh-store.js";
 import { GRANT_LABEL } from "../../lib/auth/fabric-config.js";
+import { readMetrics, summarize } from "../../adapters/fabric/query-metrics.js";
 import { createFabricGateway } from "../../adapters/fabric/client.js";
 import type { FabricStatus } from "../../core/fabric.js";
 import { registerFabricRagCommands } from "./fabric-rag.js";
@@ -127,6 +128,45 @@ async function runLogin(): Promise<void> {
   console.log(c.dim("  sai com `nio fabric logout`."));
 }
 
+/** `820ms` / `3.1s` — segundo só quando passa de mil, senão polui. */
+function tempo(ms: number): string {
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+const OUTCOME_ORDER = [
+  "ok", "column_not_found", "table_not_found", "type_mismatch",
+  "syntax_error", "function_error", "other_dax_error",
+  "unauthorized", "throttled", "unavailable",
+];
+
+function runMetrics(opts: { dias?: string; json?: boolean }): void {
+  const dias = Number(opts.dias ?? 30);
+  const s = summarize(readMetrics(dias));
+  if (opts.json) {
+    console.log(JSON.stringify({ dias, ...s }));
+    return;
+  }
+  if (s.total === 0) {
+    console.log(`${c.yellow(sym.warn)} Nenhuma consulta registrada nos últimos ${dias} dias.`);
+    console.log(c.dim("  a métrica começa a gravar na próxima consulta (desligue com NIO_METRICS=0)."));
+    return;
+  }
+
+  const erros = s.total - (s.porOutcome.ok ?? 0);
+  console.log(`\n  ${c.bold("Consultas ao Fabric")} ${c.dim(`— últimos ${dias} dias`)}\n`);
+  console.log(`  total          ${s.total}`);
+  console.log(`  taxa de erro   ${(s.taxaErro * 100).toFixed(0)}% ${c.dim(`(${erros} de ${s.total})`)}`);
+  console.log("");
+  for (const k of OUTCOME_ORDER) {
+    const n = s.porOutcome[k];
+    if (!n) continue;
+    const barra = "█".repeat(Math.max(1, Math.round((n / s.total) * 24)));
+    const cor = k === "ok" ? c.green : c.red;
+    console.log(`  ${k.padEnd(20)} ${String(n).padStart(4)}  ${cor(barra)}`);
+  }
+  console.log(`\n  tempo          p50 ${tempo(s.msP50)} · p95 ${tempo(s.msP95)}\n`);
+}
+
 function runLogout(): void {
   clearRefreshToken();
   console.log(`${c.green(sym.ok)} Sessão do Fabric encerrada. ${c.dim("volta a usar a credencial do config.env.")}`);
@@ -150,6 +190,13 @@ export function registerFabricCommand(program: Command): void {
     .command("logout")
     .description("Esquece o login interativo e volta à credencial do config.env")
     .action(runLogout);
+
+  fabric
+    .command("metrics")
+    .description("Taxa de erro das consultas ao Fabric, por categoria")
+    .option("--dias <n>", "janela em dias", "30")
+    .option("--json", "saída estável em JSON")
+    .action(runMetrics);
 
   registerFabricRagCommands(fabric);
 }
