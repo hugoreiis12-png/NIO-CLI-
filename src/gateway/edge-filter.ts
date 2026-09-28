@@ -4,6 +4,7 @@
  */
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
+import { logEvent, type LogLevel } from './log.js';
 
 /** Shape mínimo de request que o filtro precisa — não o `IncomingMessage` inteiro, pra ser testável com objeto simples. */
 export interface FilterableRequest {
@@ -32,8 +33,12 @@ export function buildContext(req: FilterableRequest): RequestContext {
 }
 
 /** Log estruturado em stderr — uma linha JSON por request (`event: 'gateway_request'`). */
-export function logRequest(ctx: RequestContext, extra: Record<string, unknown> = {}): void {
-  console.error(JSON.stringify({ ts: new Date().toISOString(), event: 'gateway_request', ...ctx, ...extra }));
+export function logRequest(
+  ctx: RequestContext,
+  extra: Record<string, unknown> = {},
+  level: LogLevel = 'info',
+): void {
+  logEvent('gateway_request', { ...ctx, ...extra }, level);
 }
 
 /**
@@ -46,9 +51,9 @@ export function logAuthEvent(
   result: string,
   meta: { name?: string; userId?: number; reason?: string } = {},
 ): void {
-  console.error(
-    JSON.stringify({ ts: new Date().toISOString(), event: 'auth_attempt', result, ...ctx, ...meta }),
-  );
+  // Falha de auth é sinal operacional (brute-force aparece como rajada de `warn`).
+  const level: LogLevel = result.endsWith('_fail') || result === '2fa_expired' ? 'warn' : 'info';
+  logEvent('auth_attempt', { result, ...ctx, ...meta }, level);
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | null {

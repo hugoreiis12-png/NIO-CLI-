@@ -28,6 +28,7 @@ import {
   tokensMatch,
   type RequestContext,
 } from './edge-filter.js';
+import { logEvent } from './log.js';
 import { GATEWAY_PORT, GATEWAY_HOST } from './config.js';
 import { VERSION } from '../version.js';
 import { getOrCreateGatewayToken } from '../lib/auth/gateway-token.js';
@@ -79,7 +80,7 @@ async function recordLoginIp(req: IncomingMessage, userId: number): Promise<void
   try {
     await createLoginIpRepository().record(userId, ip);
   } catch (err) {
-    console.error(JSON.stringify({ ts: new Date().toISOString(), event: 'login_ip_record_failed', error: (err as Error).message }));
+    logEvent('login_ip_record_failed', { error: (err as Error).message }, 'warn');
   }
 }
 
@@ -105,9 +106,7 @@ function auditAuth(
       detail: meta.reason ? { reason: meta.reason } : null,
     })
     .catch((err: unknown) =>
-      console.error(
-        JSON.stringify({ ts: new Date().toISOString(), event: 'auth_event_record_failed', error: (err as Error).message }),
-      ),
+      logEvent('auth_event_record_failed', { error: (err as Error).message }, 'warn'),
     );
 }
 
@@ -317,13 +316,13 @@ async function main(): Promise<void> {
     const ctx = buildContext(req);
 
     if (hasBrowserOrigin(req)) {
-      logRequest(ctx, { rejected: 'origin_de_browser' });
+      logRequest(ctx, { rejected: 'origin_de_browser' }, 'warn');
       sendJson(res, 403, { error: 'requests com header Origin não são aceitas' });
       return;
     }
 
     if (TOKEN_REQUIRED(ctx.path) && !tokensMatch(extractGatewayToken(req), gatewayToken)) {
-      logRequest(ctx, { rejected: 'token_invalido' });
+      logRequest(ctx, { rejected: 'token_invalido' }, 'warn');
       sendJson(res, 403, { error: 'token do gateway ausente ou inválido' });
       return;
     }
@@ -341,7 +340,7 @@ async function main(): Promise<void> {
         if (ctx.method === 'GET' && ctx.path === '/health') return sendJson(res, 200, { ok: true, version: VERSION });
         sendJson(res, 404, { error: 'rota desconhecida' });
       } catch (err) {
-        logRequest(ctx, { error: (err as Error).message, stack: (err as Error).stack });
+        logRequest(ctx, { error: (err as Error).message, stack: (err as Error).stack }, 'error');
         if (err instanceof BadRequestError) {
           sendJson(res, 400, { error: err.message });
         } else {
@@ -363,7 +362,7 @@ async function main(): Promise<void> {
     try {
       const a = await createLoginIpRepository().pruneOlderThan(LOGIN_IP_RETENTION_DAYS);
       const b = await createAuthEventRepository().pruneOlderThan(AUTH_EVENTS_RETENTION_DAYS);
-      if (a + b > 0) console.error(`[nio-gateway] retenção: -${a} login_ip_events, -${b} auth_events`);
+      if (a + b > 0) logEvent('audit_pruned', { loginIpEvents: -a, authEvents: -b });
     } catch {
       /* best-effort */
     }
@@ -373,19 +372,23 @@ async function main(): Promise<void> {
 
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`[nio-gateway] porta ${GATEWAY_PORT} ocupada em ${GATEWAY_HOST} — outro gateway rodando (container?)`);
+      logEvent(
+        'listen_failed',
+        { reason: 'port_in_use', host: GATEWAY_HOST, port: GATEWAY_PORT, hint: 'outro gateway rodando (container?)' },
+        'error',
+      );
     } else {
-      console.error(`[nio-gateway] erro no socket: ${err.message}`);
+      logEvent('socket_error', { code: err.code, error: err.message }, 'error');
     }
     process.exit(1);
   });
 
   server.listen(GATEWAY_PORT, GATEWAY_HOST, () => {
-    console.error(`[nio-gateway] ouvindo em http://${GATEWAY_HOST}:${GATEWAY_PORT}`);
+    logEvent('gateway_listening', { host: GATEWAY_HOST, port: GATEWAY_PORT, version: VERSION });
   });
 }
 
 main().catch((err) => {
-  console.error(`[nio-gateway] erro fatal: ${(err as Error).message}`);
+  logEvent('fatal', { error: (err as Error).message, stack: (err as Error).stack }, 'error');
   process.exit(1);
 });
