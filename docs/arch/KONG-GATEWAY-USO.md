@@ -32,7 +32,7 @@
 │  │ ┌──────────┐ │    │ ┌──────────┐ │    │  ┌────────────────┐ │   │
 │  │ │   Kong   │─┼────┼─│ Gateway  │ │    │  │ Aplicação ext. │─┼───┤
 │  │ │  :8000   │ │    │ │  :3000   │ │    │  │   (docker)     │ │   │
-│  │ │  :8443   │ │    │ └──────────┘ │    │  └────────────────┘ │   │
+│  │ │ LAN:8080 │ │    │ └──────────┘ │    │  └────────────────┘ │   │
 │  │ └──────────┘ │    │ ┌──────────┐ │    └──────────────────────┘   │
 │  │              │    │ │ Headroom │ │                                │
 │  │ ┌──────────┐ │    │ │  :8787   │ │                                │
@@ -54,10 +54,10 @@
 
 ### Serviços na Stack Portainer (ID 106)
 
-| Serviço | Container | Porta(s) | Visível na LAN |
-|---------|-----------|----------|-----------------|
-| Kong API Gateway | `nio-kong` | `8000` (HTTP), `8443` (HTTPS), `8001` (admin) | ✅ Sim |
-| NIO Gateway | `nio-gateway` | `3000` (loopback only) | ❌ Não |
+| Serviço | Container | Porta interna | Porta na LAN | Visível na LAN |
+|---------|-----------|---------------|--------------|-----------------|
+| Kong API Gateway | `nio-kong` | `8000` | **`8080`** (`NIO_KONG_PROXY_PORT`) | ✅ Sim |
+| NIO Gateway | `nio-gateway` | `3000` | — (sem publish) | ❌ Não |
 | Headroom Proxy | `nio-headroom` | `8787` | ✅ Sim |
 | MCP Gateway | `nio-mcp-gateway` | `8811` (127.0.0.1) | ❌ Não |
 
@@ -132,7 +132,7 @@ Prefira sempre `x-nio-gateway-token` (mais explícito).
 ### Formato do Header
 
 ```
-x-nio-gateway-token: f6df401be8ac6f19149f6d7779845d299a3b804648b0896752f76e2d90eb23cc
+x-nio-gateway-token: <SEU_TOKEN_DE_64_HEX>
 ```
 
 ### Token via Variável de Ambiente (v0.5.0+)
@@ -550,7 +550,7 @@ services:
       NIO_KONG_URL: "http://nio-kong:8000"
       NIO_GATEWAY_URL: "http://nio-gateway:3000"
       NIO_HEADROOM_URL: "http://nio-headroom:8787"
-      NIO_GATEWAY_TOKEN: "f6df401be8ac6f19149f6d7779845d299a3b804648b0896752f76e2d90eb23cc"
+      NIO_GATEWAY_TOKEN: "<SEU_TOKEN_DE_64_HEX>"
     networks:
       - nio-net
 
@@ -565,26 +565,26 @@ networks:
 # Registrando usuário
 curl -X POST http://nio-kong:8000/register \
   -H "Content-Type: application/json" \
-  -H "x-nio-gateway-token: f6df401be8ac6f19149f6d7779845d299a3b804648b0896752f76e2d90eb23cc" \
+  -H "x-nio-gateway-token: <SEU_TOKEN_DE_64_HEX>" \
   -d '{"name":"usuario1","password":"SenhaSegura123!"}'
 
 # Login (1º fator)
 curl -X POST http://nio-kong:8000/login \
   -H "Content-Type: application/json" \
-  -H "x-nio-gateway-token: f6df401be8ac6f19149f6d7779845d299a3b804648b0896752f76e2d90eb23cc" \
+  -H "x-nio-gateway-token: <SEU_TOKEN_DE_64_HEX>" \
   -d '{"name":"usuario1","password":"SenhaSegura123!"}'
 
 # Verificar status 2FA (com JWT)
 curl -X GET http://nio-kong:8000/security/status \
   -H "Authorization: Bearer <jwt_token>" \
-  -H "x-nio-gateway-token: f6df401be8ac6f19149f6d7779845d299a3b804648b0896752f76e2d90eb23cc"
+  -H "x-nio-gateway-token: <SEU_TOKEN_DE_64_HEX>"
 ```
 
 #### Acesso via IP da LAN
 
 ```bash
-# Kong (porta 8000)
-curl -X GET http://192.168.0.160:8000/health
+# Kong na LAN (porta 8080 — NIO_KONG_PROXY_PORT; :8000 está ocupada neste host)
+curl -X GET http://192.168.0.160:8080/health
 
 # Headroom (porta 8787)
 curl -X GET http://192.168.0.160:8787/health
@@ -608,10 +608,10 @@ curl -X GET http://192.168.0.160:8787/health
 
 ```bash
 # Verificar se o token está correto
-curl -s -X GET http://192.168.0.160:8000/health
+curl -s -X GET http://192.168.0.160:8080/health
 
 # Testar com token explícito
-curl -s -X POST http://192.168.0.160:8000/login \
+curl -s -X POST http://192.168.0.160:8080/login \
   -H "x-nio-gateway-token: SEU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"test","password":"test"}'
@@ -623,7 +623,7 @@ curl -s -X POST http://192.168.0.160:8000/login \
 
 ```bash
 # Verificar headers de rate limit
-curl -sI -X POST http://192.168.0.160:8000/login \
+curl -sI -X POST http://192.168.0.160:8080/login \
   -H "Content-Type: application/json" \
   -H "x-nio-gateway-token: TOKEN" \
   -d '{"name":"test","password":"test"}'
@@ -648,7 +648,7 @@ curl -sI -X POST http://192.168.0.160:8000/login \
 **Solução:** garantir formato `KEY=value` (sem espaços ao redor do `=`):
 
 ```env
-NIO_GATEWAY_TOKEN=f6df401be8ac6f19149f6d7779845d299a3b804648b0896752f76e2d90eb23cc
+NIO_GATEWAY_TOKEN=<SEU_TOKEN_DE_64_HEX>
 DATABASE_URL=postgresql://nio_user:senha@db:5432/nio_cli
 ```
 

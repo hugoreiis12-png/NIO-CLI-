@@ -1,30 +1,31 @@
 #!/bin/sh
-# Pre-commit hook: bloqueia secrets
+# Bloqueia secrets no commit. Ative com: git config core.hooksPath .husky
+# O gate que vale é o job `secrets` no CI — este hook é só feedback rápido.
 
-# Padrões que não podem ser commitados
-PATTERNS=(
-  "AZURE_CLIENT_SECRET.*="
-  "JWT_SECRET.*="
-  "DATABASE_PASSWORD.*="
-  "AWS_ACCESS_KEY_ID.*="
-  "AWS_SECRET_ACCESS_KEY.*="
-  "OPENAI_API_KEY.*="
-  "PRIVATE_KEY.*="
-)
+STAGED=$(git diff --cached)
+[ -z "$STAGED" ] && exit 0
 
-# Verifica staged files
 FAILED=0
-for pattern in "${PATTERNS[@]}"; do
-  if git diff --cached | grep -E "^\+.*$pattern" > /dev/null; then
-    echo "❌ Secret pattern detected: $pattern"
-    echo "   Remove da staging com: git reset HEAD <file>"
-    FAILED=1
-  fi
-done
+
+# 1) Atribuições de segredo nomeado (KEY=valor / KEY: valor), valor não-vazio.
+NAMED='(AZURE_CLIENT_SECRET|JWT_SECRET|NIO_GATEWAY_TOKEN|DATABASE_PASSWORD|AWS_SECRET_ACCESS_KEY|AWS_ACCESS_KEY_ID|OPENAI_API_KEY|OTP_HMAC_SECRET|NIO_PEPPER)'
+if echo "$STAGED" | grep -E "^\+.*$NAMED[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9_/+.~-]{8,}" | grep -qv '\$'; then
+  echo "❌ Segredo nomeado com valor literal:"
+  echo "$STAGED" | grep -E "^\+.*$NAMED[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9_/+.~-]{8,}" | grep -v '\$' | head -5
+  FAILED=1
+fi
+
+# 2) Token hex longo solto (>=32). Exclui digests de imagem (sha256:) — são públicos.
+if echo "$STAGED" | grep -E "^\+" | grep -v 'sha256:' | grep -qE '\b[a-f0-9]{32,}\b'; then
+  echo "❌ Token hexadecimal (>=32 chars) — use \${VAR} ou um placeholder:"
+  echo "$STAGED" | grep -E "^\+" | grep -v 'sha256:' | grep -E '\b[a-f0-9]{32,}\b' | head -5
+  FAILED=1
+fi
 
 if [ $FAILED -eq 1 ]; then
-  echo "🔒 Commit bloqueado por segurança."
-  echo "   Veja .github/SECURITY.md para mais info."
+  echo ""
+  echo "🔒 Commit bloqueado. Veja .github/SECURITY.md"
+  echo "   Falso positivo? Justifique e use: git commit --no-verify"
   exit 1
 fi
 

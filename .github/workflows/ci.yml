@@ -9,6 +9,15 @@ on:
   workflow_call:   # reutilizável: publish.yml/image.yml chamam como gate antes de release
 
 jobs:
+  # Gate de segredo. Roda antes/junto do test e também nos gates de release
+  # (publish.yml/image.yml chamam este workflow) — não publica com segredo vazado.
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan de segredos
+        run: bash scripts/scan-secrets.sh
+
   test:
     runs-on: ubuntu-latest
 
@@ -34,7 +43,7 @@ jobs:
       NIO_DATABASE_URL: postgres://postgres:postgres@localhost:5432/nio_cli
       # ≥ 32 chars + variedade — o gateway rejeita segredo fraco (auditoria H-1).
       # Valor de teste efêmero, não é segredo real.
-      JWT_SECRET: ci-only-4f9c2ka7Qh1Zpx8Rbn3Vdw6Tty0Lms5Ej
+      JWT_SECRET: ci-only-4f9c2ka7Qh1Zpx8Rbn3Vdw6Tty0Lms5Ej  # nio-allow-secret: efêmero do runner
       # SP-7: o CI não fala com api.pwnedpasswords.com — só a checagem local roda.
       NIO_HIBP_DISABLE: "1"
 

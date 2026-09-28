@@ -50,28 +50,46 @@ git commit -m "fix: remove secret"
 2. Rode BFG/filter-branch pra remover histórico (custo: 1 force-push)
 3. Notifique admins, rotacione a credencial
 
-### Pre-commit hook (automático)
+### Os dois gates
 
-Este repo usa `pre-commit` (Husky) pra bloquear padrões:
+| Gate | Onde | Cobertura | Pode ser burlado? |
+|------|------|-----------|-------------------|
+| **CI — job `secrets`** | `.github/workflows/ci.yml` | Todo PR, push em `main` e **todo release** (publish/image chamam o CI) | ❌ Não |
+| Hook `pre-commit` | `.husky/pre-commit` | Só o diff staged, só na sua máquina | Sim (`--no-verify`) |
+
+**O CI é o que garante.** O hook é feedback rápido e é *opt-in* — o git não
+olha `.husky/` sozinho. Para ativar na sua máquina (uma vez por clone):
 
 ```bash
-git hook: blocks files com patterns como:
-  - AZURE_CLIENT_SECRET=
-  - JWT_SECRET=
-  - DATABASE_PASSWORD=
-  - AWS_ACCESS_KEY_ID=
-  - OPENAI_API_KEY=
+git config core.hooksPath .husky
 ```
 
-Se o hook bloqueia seu commit:
+### Rodar o scan localmente
+
 ```bash
-# Verifique: qual arquivo tem o padrão?
-git diff --cached --name-only | xargs grep -l SECRET
-
-# Corrija o arquivo
-# Rode git add novamente
-git commit
+bash scripts/scan-secrets.sh
 ```
+
+O que ele bloqueia:
+- Segredo **nomeado** com valor literal (`AZURE_CLIENT_SECRET`, `JWT_SECRET`,
+  `NIO_GATEWAY_TOKEN`, `AWS_*`, `OPENAI_API_KEY`, `OTP_HMAC_SECRET`, `NIO_PEPPER`).
+- **Hex de 64+ chars** — o formato de `openssl rand -hex 32`. SHA-1 de commit (40)
+  e digest `sha256:` de imagem ficam de fora: são públicos.
+
+Não conta como literal: `${VAR}`, `process.env.X` e placeholder com `<…>`.
+
+### Falso positivo: o escape
+
+Valor que *parece* segredo mas é comprovadamente efêmero (ex.: o `JWT_SECRET` do
+runner de CI) leva `nio-allow-secret` **na mesma linha**, com o porquê:
+
+```yaml
+JWT_SECRET: ci-only-4f9c2ka7...  # nio-allow-secret: efêmero do runner
+```
+
+O escape é auditável de propósito — `grep -rn nio-allow-secret` lista todas as
+exceções vigentes. Se você precisa de um e não consegue justificar em uma linha,
+provavelmente não é falso positivo.
 
 ### Reportar vulnerability
 
@@ -84,7 +102,18 @@ Se descobrir uma secret vaza, **avise imediatamente:**
 
 ## Histórico de verificações
 
-- **2026-09-28:** Auditoria completa, zero secrets encontrados ✅
-  - Git history: limpeza confirmada
-  - Pre-commit hook: configurado
-  - .gitignore: reforçado
+- **2026-09-28 — 2ª passada (a que valeu).** A 1ª passada tinha dois buracos:
+  - **Achado:** `NIO_GATEWAY_TOKEN` literal (64 hex) em 7 pontos de
+    `docs/arch/KONG-GATEWAY-USO.md` e `docker/external-app.example.yml`.
+    **Testado contra a produção: o token já estava rotacionado** (o Edge Filter
+    devolveu `403 token ... inválido`), então não houve incidente — mas o valor
+    foi trocado por placeholder e o formato deixou de ser ensinado como exemplo.
+    Sem reescrita de histórico: segredo morto não justifica force-push.
+  - **Achado:** o `.husky/pre-commit` da 1ª passada **nunca rodou** —
+    `core.hooksPath` não estava setado e o repo não usa Husky. Um hook em
+    `.husky/` é inerte por padrão. Daí o gate ter virado job de CI.
+  - Scan validado nos dois sentidos: passa limpo **e** bloqueia um token plantado.
+
+- **2026-09-28 — 1ª passada.** Varredura por `SECRET=`/`PASSWORD=` no histórico:
+  nada encontrado. Não cobria token hex solto em exemplo de doc — o buraco acima.
+  `.gitignore` reforçado com `.env.*`.

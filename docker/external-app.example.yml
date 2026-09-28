@@ -23,7 +23,8 @@ services:
     restart: unless-stopped
     environment:
       # Gateway token — DEVE ser idêntico ao da stack nio_cli277
-      NIO_GATEWAY_TOKEN: "f6df401be8ac6f19149f6d7779845d299a3b804648b0896752f76e2d90eb23cc"
+      # Gere com: openssl rand -hex 32   (nunca commite o valor real)
+      NIO_GATEWAY_TOKEN: "${NIO_GATEWAY_TOKEN}"
 
       # URL do Kong (acessível da rede do container)
       # Se ambos os stacks estão na mesma rede Docker: http://nio-kong:8000
