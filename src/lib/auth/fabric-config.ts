@@ -10,14 +10,21 @@
  */
 import { input, password, select } from '../prompts.js';
 import { c, sym } from '../colors.js';
-import { createTokenProvider, fabricGrant, readFabricAuthEnv } from '../../adapters/fabric/token.js';
+import { createTokenProvider, fabricGrant, readFabricAuthEnv, type TokenGrant } from '../../adapters/fabric/token.js';
+
+/** Como cada grant se chama na UI. */
+const GRANT_LABEL: Record<TokenGrant, string> = {
+  device: 'login de usuário (device code — respeita RLS)',
+  user: 'token de usuário (respeita RLS)',
+  service_principal: 'service principal',
+};
 
 /** Como a equipe autentica no Fabric. */
 export type FabricGrantChoice = 'service_principal' | 'user' | 'skip';
 
 export interface FabricConfigStatus {
-  /** Grant que o env habilita hoje, ou `null` se falta credencial. */
-  grant: 'user' | 'service_principal' | null;
+  /** Grant que a credencial habilita hoje, ou `null` se falta credencial. */
+  grant: TokenGrant | null;
   /** Ids do modelo semântico default, se configurados. */
   hasTarget: boolean;
 }
@@ -37,7 +44,7 @@ export function describeFabricConfig(status: FabricConfigStatus): string {
       `${c.dim('`nio fabric` e as tools nio_fabric_* não funcionam; rode `nio config setup`.')}`
     );
   }
-  const modo = status.grant === 'user' ? 'token de usuário (respeita RLS)' : 'service principal';
+  const modo = GRANT_LABEL[status.grant];
   const alvo = status.hasTarget ? '' : ` ${c.dim('— sem workspace/dataset default')}`;
   return `${c.green(sym.ok)} Fabric — ${c.dim(modo)}${alvo}.`;
 }
@@ -64,7 +71,8 @@ export const GRANT_CHOICES = [
 async function promptGrant(current: FabricConfigStatus): Promise<FabricGrantChoice> {
   return select<FabricGrantChoice>({
     message: 'Como autenticar no Power BI/Fabric?',
-    default: current.grant ?? 'user',
+    // `device` não é escolha deste wizard — vem do `nio fabric login`, não de env.
+    default: current.grant === 'device' ? 'service_principal' : (current.grant ?? 'user'),
     choices: GRANT_CHOICES,
   });
 }

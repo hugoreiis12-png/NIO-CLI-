@@ -5,7 +5,9 @@
  */
 import type { Command } from "commander";
 import { c, sym } from "../../lib/colors.js";
-import { fabricGrant, type TokenGrant } from "../../adapters/fabric/token.js";
+import { fabricGrant, readFabricAuthEnv, type TokenGrant } from "../../adapters/fabric/token.js";
+import { startDeviceAuth, pollDeviceToken } from "../../adapters/fabric/device-code.js";
+import { saveRefreshToken, clearRefreshToken } from "../../adapters/fabric/refresh-store.js";
 import { createFabricGateway } from "../../adapters/fabric/client.js";
 import type { FabricStatus } from "../../core/fabric.js";
 import { registerFabricRagCommands } from "./fabric-rag.js";
@@ -82,14 +84,71 @@ async function reportLocalXmla(): Promise<void> {
   }
 }
 
+/** `mm:ss` — o relógio do device code fala em minutos, não em 847 segundos. */
+function mmss(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  return `${m}:${String(totalSec % 60).padStart(2, "0")}`;
+}
+
+/**
+ * Login interativo (device code). É o caminho para dataset com RLS: o service
+ * principal é barrado por design nesses, e o ROPC é recusado pelo Entra quando
+ * há MFA. Aqui a pessoa aprova no navegador e a CLI guarda só o refresh token.
+ */
+async function runLogin(): Promise<void> {
+  const auth = readFabricAuthEnv();
+  const start = await startDeviceAuth(auth);
+  if (start.status !== "ok") {
+    console.log(`${c.red(sym.err)} não deu para iniciar o login: ${c.dim(start.error)}`);
+    process.exit(1);
+  }
+
+  console.log("");
+  console.log(`  Abra   ${c.cyan(start.data.verificationUri)}`);
+  console.log(`  Código ${c.green(start.data.userCode)}`);
+  console.log("");
+
+  // Só em TTY: num pipe/captura o relógio vira ruído (mesma regra do logo).
+  const tick = (restanteSec: number): void => {
+    if (process.stdout.isTTY) process.stdout.write(`\r  ${c.dim(`aguardando aprovação… ${mmss(restanteSec)}`)}   `);
+  };
+  const tokens = await pollDeviceToken(auth, start.data, { onWaiting: tick });
+  if (process.stdout.isTTY) process.stdout.write("\r\x1b[K");
+
+  if (tokens.status !== "ok") {
+    console.log(`${c.red(sym.err)} login não concluído: ${c.dim(tokens.error)}`);
+    process.exit(1);
+  }
+
+  const { warning } = saveRefreshToken(tokens.data.refreshToken, auth);
+  if (warning) console.log(`${c.yellow(sym.warn)} não consegui restringir a permissão do arquivo: ${c.dim(warning)}`);
+  console.log(`${c.green(sym.ok)} Login concluído — as consultas passam a rodar como você, com o RLS aplicado.`);
+  console.log(c.dim("  sai com `nio fabric logout`."));
+}
+
+function runLogout(): void {
+  clearRefreshToken();
+  console.log(`${c.green(sym.ok)} Sessão do Fabric encerrada. ${c.dim("volta a usar a credencial do config.env.")}`);
+}
+
 export function registerFabricCommand(program: Command): void {
-  const fabric = program.command("fabric").description("Integração com o Power BI/Fabric (service principal)");
+  const fabric = program.command("fabric").description("Integração com o Power BI/Fabric");
 
   fabric
     .command("status", { isDefault: true })
     .description("Preflight: confere as credenciais AZURE_* e lista workspaces")
     .option("--json", "saída estável em JSON")
     .action(runStatus);
+
+  fabric
+    .command("login")
+    .description("Login interativo no navegador (device code) — necessário para dataset com RLS")
+    .action(runLogin);
+
+  fabric
+    .command("logout")
+    .description("Esquece o login interativo e volta à credencial do config.env")
+    .action(runLogout);
 
   registerFabricRagCommands(fabric);
 }
