@@ -1,0 +1,31 @@
+#!/bin/sh
+# Pre-commit hook: bloqueia secrets
+
+# Padrões que não podem ser commitados
+PATTERNS=(
+  "AZURE_CLIENT_SECRET.*="
+  "JWT_SECRET.*="
+  "DATABASE_PASSWORD.*="
+  "AWS_ACCESS_KEY_ID.*="
+  "AWS_SECRET_ACCESS_KEY.*="
+  "OPENAI_API_KEY.*="
+  "PRIVATE_KEY.*="
+)
+
+# Verifica staged files
+FAILED=0
+for pattern in "${PATTERNS[@]}"; do
+  if git diff --cached | grep -E "^\+.*$pattern" > /dev/null; then
+    echo "❌ Secret pattern detected: $pattern"
+    echo "   Remove da staging com: git reset HEAD <file>"
+    FAILED=1
+  fi
+done
+
+if [ $FAILED -eq 1 ]; then
+  echo "🔒 Commit bloqueado por segurança."
+  echo "   Veja .github/SECURITY.md para mais info."
+  exit 1
+fi
+
+exit 0
