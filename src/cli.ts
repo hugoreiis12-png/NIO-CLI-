@@ -3,8 +3,7 @@ import "./lib/load-env.js";
 import { DEBUG } from "./lib/debug.js";
 import { animateMatrixLogo } from "./matrix-logo.js";
 import { notifyCliIfUpdate } from "./lib/version-check.js";
-import { buildProgram } from "./cli/program.js";
-import { continueChain } from "./cli/flows/onboarding.js";
+import { buildProgramFor } from "./cli/program-lazy.js";
 import { closeDbIfOpen, shutdown } from "./lib/shutdown.js";
 
 /** Banner de update: só em TTY (humano), DEPOIS do output — fora do caminho quente. */
@@ -25,7 +24,6 @@ const warmSkills = (): void => {
 
 /** `--help` toca a animação antes; se já rolou, o `beforeAll` não redesenha. */
 let logoShown = false;
-const program = buildProgram(() => logoShown);
 
 const fail = async (err: unknown): Promise<void> => {
   if (DEBUG) console.error(err);
@@ -41,7 +39,13 @@ const topHelp =
 if (bare && process.stdout.isTTY && process.stdin.isTTY) {
   // `nio` sozinho num terminal → a esteira guiada (não o help).
   warmSkills(); // background, paralelo à esteira — não bloqueia
-  continueChain({ from: "cold" }).then(closeDbIfOpen).then(maybeNotify).catch(fail);
+  // Import aqui, não no topo: a esteira custa 45 ms e só este ramo a usa —
+  // `nio --version` e `nio <comando>` não devem pagar por ela.
+  import("./cli/flows/onboarding.js")
+    .then((m) => m.continueChain({ from: "cold" }))
+    .then(closeDbIfOpen)
+    .then(maybeNotify)
+    .catch(fail);
 } else {
   // `nio --help` / `nio | cat` / CI → animação (se topo) + help/comando do commander.
   const helpPromise = topHelp
@@ -50,7 +54,10 @@ if (bare && process.stdout.isTTY && process.stdin.isTTY) {
       })
     : Promise.resolve();
   helpPromise
-    .then(() => program.parseAsync(process.argv))
+    // Monta só o comando invocado: `nio --version` deixa de pagar o import dos
+    // ~20 módulos. O ramo `bare` acima nem chega aqui — não monta programa nenhum.
+    .then(() => buildProgramFor(process.argv, () => logoShown))
+    .then((program) => program.parseAsync(process.argv))
     .then(closeDbIfOpen)
     .then(maybeNotify)
     .catch(fail);

@@ -3,11 +3,9 @@
  * bootstrap) pra que a TUI (`src/tui/`) e o `nio docs` possam enumerar os
  * comandos sem puxar a lógica de parse/argv.
  */
-import { Command } from "commander";
-import { VERSION } from "../version.js";
-import { brand } from "../brand.js";
-import { renderMatrixLogo, shouldDrawLogo } from "../matrix-logo.js";
-import { usageGuide } from "./help-guide.js";
+import type { Command } from "commander";
+import { createBaseProgram } from "./program-base.js";
+import { registerLeaves } from "./program-lazy.js";
 import { registerAuthCommands } from "./commands/auth.js";
 import { registerInitCommand } from "./commands/init/register.js";
 import { registerSyncCommand } from "./commands/sync.js";
@@ -29,57 +27,8 @@ import { registerStartCommand } from "./commands/start.js";
 import { registerAiCommand } from "./commands/ai.js";
 
 /** `logoShown` fica em `cli.ts` — aqui só o hook do help. */
-/**
- * Comandos carregados sob demanda. Nome e descrição ficam aqui — texto, custo
- * zero — e o módulo só é importado quando o comando roda. Antes, `nio --version`
- * pagava o import de todos: `program.js` custava 152 ms, 93% do cold start.
- *
- * **Só entra aqui comando sem `.option()` e sem subcomando.** O commander precisa
- * das opções declaradas antes do parse; adiar uma faria `nio x --flag` virar
- * "unknown option". Para os demais, o padrão exige registrar as opções aqui.
- */
-const LAZY_COMMANDS: ReadonlyArray<{
-  name: string;
-  description: string;
-  load: () => Promise<() => void | Promise<void>>;
-}> = [
-  {
-    name: "debug",
-    description: "Diagnostica o ambiente e aponta onde está o problema",
-    load: async () => (await import("./commands/debug.js")).runDebug,
-  },
-  {
-    name: "agents",
-    description: "Lista os agentes disponíveis",
-    load: async () => (await import("./commands/agents.js")).runAgents,
-  },
-  {
-    name: "open",
-    description: "Abre a IDE da sessão ativa na pasta do projeto",
-    load: async () => (await import("./commands/open.js")).runOpen,
-  },
-];
-
-function registerLazyCommands(program: Command): void {
-  for (const { name, description, load } of LAZY_COMMANDS) {
-    program
-      .command(name)
-      .description(description)
-      .action(async () => {
-        await (await load())();
-      });
-  }
-}
-
 export function buildProgram(logoShown: () => boolean = () => false): Command {
-  const program = new Command();
-  program
-    .name(brand.name)
-    .description(`CLI do ${brand.productName} (${brand.productFullName}) — rode \`nio\` sem argumentos pra esteira guiada`)
-    .version(VERSION)
-    .addHelpText("beforeAll", () => (logoShown() || !shouldDrawLogo() ? "" : renderMatrixLogo()))
-    // só no help do topo (`nio --help`), não no de cada subcomando
-    .addHelpText("after", (ctx) => (ctx.command.name() === brand.name ? usageGuide() : ""));
+  const program = createBaseProgram(logoShown);
 
   registerAuthCommands(program);
   registerInitCommand(program);
@@ -91,7 +40,7 @@ export function buildProgram(logoShown: () => boolean = () => false): Command {
   registerCompletionCommand(program);
   registerLangCommand(program);
   registerSessionsCommand(program);
-  registerLazyCommands(program);
+  registerLeaves(program);
   registerCommandCommand(program);
   registerDepsCommand(program);
   registerDockerCommand(program);
