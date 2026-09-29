@@ -8,7 +8,7 @@ import { writeIdeAutostartTask } from "../../lib/ide-tasks.js";
 import { c, sym } from "../../lib/colors.js";
 import { brand } from "../../brand.js";
 
-async function runOpen(): Promise<void> {
+export async function runOpen(): Promise<void> {
   const stored = await loadSession();
   if (!stored) {
     console.error(`${c.yellow(sym.warn)} Não autenticado. Rode ${c.cyan(`${brand.name} login`)}.`);
@@ -62,9 +62,3 @@ async function runOpen(): Promise<void> {
   }
 }
 
-export function registerOpenCommand(program: Command): void {
-  program
-    .command("open")
-    .description("Abre a IDE da sessão ativa na pasta do projeto")
-    .action(runOpen);
-}

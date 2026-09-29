@@ -18,10 +18,7 @@ import { registerValidatePlanCommand } from "./commands/validate-plan.js";
 import { registerCompletionCommand } from "./commands/completion.js";
 import { registerLangCommand } from "./commands/lang.js";
 import { registerSessionsCommand } from "./commands/sessions.js";
-import { registerDebugCommand } from "./commands/debug.js";
-import { registerAgentsCommand } from "./commands/agents.js";
 import { registerCommandCommand } from "./commands/command.js";
-import { registerOpenCommand } from "./commands/open.js";
 import { registerDepsCommand } from "./commands/deps.js";
 import { registerDockerCommand } from "./commands/docker.js";
 import { registerSecurityCommands } from "./commands/security.js";
@@ -32,6 +29,48 @@ import { registerStartCommand } from "./commands/start.js";
 import { registerAiCommand } from "./commands/ai.js";
 
 /** `logoShown` fica em `cli.ts` — aqui só o hook do help. */
+/**
+ * Comandos carregados sob demanda. Nome e descrição ficam aqui — texto, custo
+ * zero — e o módulo só é importado quando o comando roda. Antes, `nio --version`
+ * pagava o import de todos: `program.js` custava 152 ms, 93% do cold start.
+ *
+ * **Só entra aqui comando sem `.option()` e sem subcomando.** O commander precisa
+ * das opções declaradas antes do parse; adiar uma faria `nio x --flag` virar
+ * "unknown option". Para os demais, o padrão exige registrar as opções aqui.
+ */
+const LAZY_COMMANDS: ReadonlyArray<{
+  name: string;
+  description: string;
+  load: () => Promise<() => void | Promise<void>>;
+}> = [
+  {
+    name: "debug",
+    description: "Diagnostica o ambiente e aponta onde está o problema",
+    load: async () => (await import("./commands/debug.js")).runDebug,
+  },
+  {
+    name: "agents",
+    description: "Lista os agentes disponíveis",
+    load: async () => (await import("./commands/agents.js")).runAgents,
+  },
+  {
+    name: "open",
+    description: "Abre a IDE da sessão ativa na pasta do projeto",
+    load: async () => (await import("./commands/open.js")).runOpen,
+  },
+];
+
+function registerLazyCommands(program: Command): void {
+  for (const { name, description, load } of LAZY_COMMANDS) {
+    program
+      .command(name)
+      .description(description)
+      .action(async () => {
+        await (await load())();
+      });
+  }
+}
+
 export function buildProgram(logoShown: () => boolean = () => false): Command {
   const program = new Command();
   program
@@ -52,10 +91,8 @@ export function buildProgram(logoShown: () => boolean = () => false): Command {
   registerCompletionCommand(program);
   registerLangCommand(program);
   registerSessionsCommand(program);
-  registerDebugCommand(program);
-  registerAgentsCommand(program);
+  registerLazyCommands(program);
   registerCommandCommand(program);
-  registerOpenCommand(program);
   registerDepsCommand(program);
   registerDockerCommand(program);
   registerSecurityCommands(program);

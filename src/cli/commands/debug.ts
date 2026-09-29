@@ -119,25 +119,20 @@ async function runChecks(): Promise<Check[]> {
   return checks;
 }
 
-export function registerDebugCommand(program: Command): void {
-  program
-    .command("debug")
-    .description("Diagnostica o ambiente e aponta onde está o problema")
-    .action(async () => {
-      section("Debug", "checando o ambiente");
-      const checks = await runChecks();
-      for (const check of checks) print(check);
+export async function runDebug(): Promise<void> {
+  section("Debug", "checando o ambiente");
+  const checks = await runChecks();
+  for (const check of checks) print(check);
 
-      const fails = checks.filter((c) => c.level === "fail").length;
-      const warns = checks.filter((c) => c.level === "warn").length;
-      console.log("");
-      if (fails === 0 && warns === 0) {
-        console.log(`${c.green(sym.ok)} Tudo certo.`);
-      } else {
-        console.log(`${fails > 0 ? c.red(`${fails} erro(s)`) : ""}${fails && warns ? " · " : ""}${warns > 0 ? c.yellow(`${warns} aviso(s)`) : ""}`);
-      }
+  const fails = checks.filter((c) => c.level === "fail").length;
+  const warns = checks.filter((c) => c.level === "warn").length;
+  console.log("");
+  if (fails === 0 && warns === 0) {
+    console.log(`${c.green(sym.ok)} Tudo certo.`);
+  } else {
+    console.log(`${fails > 0 ? c.red(`${fails} erro(s)`) : ""}${fails && warns ? " · " : ""}${warns > 0 ? c.yellow(`${warns} aviso(s)`) : ""}`);
+  }
 
-      await closePool().catch(() => {});
-      if (fails > 0) process.exitCode = 1;
-    });
+  await closePool().catch(() => {});
+  if (fails > 0) process.exitCode = 1;
 }
