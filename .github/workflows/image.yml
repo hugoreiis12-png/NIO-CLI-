@@ -33,6 +33,22 @@ jobs:
         with:
           node-version: '20'
 
+      # Antes de qualquer efeito externo. Sem este gate, em 29/09 a tag v0.17.0
+      # com package.json 0.16.1 publicou a imagem e commitou o compose enquanto o
+      # publish.yml recusava — gateway em v0.17.0 e npm em 0.16.1 por horas.
+      - name: Check tag and manifest agree
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME#v}"
+            if [ "$TAG" != "$VERSION" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} não bate com package.json ${VERSION}."
+              echo "Bump a versão no mesmo commit da tag, ou a tag v${VERSION} no commit certo."
+              exit 1
+            fi
+          fi
+          echo "manifest: $VERSION"
+
       - name: Install & build (gera o dist/ que o Dockerfile copia)
         run: |
           bun install --frozen-lockfile
