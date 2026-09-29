@@ -651,3 +651,38 @@ test('replyErrorDetail extrai a recusa e não inventa motivo no sucesso', () => 
   expect(replyErrorDetail({ data: {} })).toBe('');
   expect(replyErrorDetail({ error: { message: 'x'.repeat(500) } })).toHaveLength(200);
 });
+
+// Bug de produção (29/09): usuário manda a request, a CLI "pensa" e o turno morre
+// sem nada na tela. A condição exigia `err.name`; sem ele o evento era descartado
+// — mas `busy` já virara false logo acima, então o spinner sumia e nenhum erro
+// aparecia. Provider OpenAI-compatível (nio-local) erra fora do formato nomeado.
+test('session.error SEM name ainda vira erro visível (não morre calado)', () => {
+  const s = applyEvent({ ...emptyChat, busy: true }, ev('session.error', {
+    error: { data: { message: 'upstream connect error or disconnect/reset' } },
+  }));
+  expect(s.busy).toBe(false);
+  expect(s.error).not.toBeNull();
+  expect(s.error!.message).toContain('upstream connect error');
+});
+
+test('session.error sem payload nenhum também aparece', () => {
+  const s = applyEvent({ ...emptyChat, busy: true }, ev('session.error', {}));
+  expect(s.error).not.toBeNull();
+  expect(s.error!.name).toBe('EngineError');
+  expect(s.error!.message).toBe('erro no motor');
+});
+
+test('overflow sem name é detectado pela mensagem e vira ContextOverflowError', () => {
+  const s = applyEvent({ ...emptyChat, busy: true }, ev('session.error', {
+    error: { data: { message: "This model's maximum context length is 32768 tokens" } },
+  }));
+  expect(s.error!.name).toBe('ContextOverflowError');
+});
+
+test('Esc do usuário (MessageAbortedError) segue sem mostrar erro', () => {
+  const s = applyEvent({ ...emptyChat, busy: true }, ev('session.error', {
+    error: { name: 'MessageAbortedError' },
+  }));
+  expect(s.busy).toBe(false);
+  expect(s.error).toBeNull();
+});

@@ -557,24 +557,32 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
       state.retry = null;
       const err = p.error as { name?: string; data?: Record<string, unknown> } | undefined;
       // `MessageAbortedError` = o usuário apertou Esc — não é erro pra mostrar.
-      if (err?.name && err.name !== 'MessageAbortedError') {
-        const data = err.data ?? {};
-        const raw = typeof data.message === 'string' ? data.message : '';
-        // Estouro de janela chega ora nomeado, ora como APIError com a mensagem crua do
-        // provider. Normaliza aqui pra quem trata a recuperação não repetir a heurística.
-        const name = isContextOverflow(err.name, raw) ? 'ContextOverflowError' : err.name;
-        const hint = errorHint(name);
-        const useHint =
-          name === 'ProviderAuthError' ||
-          name === 'MessageOutputLengthError' ||
-          name === 'ContextOverflowError' ||
-          !raw;
-        state.error = {
-          name,
-          message: useHint ? hint : raw,
-          retryable: name === 'APIError' && Boolean(data.isRetryable),
-        };
-      }
+      if (err?.name === 'MessageAbortedError') break;
+
+      const data = err?.data ?? {};
+      const raw = typeof data.message === 'string' ? data.message : '';
+      /**
+       * Sem `name` o motor **ainda falhou**. Antes, a condição exigia `err.name` e
+       * o evento era descartado: o `busy` já tinha virado `false` logo acima, então
+       * o spinner sumia e nada aparecia — o turno morria em silêncio. Provider
+       * OpenAI-compatível (o `nio-local`) erra fora do formato que o opencode
+       * nomeia, e caía exatamente aqui.
+       */
+      const bruto = err?.name ?? '';
+      // Estouro de janela chega ora nomeado, ora como APIError com a mensagem crua do
+      // provider. Normaliza aqui pra quem trata a recuperação não repetir a heurística.
+      const name = isContextOverflow(bruto, raw) ? 'ContextOverflowError' : bruto || 'EngineError';
+      const hint = errorHint(name);
+      const useHint =
+        name === 'ProviderAuthError' ||
+        name === 'MessageOutputLengthError' ||
+        name === 'ContextOverflowError' ||
+        !raw;
+      state.error = {
+        name,
+        message: useHint ? hint : raw,
+        retryable: name === 'APIError' && Boolean(data.isRetryable),
+      };
       break;
     }
     case 'session.diff': {
