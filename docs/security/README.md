@@ -29,8 +29,44 @@ Pasta de rastreio da auditoria de segurança e do trabalho que ela gerou.
 | `../adr/0011-endurecimento-cripto-auth.md` | **ADR 0011** — a arquitetura do Lote 5 que vamos seguir (decisões fechadas, plano em 3 fases). |
 | `lote5-cripto-arquitetura.md` | Doc de trabalho que originou a ADR 0011 (o raciocínio). |
 | `db-tls.md` | Runbook da CA interna do Postgres (fecha o H-2 na infra self-hosted). |
+| **`fourth-pass.md`** | **Quarta passada (2026-09-29)** — QP-1 a QP-6, com fix de implementação detalhado por item. ⬜ **nenhum implementado.** |
 
-## Status geral (2026-09-07)
+## ⚠️ Status desatualizado desde 2026-09-29
+
+> A tabela "Status geral" abaixo é de **2026-09-07** e **não reflete mais o
+> estado do repositório**. A quarta passada (`fourth-pass.md`) mediu a `v0.17.0`
+> e encontrou 6 achados novos, dois deles regredindo itens marcados como
+> fechados aqui:
+>
+> - **`bun audit` não está mais limpo** — 6 vulnerabilidades (3 high, 3
+>   moderate). Isso contradiz o fechamento do **H-4** e do **SP-4**, ambos
+>   registrados abaixo como resolvidos *"com `bun audit` limpo (0 vulns)"*. As
+>   causas são o **QP-1** (`xlsx`, 2 CVEs high, sem versão corrigida no npm) e o
+>   **QP-2** (`adm-zip`).
+> - **O TP-4 protege o cache, não a extração.** `rejectSymlinks()` roda **depois**
+>   do `extractAllTo`, então a CVE `GHSA-vwc7-r8mq-g2x9` (escrita arbitrária
+>   durante a extração) segue aberta. O objetivo declarado do TP-4 está cumprido;
+>   a CVE não. Ver **QP-2**.
+> - **O L-4 nunca valeu em NTFS.** `~/.nio/session.json` (JWT) e
+>   `~/.nio/gateway.token` usam `chmod` cru com a falha engolida, enquanto o
+>   `lib/secure-file.ts` — escrito no próprio projeto exatamente porque *"chmod
+>   não protege nada no NTFS"* — só é usado por outros dois arquivos. Ver **QP-3**.
+>
+> **Backlog dev-doable deixou de ser zero**: QP-2, QP-3 e QP-6 são ~40 linhas de
+> código puro, sem decisão nem ops pendente.
+
+| ID | Sev | Título | Código | Ação do time | Estado |
+|----|-----|--------|:------:|:------------:|--------|
+| QP-1 | **Alta** | `xlsx` 2 CVEs high, alcançável por anexo `.xlsx` | ⬜ | ⏳ decidir A/B/C | **aberto** — sem fix por versão no npm |
+| QP-2 | **Alta** | Symlink do zip validado depois do `extractAllTo` | ⬜ | — | **aberto** — 100% dev |
+| QP-3 | Média | JWT/gateway token sem `hardenSecretFile` (NTFS) | ⬜ | — | **aberto** — 100% dev |
+| QP-4 | Média | Rotação de JWT não aposenta `JWT_SECRET` | ⬜ | ⏳ junto do H-1 | **aberto** — dev + ops |
+| QP-5 | Baixa | `OTP_HMAC_SECRET` cai no `JWT_SECRET` | ⬜ | ⏳ env em prod | **aberto** — dev + ops |
+| QP-6 | Baixa | Checagem de `sub` tem escape por tipo | ⬜ | — | **aberto** — 100% dev |
+
+Detalhe de cada um, com diff de fix e teste de regressão: [`fourth-pass.md`](fourth-pass.md).
+
+## Status geral (2026-09-07) — histórico, ver aviso acima
 
 > **Backlog dev-doable = zero.** Todo código (Altos, Médios, Baixos, §4, Lote 5
 > A–F, ADR 0012, SP-1..7, TP-1..6) está commitado e verde no CI. O que resta é só
@@ -45,7 +81,7 @@ Pasta de rastreio da auditoria de segurança e do trabalho que ela gerou.
 | H-1 | Alta | `JWT_SECRET` sem exigência de força | ✅ feito | ⏳ rotacionar em prod | **código pronto, pendente ops** |
 | H-2 | Alta | Postgres TLS sem verificação de cert | ✅ feito | ⏳ gerar/distribuir CA | **código pronto, pendente ops** |
 | H-3 | Alta | Supply chain das skills sem pin | ✅ feito | ⏳ org + branch protection + bump por release | **código pronto, pendente ops** |
-| H-4 | Alta | `adm-zip <0.6` + teto de download + transitivas | ✅ feito | — | **fechado** — `bun update` + `overrides`; `bun audit` limpo (0 vulns) |
+| H-4 | Alta | `adm-zip <0.6` + teto de download + transitivas | ✅ feito | — | ⚠️ **reaberto (QP-1/QP-2)** — `bun audit` tem 6 vulns em 2026-09-29, não 0. O teto de download segue válido |
 | M-1 | Média | MCP usa `session.json.name` em vez do `userId` do token | ✅ feito | — | **código pronto** |
 | M-2 | Média | Sem lockfile no build da imagem | ✅ feito | — | **código pronto** (all-bun, Dockerfile multi-stage) |
 | M-3 | Média | 1º fator sem lockout na aplicação | ✅ feito | — | **código pronto** (atraso escalonado in-memory) |
@@ -57,7 +93,7 @@ Pasta de rastreio da auditoria de segurança e do trabalho que ela gerou.
 | L-1 | Baixa | `openUrl` Windows `cmd /c start` | ✅ feito | — | **código pronto** |
 | L-2 | Baixa | Código de backup sem cap de tentativas por desafio | ✅ feito | — | **código pronto** |
 | L-3 | Baixa | Handler de erro do gateway vaza `err.message` | ✅ feito | — | **código pronto** |
-| L-4 | Baixa | Segredo: `writeFile` → `chmod` (janela 0644) | ✅ feito | — | **código pronto** |
+| L-4 | Baixa | Segredo: `writeFile` → `chmod` (janela 0644) | ✅ feito | — | ✅ fecha a janela de tempo; ⚠️ `chmod` é no-op em NTFS e 2 arquivos de credencial não usam `hardenSecretFile` — ver **QP-3** |
 | L-5 | Baixa | `handleLogout` sem checagem de dono | ✅ feito | força re-login (com H-1) | **código pronto** |
 | L-6 | Baixa | JWT sem `iss`/`aud` | ✅ feito | força re-login (com H-1) | **código pronto** |
 | I-1 | Info | Código `UNLICENSED` publicado público no npm | ⏳ config staged | ⏳ **você** — criar org `nio-cli` + mover repos | task-user-i1-registry.md |
@@ -70,16 +106,16 @@ Pasta de rastreio da auditoria de segurança e do trabalho que ela gerou.
 | §4.4 | Vers. | gateway ↔ CLI sem header de protocolo | ⏸️ adiado | — | YAGNI — reabre se a API crescer |
 | §4.5 | Vers. | migrations sem runner | ✅ feito | — | = I-3 (`scripts/migrate.ts`) |
 | SP-1 | 2ª pass | Trilha de auth só em stderr (sem histórico) | ✅ feito | — | `auth_events` (ADR 0012) |
-| SP-2 | 2ª pass | `sub` do token não conferido vs dono da sessão | ✅ feito | — | `middleware/auth.ts` |
+| SP-2 | 2ª pass | `sub` do token não conferido vs dono da sessão | ✅ feito | — | ⚠️ a checagem só roda se `sub` for string — escape por tipo, ver **QP-6** |
 | SP-3 | 2ª pass | `MIN_PASSWORD_LENGTH` só no CLI | ✅ feito | — | enforçado no gateway |
-| SP-4 | 2ª pass | Transitivas vulneráveis (`fast-uri`/`hono`/`qs`) | ✅ feito | — | `overrides` — `bun audit` limpo |
+| SP-4 | 2ª pass | Transitivas vulneráveis (`fast-uri`/`hono`/`qs`) | ✅ feito | — | ✅ os 3 `overrides` seguem valendo; mas `bun audit` **não está limpo** (ver QP-1/QP-2) |
 | SP-5 | 2ª pass | Sem teto de sessões / sem `logout --all` | ✅ feito | — | `MAX_SESSIONS_PER_USER` + `POST /logout-all` + `nio logout --all` |
 | SP-7 | 2ª pass | Senha só validada por tamanho | ✅ feito | — | `breach-check.ts` — lista local + HIBP (fail-open) |
 | SP-6 | 2ª pass | Update-notifier proativo | ✅ já existia | — | `notifyCliIfUpdate` (`cli.ts`) |
 | TP-1 | 3ª pass | CLI com credencial de escrita nas tabelas de auth | ✅ feito | ⏳ criar LOGIN users em prod | migration `0008` (roles) + `register` no gateway |
 | TP-2 | 3ª pass | Sem fluxo de troca de senha | ✅ feito | — | `nio security change-password` (revoga sessões) |
 | TP-3 | 3ª pass | Enumeração de usuário no `register` | ✅ feito | — | decoy de timing |
-| TP-4 | 3ª pass | Zip com symlink na extração | ✅ feito | — | `rejectSymlinks()` |
+| TP-4 | 3ª pass | Zip com symlink na extração | ✅ feito | — | ✅ protege o **cache**; ⚠️ roda **depois** do `extractAllTo`, então a CVE de escrita arbitrária segue aberta — ver **QP-2** |
 | TP-5 | 3ª pass | Retenção negativa apaga a tabela | ✅ feito | — | clamp `Math.max(1,…)` |
 | TP-6 | 3ª pass | `trace_id` do cliente sem cap | ✅ feito | — | `.slice(0, 64)` |
 
