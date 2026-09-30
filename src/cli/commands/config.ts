@@ -4,7 +4,12 @@
  */
 import type { Command } from "commander";
 import { c, sym } from "../../lib/colors.js";
-import { CONFIG_FILE, checkConfig, probeAiBackend, runConfigWizard } from "../../lib/auth/nio-config.js";
+import {
+  CONFIG_FILE,
+  checkConfig,
+  probeAiBackend,
+  runConfigWizard,
+} from "../../lib/auth/nio-config.js";
 import { describeFabricConfig, fabricConfigStatus } from "../../lib/auth/fabric-config.js";
 import { continueChain } from "../flows/onboarding.js";
 
@@ -24,7 +29,9 @@ async function runCheck(opts: { json?: boolean }): Promise<void> {
     console.log(`${c.green(sym.ok)} config ok — NIO_DATABASE_URL, JWT_SECRET e conexão.`);
   } else {
     for (const p of problems) {
-      console.log(`${c.red(sym.err)} ${c.bold(p.key)} ${c.dim("— " + LABEL[p.issue])}  ${c.dim(p.hint)}`);
+      console.log(
+        `${c.red(sym.err)} ${c.bold(p.key)} ${c.dim("— " + LABEL[p.issue])}  ${c.dim(p.hint)}`,
+      );
     }
     console.log(`\n${c.dim("Rode")} ${c.cyan("nio config setup")} ${c.dim("pra resolver.")}`);
   }

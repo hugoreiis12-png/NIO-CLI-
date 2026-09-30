@@ -19,12 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 const debug = /^(1|true|yes|on)$/i.test((process.env.NIO_DEBUG ?? '').trim());
 
 /** Chaves que um `.env` de projeto (cwd) pode setar — nada de infra/segredo. */
-const CWD_ALLOWLIST = new Set([
-  'NIO_DEBUG',
-  'NIO_NO_ANIM',
-  'NIO_TELEMETRY',
-  'NIO_NO_TELEMETRY',
-]);
+const CWD_ALLOWLIST = new Set(['NIO_DEBUG', 'NIO_NO_ANIM', 'NIO_TELEMETRY', 'NIO_NO_TELEMETRY']);
 
 /** `process.loadEnvFile` (Node 20.12+) existe? Sob Bun / Node antigo, não. */
 const nodeLoad = (process as { loadEnvFile?: (p: string) => void }).loadEnvFile;

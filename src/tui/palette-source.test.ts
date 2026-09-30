@@ -29,6 +29,10 @@ test('buildPalette: `docker headroom down` marcado destructive; `ai` capability 
 });
 
 test('filterPalette: substring sobre nome+desc', () => {
-  expect(filterPalette(items, 'headroom').every((i) => `${i.name} ${i.desc}`.toLowerCase().includes('headroom'))).toBe(true);
+  expect(
+    filterPalette(items, 'headroom').every((i) =>
+      `${i.name} ${i.desc}`.toLowerCase().includes('headroom'),
+    ),
+  ).toBe(true);
   expect(filterPalette(items, '').length).toBe(items.length);
 });

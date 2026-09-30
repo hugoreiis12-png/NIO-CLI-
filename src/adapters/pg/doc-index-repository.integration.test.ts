@@ -51,7 +51,9 @@ const chunk = (repo: string, path: string, content: string): DocChunk => ({
 afterAll(async () => {
   if (!hasDb) return;
   if (ragReady) {
-    await query('DELETE FROM dax_doc_chunk WHERE repo = ANY($1)', [[REPO_A, REPO_B]]).catch(() => {});
+    await query('DELETE FROM dax_doc_chunk WHERE repo = ANY($1)', [[REPO_A, REPO_B]]).catch(
+      () => {},
+    );
   }
   await closePool().catch(() => {});
 });
@@ -91,7 +93,10 @@ dbTest('reingestão do mesmo conteúdo é idempotente (ON CONFLICT DO NOTHING)',
 
 dbTest('indexedRefs é por modelo', async () => {
   const repo = createDocIndexRepository();
-  await repo.indexChunks([{ ...chunk(REPO_A, 'tabela/REF', 'Tabela: REF'), ref: 'ref-A' }], [hot(2)]);
+  await repo.indexChunks(
+    [{ ...chunk(REPO_A, 'tabela/REF', 'Tabela: REF'), ref: 'ref-A' }],
+    [hot(2)],
+  );
 
   const refsA = await repo.indexedRefs(REPO_A);
   const refsB = await repo.indexedRefs(REPO_B);

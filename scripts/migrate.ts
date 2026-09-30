@@ -63,9 +63,7 @@ async function run(): Promise<void> {
       console.error(`arquivo não encontrado em db/migrations/: "${upTo}"`);
       process.exit(2);
     }
-    const target = upTo
-      ? pending.filter((f) => f <= upTo)
-      : pending;
+    const target = upTo ? pending.filter((f) => f <= upTo) : pending;
     if (target.length === 0) return console.log('Nada a marcar — tudo já registrado.');
     for (const f of target) {
       await getPool().query(

@@ -45,7 +45,10 @@ export interface QueryMetric {
 const DAX_PATTERNS: [RegExp, QueryOutcome][] = [
   // O nome vem envolto em `<oii>…</oii>` e às vezes há `in table '…'` no meio —
   // por isso nada de `[^']*` entre as aspas: as internas quebrariam o casamento.
-  [/column .* cannot be found|either the column .* doesn'?t exist|the value for .* cannot be determined/i, 'column_not_found'],
+  [
+    /column .* cannot be found|either the column .* doesn'?t exist|the value for .* cannot be determined/i,
+    'column_not_found',
+  ],
   // Duas redações para nome inventado: `Cannot find table` e, medido ao vivo,
   // `Failed to resolve name '…'. It is not a valid table, variable, or function name.`
   [/cannot find table|failed to resolve name/i, 'table_not_found'],
@@ -71,7 +74,8 @@ export function classifyOutcome(status: FabricStatus, error?: string): QueryOutc
 
 /** `at` existe para o teste apontar para um tmpdir e não sujar o `~/.nio` real. */
 export const metricsDir = (at?: string): string => at ?? join(homedir(), '.nio', 'metrics');
-const fileFor = (dir: string, d: Date): string => join(dir, `fabric-${d.toISOString().slice(0, 10)}.jsonl`);
+const fileFor = (dir: string, d: Date): string =>
+  join(dir, `fabric-${d.toISOString().slice(0, 10)}.jsonl`);
 
 /** `NIO_METRICS=0` desliga — testes setam isso para não sujar o disco. */
 function enabled(): boolean {
@@ -97,7 +101,9 @@ export function readMetrics(dias = 30, at?: string): QueryMetric[] {
   const corte = Date.now() - dias * 24 * 60 * 60 * 1000;
   const out: QueryMetric[] = [];
   try {
-    for (const nome of readdirSync(dir).filter((f) => f.startsWith('fabric-') && f.endsWith('.jsonl'))) {
+    for (const nome of readdirSync(dir).filter(
+      (f) => f.startsWith('fabric-') && f.endsWith('.jsonl'),
+    )) {
       for (const linha of readFileSync(join(dir, nome), 'utf8').split('\n')) {
         if (!linha.trim()) continue;
         try {

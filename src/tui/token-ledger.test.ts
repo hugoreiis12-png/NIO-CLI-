@@ -23,7 +23,11 @@ const assistant = (parts: ReturnType<typeof step>[], extra = {}): ChatMessage =>
   ...extra,
 });
 
-const user = (): ChatMessage => ({ id: Math.random().toString(36).slice(2), role: 'user', parts: [] });
+const user = (): ChatMessage => ({
+  id: Math.random().toString(36).slice(2),
+  role: 'user',
+  parts: [],
+});
 
 test('ACEITE: o saldo começa do último resumo, não do início da sessão', () => {
   // Sem o cursor, somar o histórico faria o orçamento parecer estourado logo DEPOIS
@@ -60,7 +64,11 @@ test('ACEITE: enquanto há trabalho em voo, a sessão tem o que proteger', () =>
 });
 
 test('mode compaction também marca o corte (o opencode usa os dois sinais)', () => {
-  const msgs = [assistant([step(80_000, 10)]), assistant([], { mode: 'compaction' }), assistant([step(1_000, 5)])];
+  const msgs = [
+    assistant([step(80_000, 10)]),
+    assistant([], { mode: 'compaction' }),
+    assistant([step(1_000, 5)]),
+  ];
   expect(summaryCursor(msgs)).toBe(1);
   expect(buildLedger(msgs).processedIn).toBe(1_000);
 });

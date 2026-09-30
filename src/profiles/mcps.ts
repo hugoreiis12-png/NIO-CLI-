@@ -95,7 +95,10 @@ function isolateFromServicePrincipal(spec: McpSpec): McpSpec {
  *
  * Os dois caminhos nunca se cruzam: processos distintos, environments distintos.
  */
-export function resolveFabricMcps(specs: McpSpec[], env: NodeJS.ProcessEnv = process.env): McpSpec[] {
+export function resolveFabricMcps(
+  specs: McpSpec[],
+  env: NodeJS.ProcessEnv = process.env,
+): McpSpec[] {
   // Conexão local não declarada → o MCP de modelagem não tem o que fazer aqui.
   if (!localPowerBiDeclared(env)) return specs.filter((s) => s.id !== powerbiMcp.id);
   // Declarada, mas com SP no ambiente: isola, senão ele drena pro Fabric.

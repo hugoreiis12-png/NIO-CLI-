@@ -9,51 +9,51 @@ const MAP: Record<LanguageId, Record<string, string>> = {
   // ── referência completa (já preenchi) ──
   typescript: {
     'Next.js': 'next',
-    'NestJS': '@nestjs/core',
+    NestJS: '@nestjs/core',
     'Express.js': 'express',
-    'Fastify': 'fastify',
-    'Hono': 'hono',
+    Fastify: 'fastify',
+    Hono: 'hono',
     'Koa.js': 'koa',
-    'Angular': '@angular/core',
-    'Nuxt': 'nuxt',
-    'SvelteKit': '@sveltejs/kit',
-    'AdonisJS': '@adonisjs/core',
-    'tRPC': '@trpc/server',
-    'Mastra': '@mastra/core',
-    'Prisma': 'prisma',
-    'TypeORM': 'typeorm',
-    'Sequelize': 'sequelize',
+    Angular: '@angular/core',
+    Nuxt: 'nuxt',
+    SvelteKit: '@sveltejs/kit',
+    AdonisJS: '@adonisjs/core',
+    tRPC: '@trpc/server',
+    Mastra: '@mastra/core',
+    Prisma: 'prisma',
+    TypeORM: 'typeorm',
+    Sequelize: 'sequelize',
     'Objection.js': 'objection',
-    'MikroORM': '@mikro-orm/core',
+    MikroORM: '@mikro-orm/core',
     'Knex.js': 'knex',
-    'Mongoose': 'mongoose',
-    'Kysely': 'kysely',
-    'Typegoose': '@typegoose/typegoose',
+    Mongoose: 'mongoose',
+    Kysely: 'kysely',
+    Typegoose: '@typegoose/typegoose',
   },
 
   // node ≡ typescript (mesmos pacotes npm).
   node: {
     'Next.js': 'next',
-    'NestJS': '@nestjs/core',
+    NestJS: '@nestjs/core',
     'Express.js': 'express',
-    'Fastify': 'fastify',
-    'Hono': 'hono',
+    Fastify: 'fastify',
+    Hono: 'hono',
     'Koa.js': 'koa',
-    'Angular': '@angular/core',
-    'Nuxt': 'nuxt',
-    'SvelteKit': '@sveltejs/kit',
-    'AdonisJS': '@adonisjs/core',
-    'tRPC': '@trpc/server',
-    'Mastra': '@mastra/core',
-    'Prisma': 'prisma',
-    'TypeORM': 'typeorm',
-    'Sequelize': 'sequelize',
+    Angular: '@angular/core',
+    Nuxt: 'nuxt',
+    SvelteKit: '@sveltejs/kit',
+    AdonisJS: '@adonisjs/core',
+    tRPC: '@trpc/server',
+    Mastra: '@mastra/core',
+    Prisma: 'prisma',
+    TypeORM: 'typeorm',
+    Sequelize: 'sequelize',
     'Objection.js': 'objection',
-    'MikroORM': '@mikro-orm/core',
+    MikroORM: '@mikro-orm/core',
     'Knex.js': 'knex',
-    'Mongoose': 'mongoose',
-    'Kysely': 'kysely',
-    'Typegoose': '@typegoose/typegoose',
+    Mongoose: 'mongoose',
+    Kysely: 'kysely',
+    Typegoose: '@typegoose/typegoose',
   },
   python: {
     // frameworks
@@ -109,11 +109,9 @@ const MAP: Record<LanguageId, Record<string, string>> = {
 };
 
 export function createPackageMap(): PackageMap {
-    return {
-        resolve(language: LanguageId, displayName: string): string | null{
-            return MAP[language]?.[displayName] ?? null;
-        },
-    };
+  return {
+    resolve(language: LanguageId, displayName: string): string | null {
+      return MAP[language]?.[displayName] ?? null;
+    },
+  };
 }
-
-

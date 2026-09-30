@@ -24,7 +24,11 @@ interface StoredAuth {
 }
 
 /** O refresh token salvo, ou `null` se não há, está ilegível ou é de outra credencial. */
-export function readRefreshToken(tenantId?: string, clientId?: string, path: string = authPath()): string | null {
+export function readRefreshToken(
+  tenantId?: string,
+  clientId?: string,
+  path: string = authPath(),
+): string | null {
   try {
     const raw = readFileSync(path, 'utf8');
     const j = JSON.parse(raw) as StoredAuth;

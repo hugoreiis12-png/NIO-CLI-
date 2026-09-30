@@ -81,7 +81,11 @@ export function createStepRepository(): StepRepository {
       if (steps.length === 0) return [];
       // Plano pela metade não existe: ou entram todos os steps, ou nenhum.
       return withTransaction((client) =>
-        insertBatch((text, params) => client.query(text, params ? [...params] : undefined), taskId, steps),
+        insertBatch(
+          (text, params) => client.query(text, params ? [...params] : undefined),
+          taskId,
+          steps,
+        ),
       );
     },
 
@@ -107,10 +111,9 @@ export function createStepRepository(): StepRepository {
     },
 
     async start(stepId: number): Promise<void> {
-      await query(
-        `UPDATE task_steps SET status = 'running', started_at = now() WHERE id = $1`,
-        [stepId],
-      );
+      await query(`UPDATE task_steps SET status = 'running', started_at = now() WHERE id = $1`, [
+        stepId,
+      ]);
     },
 
     async reopen(stepId: number): Promise<void> {
@@ -163,7 +166,11 @@ export function createStepRepository(): StepRepository {
     async append(taskId: string, steps: readonly NewStepInput[]): Promise<TaskStep[]> {
       if (steps.length === 0) return [];
       return withTransaction((client) =>
-        insertBatch((text, params) => client.query(text, params ? [...params] : undefined), taskId, steps),
+        insertBatch(
+          (text, params) => client.query(text, params ? [...params] : undefined),
+          taskId,
+          steps,
+        ),
       );
     },
 

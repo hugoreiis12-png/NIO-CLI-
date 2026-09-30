@@ -21,13 +21,17 @@ export function registerDocsCommand(program: Command): void {
     .action(async (opts: { html?: boolean; open?: boolean; out?: string }) => {
       // Conteúdo/render (SECTIONS, terminal, html) importados sob demanda: pesam
       // ~107ms e só o `nio docs` os usa — fora do caminho quente do cold-start.
-      const [{ SECTIONS, TAGLINE }, { commandSection, toolSection }, { renderTerminal }, { renderHtml }] =
-        await Promise.all([
-          import("./docs/content.js"),
-          import("./docs/dynamic.js"),
-          import("./docs/terminal.js"),
-          import("./docs/html.js"),
-        ]);
+      const [
+        { SECTIONS, TAGLINE },
+        { commandSection, toolSection },
+        { renderTerminal },
+        { renderHtml },
+      ] = await Promise.all([
+        import("./docs/content.js"),
+        import("./docs/dynamic.js"),
+        import("./docs/terminal.js"),
+        import("./docs/html.js"),
+      ]);
       const sections = [...SECTIONS, commandSection(program), toolSection()];
 
       if (!opts.html && !opts.open) {

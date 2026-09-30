@@ -10,7 +10,11 @@ import { askDax, type DaxRagDeps } from '../app/dax-rag.js';
 import { createDaxGenerator } from '../app/dax-generator.js';
 import { createDaxMemoryRepository } from '../adapters/pg/dax-memory-repository.js';
 import { createLocalEmbedder } from '../adapters/embed/local-embedder.js';
-import { createDocIndexRepository, findChunkByPath, searchTables } from '../adapters/pg/doc-index-repository.js';
+import {
+  createDocIndexRepository,
+  findChunkByPath,
+  searchTables,
+} from '../adapters/pg/doc-index-repository.js';
 import { createSchemaSearch } from '../app/schema-search.js';
 import { schemaRepo } from '../app/schema-chunker.js';
 import { ensureSchemaIndexed } from '../app/ensure-schema.js';
@@ -39,7 +43,10 @@ export const definition: Tool = {
     type: 'object',
     properties: {
       question: { type: 'string', description: 'Pergunta em linguagem natural (pt-BR).' },
-      workspace_id: { type: 'string', description: 'GUID do workspace. Default: NIO_FABRIC_WORKSPACE.' },
+      workspace_id: {
+        type: 'string',
+        description: 'GUID do workspace. Default: NIO_FABRIC_WORKSPACE.',
+      },
       dataset_id: { type: 'string', description: 'GUID do dataset. Default: NIO_FABRIC_DATASET.' },
       request_name: { type: 'string', description: 'Nome curto da request, guardado no cache.' },
     },
@@ -71,7 +78,9 @@ export async function runFabricAsk(
 ): Promise<CallToolResult> {
   const out = await askDax(deps, { question, workspaceId, datasetId, requestName });
   if (out.status !== 'ok' || !out.data) {
-    return errorResult(`${RAG_ERROR_LABEL[out.status as Exclude<RagStatus, 'ok'>]}: ${out.error ?? 'sem detalhe'}`);
+    return errorResult(
+      `${RAG_ERROR_LABEL[out.status as Exclude<RagStatus, 'ok'>]}: ${out.error ?? 'sem detalhe'}`,
+    );
   }
   const { tier, dax, rows, score } = out.data;
   return jsonResult({

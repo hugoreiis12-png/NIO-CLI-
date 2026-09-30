@@ -98,18 +98,20 @@ export function skillResourceDescriptors(docs: SkillDoc[]): SkillResourceDescrip
     if (d.type === 'skill') skillFolders.set(d.path.slice(0, d.path.lastIndexOf('/')), d.id);
   }
 
-  return docs
-    // `command`/`skill` já são servidos como **prompts** — não repetir como resource
-    // (senão o Cowork lista cada um duas vezes). Aqui ficam só os arquivos de apoio
-    // (templates/patterns), agents e dependencies.
-    .filter((d) => d.type !== 'command' && d.type !== 'skill')
-    .map((d) => ({
-      uri: `${SKILLS_URI_PREFIX}${d.path}`,
-      name: resourceName(d, skillFolders),
-      description: cap(d.description || d.title, NIO_SKILLS_DESC_CHARS),
-      mimeType: 'text/markdown',
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    docs
+      // `command`/`skill` já são servidos como **prompts** — não repetir como resource
+      // (senão o Cowork lista cada um duas vezes). Aqui ficam só os arquivos de apoio
+      // (templates/patterns), agents e dependencies.
+      .filter((d) => d.type !== 'command' && d.type !== 'skill')
+      .map((d) => ({
+        uri: `${SKILLS_URI_PREFIX}${d.path}`,
+        name: resourceName(d, skillFolders),
+        description: cap(d.description || d.title, NIO_SKILLS_DESC_CHARS),
+        mimeType: 'text/markdown',
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
 }
 
 export interface SkillResourceContent {

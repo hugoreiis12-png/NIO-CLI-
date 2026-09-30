@@ -1,4 +1,4 @@
-import { env } from "../brand.js";
+import { env } from '../brand.js';
 
 /**
  * Telemetria de uso best-effort. Nunca lança nem bloqueia. Desliga com `NIO_TELEMETRY=0`.
@@ -17,7 +17,7 @@ export interface Item {
 }
 
 export interface ProvisionEvent {
-  type: "provision";
+  type: 'provision';
   client: string;
   sections?: unknown;
   items: Item[];
@@ -25,7 +25,7 @@ export interface ProvisionEvent {
 }
 
 export interface PromptEvent {
-  type: "prompt";
+  type: 'prompt';
   client: string;
   id: string | null;
   name: string;
@@ -34,7 +34,7 @@ export interface PromptEvent {
 export type UsageEvent = ProvisionEvent | PromptEvent;
 
 function enabled(): boolean {
-  return env("TELEMETRY") !== "0" && !env("NO_TELEMETRY");
+  return env('TELEMETRY') !== '0' && !env('NO_TELEMETRY');
 }
 
 /**
@@ -82,8 +82,5 @@ export function track(event: UsageEvent): void {
 export async function flushTelemetry(timeoutMs = 4000): Promise<void> {
   if (pending.length === 0) return;
   const inflight = Promise.allSettled(pending.splice(0));
-  await Promise.race([
-    inflight,
-    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-  ]);
+  await Promise.race([inflight, new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
 }

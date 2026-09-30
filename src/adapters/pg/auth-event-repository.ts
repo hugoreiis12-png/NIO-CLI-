@@ -3,11 +3,7 @@
  * — trilha de auth persistente (ADR 0012). Só grava/consulta/retém; nada aqui
  * bloqueia login (o caller usa `.catch()`).
  */
-import type {
-  AuthEventInput,
-  AuthEventRepository,
-  AuthFailure,
-} from '../../core/repositories.js';
+import type { AuthEventInput, AuthEventRepository, AuthFailure } from '../../core/repositories.js';
 import { query } from './client.js';
 
 /** `name` é input do cliente — capa pra não encher a coluna com lixo. */

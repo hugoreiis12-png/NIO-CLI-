@@ -93,7 +93,10 @@ export function createWhatsAppSender(env: WhatsAppReadEnv = readEnv()): OtpSende
   return {
     async sendOtp(to: string, code: string): Promise<SmsResult> {
       if (!env.url || !env.token) {
-        return { status: 'skipped', error: 'WHATSAPP_ENDPOINT_URL / WHATSAPP_TOKEN não configurados' };
+        return {
+          status: 'skipped',
+          error: 'WHATSAPP_ENDPOINT_URL / WHATSAPP_TOKEN não configurados',
+        };
       }
       const body = buildPayload(to, code, env);
       try {

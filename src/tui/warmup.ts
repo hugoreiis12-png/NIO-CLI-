@@ -49,7 +49,11 @@ export async function warmPrefixCache(deps: WarmupDeps): Promise<boolean> {
     deps.onSession?.(sessionId);
     await deps.client.session.prompt({
       path: { id: sessionId },
-      body: { model: deps.model, agent: deps.agent, parts: [{ type: 'text', text: WARMUP_PROMPT }] },
+      body: {
+        model: deps.model,
+        agent: deps.agent,
+        parts: [{ type: 'text', text: WARMUP_PROMPT }],
+      },
     });
     return true;
   } catch (err) {

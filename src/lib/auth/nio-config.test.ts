@@ -2,10 +2,19 @@ import { test, expect } from 'bun:test';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseEnvFile, readConfigFile, writeConfigFile, validateConfigShape, probeAiBackend, describePingFailure } from './nio-config.js';
+import {
+  parseEnvFile,
+  readConfigFile,
+  writeConfigFile,
+  validateConfigShape,
+  probeAiBackend,
+  describePingFailure,
+} from './nio-config.js';
 
 test('parseEnvFile: KEY=value, ignora # e vazio, mantém = no valor', () => {
-  const out = parseEnvFile('# comentário\n\nNIO_DATABASE_URL=postgres://u:p@h:5432/d\nJWT_SECRET=a=b=c\n  \n');
+  const out = parseEnvFile(
+    '# comentário\n\nNIO_DATABASE_URL=postgres://u:p@h:5432/d\nJWT_SECRET=a=b=c\n  \n',
+  );
   expect(out.NIO_DATABASE_URL).toBe('postgres://u:p@h:5432/d');
   expect(out.JWT_SECRET).toBe('a=b=c');
   expect(Object.keys(out).length).toBe(2);
@@ -53,7 +62,9 @@ test('validateConfigShape: pega faltando e formato inválido, sem tocar rede', (
   const strong = 'x7K2p9Qw3mZ1aB5nR8tL4vE6cH0jY2sD';
   const bad = validateConfigShape({ NIO_DATABASE_URL: 'mysql://x', JWT_SECRET: strong });
   expect(bad).toEqual([{ key: 'NIO_DATABASE_URL', issue: 'invalid', hint: expect.any(String) }]);
-  expect(validateConfigShape({ NIO_DATABASE_URL: 'postgres://u@h:5432/d', JWT_SECRET: strong })).toEqual([]);
+  expect(
+    validateConfigShape({ NIO_DATABASE_URL: 'postgres://u@h:5432/d', JWT_SECRET: strong }),
+  ).toEqual([]);
 
   // JWT_SECRET fraco (H-1): curto ou sem variedade → 'invalid'
   const weak = validateConfigShape({ NIO_DATABASE_URL: 'postgres://u@h:5432/d', JWT_SECRET: 's' });
@@ -71,7 +82,12 @@ test('probeAiBackend: porta fechada → ok:false sem estourar', async () => {
 });
 
 test('describePingFailure: cada kind TLS é fixable com hint próprio; unknown genérico não abre wizard', () => {
-  for (const kind of ['tls-self-signed', 'tls-expired', 'tls-server-off', 'tls-required'] as const) {
+  for (const kind of [
+    'tls-self-signed',
+    'tls-expired',
+    'tls-server-off',
+    'tls-required',
+  ] as const) {
     const h = describePingFailure({ ok: false, tlsKind: kind });
     expect(h.fixable).toBe(true);
     expect(h.hint.length).toBeGreaterThan(0);
@@ -88,5 +104,7 @@ test('describePingFailure: cada kind TLS é fixable com hint próprio; unknown g
     fixable: false,
     hint: expect.any(String),
   });
-  expect(describePingFailure({ ok: false, tlsKind: 'unknown', tlsCertError: true }).fixable).toBe(true);
+  expect(describePingFailure({ ok: false, tlsKind: 'unknown', tlsCertError: true }).fixable).toBe(
+    true,
+  );
 });

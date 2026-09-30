@@ -41,7 +41,13 @@ function walkCommands(cmd: Command, prefix: string): PaletteItem[] {
     const nm = sub.name();
     if (nm === 'help') continue;
     const full = prefix ? `${prefix} ${nm}` : nm;
-    const args = sub.commands.length > 0 ? '' : sub.usage().replace(/^\[options\]\s*/, '').trim();
+    const args =
+      sub.commands.length > 0
+        ? ''
+        : sub
+            .usage()
+            .replace(/^\[options\]\s*/, '')
+            .trim();
     const desc = sub.description();
     if (desc) {
       out.push({

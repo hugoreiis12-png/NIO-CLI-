@@ -30,7 +30,12 @@ export interface HitResult {
  * `windowMs`. Janela fixa (simples; um burst na virada é aceitável pro caso de
  * uso — envio de SMS).
  */
-export function hit(key: string, limit: number, windowMs: number, now: number = Date.now()): HitResult {
+export function hit(
+  key: string,
+  limit: number,
+  windowMs: number,
+  now: number = Date.now(),
+): HitResult {
   const w = windows.get(key);
   if (!w || now >= w.resetAt) {
     windows.set(key, { count: 1, resetAt: now + windowMs });

@@ -31,7 +31,10 @@ export async function learnFromAttempts(
   const textos = licoes.map(lessonEmbeddingText);
   const vetores = await deps.embedder.embedPassages(textos);
   if (vetores.status !== 'ok' || !vetores.data) {
-    return { status: vetores.status === 'unconfigured' ? 'unconfigured' : 'unavailable', error: vetores.error };
+    return {
+      status: vetores.status === 'unconfigured' ? 'unconfigured' : 'unavailable',
+      error: vetores.error,
+    };
   }
 
   let gravadas = 0;
@@ -56,7 +59,10 @@ export async function recallLessons(
 ): Promise<LearningResult<ScoredLesson[]>> {
   const vetor = await deps.embedder.embedQuery(`${tool}\n${contexto}`);
   if (vetor.status !== 'ok' || !vetor.data) {
-    return { status: vetor.status === 'unconfigured' ? 'unconfigured' : 'unavailable', error: vetor.error };
+    return {
+      status: vetor.status === 'unconfigured' ? 'unconfigured' : 'unavailable',
+      error: vetor.error,
+    };
   }
   const achadas = await deps.store.recall(tool, vetor.data, topK);
   if (achadas.status !== 'ok') return achadas;

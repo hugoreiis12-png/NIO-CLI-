@@ -119,7 +119,10 @@ test('migração legada: sections+rules → selection unificada', () => {
     sections: { profiles: ['developer'], fields: ['backend'] },
     rules: { backend: 'node' },
   });
-  expect(loadProjectConfig(dir)?.selection).toEqual({ roles: ['dev'], stacks: { backend: 'node' } });
+  expect(loadProjectConfig(dir)?.selection).toEqual({
+    roles: ['dev'],
+    stacks: { backend: 'node' },
+  });
 });
 
 test('migração legada: field sem rule cai pra general', () => {
@@ -141,7 +144,10 @@ test('selection explícita tem precedência sobre o formato legado', () => {
     sections: { profiles: ['other'], fields: ['design'] },
     rules: {},
   });
-  expect(loadProjectConfig(dir)?.selection).toEqual({ roles: ['dev'], stacks: { frontend: 'react' } });
+  expect(loadProjectConfig(dir)?.selection).toEqual({
+    roles: ['dev'],
+    stacks: { frontend: 'react' },
+  });
 });
 
 test('JSON inválido → erro descritivo mencionando o arquivo', () => {
@@ -208,7 +214,10 @@ test('ensureGitignored: idempotente — entrada já presente não duplica', () =
 });
 
 test('removeFromGitignore: remove a entrada + marcador de projeto de qualquer marca', () => {
-  writeFileSync(join(dir, '.gitignore'), '# marcaantiga (binding local do projeto)\nnio.json\nkeep\n');
+  writeFileSync(
+    join(dir, '.gitignore'),
+    '# marcaantiga (binding local do projeto)\nnio.json\nkeep\n',
+  );
   expect(removeFromGitignore('nio.json', dir)).toBe(true);
   const txt = readFileSync(join(dir, '.gitignore'), 'utf8');
   expect(txt).not.toContain('# marcaantiga (binding local do projeto)');

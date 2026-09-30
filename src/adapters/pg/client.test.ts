@@ -2,11 +2,24 @@ import { test, expect, afterEach } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getPool, ping, closePool, isUuid, readSslOption, isTlsCertError, classifyDbError } from './client.js';
+import {
+  getPool,
+  ping,
+  closePool,
+  isUuid,
+  readSslOption,
+  isTlsCertError,
+  classifyDbError,
+} from './client.js';
 
 const KEY = 'NIO_DATABASE_URL';
 const original = process.env[KEY];
-const SSL_KEYS = ['NIO_DATABASE_SSL', 'NIO_DATABASE_SSL_INSECURE', 'NIO_DATABASE_CA', 'NIO_DATABASE_SSL_SERVERNAME'] as const;
+const SSL_KEYS = [
+  'NIO_DATABASE_SSL',
+  'NIO_DATABASE_SSL_INSECURE',
+  'NIO_DATABASE_CA',
+  'NIO_DATABASE_SSL_SERVERNAME',
+] as const;
 const sslOriginal = Object.fromEntries(SSL_KEYS.map((k) => [k, process.env[k]]));
 
 afterEach(async () => {
@@ -97,7 +110,10 @@ test('readSslOption: NIO_DATABASE_SSL_SERVERNAME → verifica hostname contra o 
   });
   // sem CA, só servername → segue verificado, com o servername aplicado.
   delete process.env.NIO_DATABASE_CA;
-  expect(readSslOption(REMOTE_URL)).toEqual({ rejectUnauthorized: true, servername: 'vm-debian-db' });
+  expect(readSslOption(REMOTE_URL)).toEqual({
+    rejectUnauthorized: true,
+    servername: 'vm-debian-db',
+  });
 });
 
 test('readSslOption: NIO_DATABASE_CA ilegível → lança', () => {
@@ -139,16 +155,23 @@ test('classifyDbError: matriz self-signed / expirado / mismatch / required / unk
   expect(classifyDbError(undefined, 'self-signed certificate')).toBe('tls-self-signed');
   expect(classifyDbError('CERT_HAS_EXPIRED')).toBe('tls-expired');
   expect(classifyDbError(undefined, 'certificate has expired')).toBe('tls-expired');
-  expect(classifyDbError(undefined, 'The server does not support SSL connections')).toBe('tls-server-off');
-  expect(classifyDbError('28000', 'pg_hba.conf rejects connection for host "1.2.3.4", user "u", database "d", SSL off')).toBe(
-    'tls-required',
+  expect(classifyDbError(undefined, 'The server does not support SSL connections')).toBe(
+    'tls-server-off',
   );
+  expect(
+    classifyDbError(
+      '28000',
+      'pg_hba.conf rejects connection for host "1.2.3.4", user "u", database "d", SSL off',
+    ),
+  ).toBe('tls-required');
   // Fallback legado: nada específico → unknown (hint genérico, sem wizard forçado)
   expect(classifyDbError('ECONNREFUSED', 'connection refused')).toBe('unknown');
   expect(classifyDbError('28P01', 'password authentication failed')).toBe('unknown');
   expect(classifyDbError()).toBe('unknown');
   // 28000 sem menção a SSL off não é retomada TLS (ex.: senha/role) → unknown
-  expect(classifyDbError('28000', 'pg_hba.conf rejects connection for host "1.2.3.4"')).toBe('unknown');
+  expect(classifyDbError('28000', 'pg_hba.conf rejects connection for host "1.2.3.4"')).toBe(
+    'unknown',
+  );
 });
 
 test('readSslOption: CA + insecure juntos → CA vence (verificado)', () => {

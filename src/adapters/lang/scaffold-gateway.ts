@@ -106,11 +106,23 @@ function buildPlanWith(
   if (ctx.empty) {
     const init = INIT[pm];
     if (init) {
-      steps.push({ kind: 'run', program: init.program, args: init.args, cwd: targetDir, label: `inicializa (${pm})` });
+      steps.push({
+        kind: 'run',
+        program: init.program,
+        args: init.args,
+        cwd: targetDir,
+        label: `inicializa (${pm})`,
+      });
     }
     const nodeAdd = NODE_ADD[pm];
     if (nodeAdd && recipe.typings.length > 0) {
-      steps.push({ kind: 'run', program: pm, args: [nodeAdd, '-D', ...recipe.typings], cwd: targetDir, label: 'instala tipagens' });
+      steps.push({
+        kind: 'run',
+        program: pm,
+        args: [nodeAdd, '-D', ...recipe.typings],
+        cwd: targetDir,
+        label: 'instala tipagens',
+      });
     }
   }
 
@@ -123,7 +135,13 @@ function buildPlanWith(
     const cmd = pkg && fits ? addCommand(pm, pkg) : null;
     if (pkg && fits && cmd) {
       installed.push(pkg);
-      steps.push({ kind: 'run', program: cmd.program, args: cmd.args, cwd: targetDir, label: `instala ${displayName} (${pkg})` });
+      steps.push({
+        kind: 'run',
+        program: cmd.program,
+        args: cmd.args,
+        cwd: targetDir,
+        label: `instala ${displayName} (${pkg})`,
+      });
     } else {
       skipped.push(displayName); // sem mapa OU ecossistema incompatível → só marker
     }

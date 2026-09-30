@@ -74,7 +74,11 @@ export interface DiscoverDeps {
 async function execReal(cmd: string, args: string[]): Promise<string> {
   // `latin1`: a saída do console vem em codepage legada e o UTF-8 corromperia os
   // acentos. Só precisamos dos números, mas decodificar errado quebraria as regex.
-  const { stdout } = await run(cmd, args, { encoding: 'latin1', timeout: TIMEOUT_MS, windowsHide: true });
+  const { stdout } = await run(cmd, args, {
+    encoding: 'latin1',
+    timeout: TIMEOUT_MS,
+    windowsHide: true,
+  });
   return String(stdout);
 }
 
@@ -89,7 +93,13 @@ export async function discoverLocalXmla(deps: DiscoverDeps = {}): Promise<LocalX
   }
   const exec = deps.exec ?? execReal;
   try {
-    const listaProcessos = await exec('tasklist', ['/FI', `IMAGENAME eq ${PROCESSO}`, '/FO', 'CSV', '/NH']);
+    const listaProcessos = await exec('tasklist', [
+      '/FI',
+      `IMAGENAME eq ${PROCESSO}`,
+      '/FO',
+      'CSV',
+      '/NH',
+    ]);
     const pids = parseTasklistPids(listaProcessos);
     if (pids.length === 0) {
       return {
@@ -100,7 +110,10 @@ export async function discoverLocalXmla(deps: DiscoverDeps = {}): Promise<LocalX
     const conexoes = await exec('netstat', ['-ano']);
     const porta = parseListeningPort(conexoes, pids);
     if (!porta) {
-      return { status: 'not_running', error: 'msmdsrv.exe está de pé mas ainda não escuta — reabra o modelo.' };
+      return {
+        status: 'not_running',
+        error: 'msmdsrv.exe está de pé mas ainda não escuta — reabra o modelo.',
+      };
     }
     return { status: 'ok', port: porta, endpoint: `localhost:${porta}` };
   } catch (err) {

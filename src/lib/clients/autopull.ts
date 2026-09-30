@@ -1,7 +1,10 @@
 import { opencodeTarget, type ProvisionTarget } from './targets.js';
 
 /** Decide se o auto-pull deve rodar. Pura: o usuário pode desligar explicitamente. */
-export function shouldRunAutoPull(client: string | undefined, autoPullFlag: string | undefined): boolean {
+export function shouldRunAutoPull(
+  client: string | undefined,
+  autoPullFlag: string | undefined,
+): boolean {
   return autoPullFlag !== '0' && autoPullFlag !== 'false';
 }
 

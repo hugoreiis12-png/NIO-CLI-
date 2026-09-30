@@ -30,7 +30,9 @@ export function handleLangReference(args: unknown, store: KnowledgeStore): CallT
   const a = (args ?? {}) as { language?: unknown; topic?: unknown };
   if (!isLanguageId(a.language)) {
     return {
-      content: [{ type: 'text', text: `language inválida. Use uma de: ${LANGUAGE_IDS.join(', ')}.` }],
+      content: [
+        { type: 'text', text: `language inválida. Use uma de: ${LANGUAGE_IDS.join(', ')}.` },
+      ],
       isError: true,
     };
   }

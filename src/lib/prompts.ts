@@ -123,12 +123,16 @@ export async function select<T>(opts: {
     hint: ch.description,
   }));
   return unwrap(
-    await clackSelect({ message: opts.message, options: options as never, initialValue: opts.default }),
+    await clackSelect({
+      message: opts.message,
+      options: options as never,
+      initialValue: opts.default,
+    }),
   ) as T;
 }
 
 /** Sentinela da opção "Todos" — `Symbol` não colide com nenhum valor real de `T`. */
-const SELECT_ALL = Symbol("select-all");
+const SELECT_ALL = Symbol('select-all');
 
 export async function checkbox<T>(opts: {
   message: string;
@@ -138,9 +142,9 @@ export async function checkbox<T>(opts: {
 }): Promise<T[]> {
   if (noTty()) throw new NonInteractiveError(opts.message); // checkbox não tem default
   const withAll = Boolean(opts.all) && opts.choices.length > 1;
-  const allLabel = typeof opts.all === "string" ? opts.all : "Todos";
+  const allLabel = typeof opts.all === 'string' ? opts.all : 'Todos';
   const options: ClackOption<unknown>[] = [
-    ...(withAll ? [{ value: SELECT_ALL, label: allLabel, hint: "marca tudo" }] : []),
+    ...(withAll ? [{ value: SELECT_ALL, label: allLabel, hint: 'marca tudo' }] : []),
     ...opts.choices.map((ch) => ({ value: ch.value, label: ch.name, hint: ch.description })),
   ];
   const picked = unwrap(

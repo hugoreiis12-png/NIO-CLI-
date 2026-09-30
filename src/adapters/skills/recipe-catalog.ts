@@ -46,10 +46,14 @@ function loadRecipes(baseDir: string): EnvironmentRecipe[] {
     if (entry.name.toLowerCase() === 'readme.md') continue;
 
     const slug = entry.name.replace(/\.md$/i, '');
-    const { frontmatter: fm, body } = parseFrontmatter(readFileSync(join(recipesDir, entry.name), 'utf8'));
+    const { frontmatter: fm, body } = parseFrontmatter(
+      readFileSync(join(recipesDir, entry.name), 'utf8'),
+    );
     const profile = fm.profile?.trim() as Profile | undefined;
     if (!profile || !PROFILES.has(profile)) {
-      console.error(`[nio] recipe "${slug}" ignorada: profile inválido (${fm.profile ?? 'ausente'}).`);
+      console.error(
+        `[nio] recipe "${slug}" ignorada: profile inválido (${fm.profile ?? 'ausente'}).`,
+      );
       continue;
     }
 

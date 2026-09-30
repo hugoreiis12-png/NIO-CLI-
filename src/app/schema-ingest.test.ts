@@ -15,7 +15,12 @@ const MEASURES: FabricRow[] = [
   { '[Name]': 'TOTAL_LIQUIDO', '[Table]': 'VISAO_COMERCIAL', '[IsHidden]': 'false' },
 ];
 const COLUMNS: FabricRow[] = [
-  { '[Name]': 'VALOR', '[Table]': 'VISAO_COMERCIAL', '[DataType]': 'Number', '[IsHidden]': 'false' },
+  {
+    '[Name]': 'VALOR',
+    '[Table]': 'VISAO_COMERCIAL',
+    '[DataType]': 'Number',
+    '[IsHidden]': 'false',
+  },
 ];
 
 interface Spy {

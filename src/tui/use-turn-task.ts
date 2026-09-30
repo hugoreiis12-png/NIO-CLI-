@@ -18,7 +18,12 @@ export interface TurnTaskApi {
   /** Abre o registro do turno. Dispara e volta — não aguarda o banco. */
   begin: (texto: string) => void;
   /** Fecha com o que o motor produziu. */
-  end: (outcome: { text: string; toolCalls?: ToolCallTrace[]; tokensIn?: number; tokensOut?: number }) => void;
+  end: (outcome: {
+    text: string;
+    toolCalls?: ToolCallTrace[];
+    tokensIn?: number;
+    tokensOut?: number;
+  }) => void;
   /** Encerra em falha (interrupção do usuário, erro do motor). */
   abort: (motivo: string) => void;
 }

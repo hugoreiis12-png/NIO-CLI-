@@ -9,7 +9,13 @@
  * significa "perdeu a corrida, não escreveu nada", nunca "erro".
  */
 import type { AwaitingKind, Profile, TaskKind, TaskStatus } from '../../core/types.js';
-import type { ListTasksOpts, NewTaskInput, Task, TaskPatch, TaskRepository } from '../../core/tasks.js';
+import type {
+  ListTasksOpts,
+  NewTaskInput,
+  Task,
+  TaskPatch,
+  TaskRepository,
+} from '../../core/tasks.js';
 import { query } from './client.js';
 
 /** Exportado para a fila reusar o mesmo shape no `RETURNING` do claim. */

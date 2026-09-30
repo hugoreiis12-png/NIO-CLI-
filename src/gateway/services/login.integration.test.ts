@@ -63,10 +63,15 @@ dbTest(
       if (!done.ok) throw new Error('verifyLogin falhou');
 
       // JWT válido, jti == a auth_session criada
-      const decoded = jwt.verify(done.session.token, process.env.JWT_SECRET!) as { sub: string; jti: string };
+      const decoded = jwt.verify(done.session.token, process.env.JWT_SECRET!) as {
+        sub: string;
+        jti: string;
+      };
       expect(decoded.sub).toBe(String(user.id));
       expect(decoded.jti).toBe(done.session.sessionId);
-      const as = await query('SELECT id FROM auth_sessions WHERE id = $1', [done.session.sessionId]);
+      const as = await query('SELECT id FROM auth_sessions WHERE id = $1', [
+        done.session.sessionId,
+      ]);
       expect(as.rowCount).toBe(1);
       // challenge consumido
       const ch = await challenges.findById(started.challengeId);
@@ -94,7 +99,10 @@ dbTest(
       const sms3 = captureOtp();
       const s3 = await login(user.name, password, { sms: sms3 });
       if (!s3.ok || s3.step !== '2fa_required') throw new Error();
-      await query('UPDATE login_challenges SET expires_at = NOW() - INTERVAL \'1 minute\' WHERE id = $1', [s3.challengeId]);
+      await query(
+        "UPDATE login_challenges SET expires_at = NOW() - INTERVAL '1 minute' WHERE id = $1",
+        [s3.challengeId],
+      );
       expect((await verifyLogin(s3.challengeId, sms3.code!, 'otp')).ok).toBe(false);
 
       // ── challenge inexistente ────────────────────────────────────────
@@ -107,91 +115,110 @@ dbTest(
   30_000,
 );
 
-dbTest('login 1FA: usuário sem auth_2 → step done + auth_session', async () => {
-  const users = createUserRepository();
-  const password = `pw-${randomUUID()}`;
-  const user = await users.create({ name: `nio-1fa-${randomUUID()}`, password });
-  try {
-    const out = await login(user.name, password);
-    expect(out.ok).toBe(true);
-    if (!out.ok || out.step !== 'done') throw new Error('esperava done');
-    const decoded = jwt.verify(out.session.token, process.env.JWT_SECRET!) as { jti: string };
-    expect(decoded.jti).toBe(out.session.sessionId);
-    expect((await query('SELECT 1 FROM auth_sessions WHERE id = $1', [out.session.sessionId])).rowCount).toBe(1);
+dbTest(
+  'login 1FA: usuário sem auth_2 → step done + auth_session',
+  async () => {
+    const users = createUserRepository();
+    const password = `pw-${randomUUID()}`;
+    const user = await users.create({ name: `nio-1fa-${randomUUID()}`, password });
+    try {
+      const out = await login(user.name, password);
+      expect(out.ok).toBe(true);
+      if (!out.ok || out.step !== 'done') throw new Error('esperava done');
+      const decoded = jwt.verify(out.session.token, process.env.JWT_SECRET!) as { jti: string };
+      expect(decoded.jti).toBe(out.session.sessionId);
+      expect(
+        (await query('SELECT 1 FROM auth_sessions WHERE id = $1', [out.session.sessionId]))
+          .rowCount,
+      ).toBe(1);
 
-    expect((await login(user.name, 'senha-errada')).ok).toBe(false);
-  } finally {
-    await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
-  }
-}, 20_000);
+      expect((await login(user.name, 'senha-errada')).ok).toBe(false);
+    } finally {
+      await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
+    }
+  },
+  20_000,
+);
 
-dbTest('SP-5: teto de sessões — login além do limite revoga as mais antigas', async () => {
-  const users = createUserRepository();
-  const sessions = createAuthSessionRepository();
-  const password = `pw-${randomUUID()}`;
-  const user = await users.create({ name: `nio-cap-${randomUUID()}`, password });
-  try {
-    const N = MAX_SESSIONS_PER_USER;
-    const ids: string[] = [];
-    for (let i = 0; i < N + 2; i++) {
+dbTest(
+  'SP-5: teto de sessões — login além do limite revoga as mais antigas',
+  async () => {
+    const users = createUserRepository();
+    const sessions = createAuthSessionRepository();
+    const password = `pw-${randomUUID()}`;
+    const user = await users.create({ name: `nio-cap-${randomUUID()}`, password });
+    try {
+      const N = MAX_SESSIONS_PER_USER;
+      const ids: string[] = [];
+      for (let i = 0; i < N + 2; i++) {
+        const out = await login(user.name, password);
+        if (!out.ok || out.step !== 'done') throw new Error('esperava done');
+        ids.push(out.session.sessionId);
+      }
+      const active = await sessions.listActiveByUser(user.id);
+      expect(active).toHaveLength(N);
+      // as 2 primeiras (mais antigas) foram revogadas; as N últimas seguem ativas
+      const activeIds = new Set(active.map((s) => s.id));
+      expect(activeIds.has(ids[0]!)).toBe(false);
+      expect(activeIds.has(ids.at(-1)!)).toBe(true);
+    } finally {
+      await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
+    }
+  },
+  30_000,
+);
+
+dbTest(
+  'SP-5: logout --all revoga todas as sessões do usuário',
+  async () => {
+    const users = createUserRepository();
+    const sessions = createAuthSessionRepository();
+    const password = `pw-${randomUUID()}`;
+    const user = await users.create({ name: `nio-logoutall-${randomUUID()}`, password });
+    try {
+      await login(user.name, password);
+      await login(user.name, password);
+      expect((await sessions.listActiveByUser(user.id)).length).toBeGreaterThan(0);
+      await logoutAll(user.id);
+      expect(await sessions.listActiveByUser(user.id)).toHaveLength(0);
+    } finally {
+      await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
+    }
+  },
+  20_000,
+);
+
+dbTest(
+  'JWT rotação (§E): token com kid é aceito por authenticate; kid removido → recusa',
+  async () => {
+    const users = createUserRepository();
+    const password = `pw-${randomUUID()}`;
+    const user = await users.create({ name: `nio-kid-${randomUUID()}`, password });
+    const oldJwtSecrets = process.env.JWT_SECRETS;
+    const A = 'segredo-jwt-antigo-com-mais-de-32-caracteres';
+    const B = 'segredo-jwt-novo-com-mais-de-32-caracteres!!';
+    try {
+      process.env.JWT_SECRETS = `k1:${A},k2:${B}`;
+      __resetJwtSecrets();
       const out = await login(user.name, password);
       if (!out.ok || out.step !== 'done') throw new Error('esperava done');
-      ids.push(out.session.sessionId);
+
+      // token foi assinado com o kid mais novo (k2) e authenticate resolve a chave
+      expect(jwt.decode(out.session.token, { complete: true })?.header.kid).toBe('k2');
+      expect((await authenticate(`Bearer ${out.session.token}`)).ok).toBe(true);
+
+      // aposenta o k2 → o token vira inválido (chave não reconhecida)
+      process.env.JWT_SECRETS = `k1:${A}`;
+      __resetJwtSecrets();
+      const after = await authenticate(`Bearer ${out.session.token}`);
+      expect(after.ok).toBe(false);
+      if (!after.ok) expect(after.reason).toBe('token_invalido');
+    } finally {
+      if (oldJwtSecrets === undefined) delete process.env.JWT_SECRETS;
+      else process.env.JWT_SECRETS = oldJwtSecrets;
+      __resetJwtSecrets();
+      await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
     }
-    const active = await sessions.listActiveByUser(user.id);
-    expect(active).toHaveLength(N);
-    // as 2 primeiras (mais antigas) foram revogadas; as N últimas seguem ativas
-    const activeIds = new Set(active.map((s) => s.id));
-    expect(activeIds.has(ids[0]!)).toBe(false);
-    expect(activeIds.has(ids.at(-1)!)).toBe(true);
-  } finally {
-    await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
-  }
-}, 30_000);
-
-dbTest('SP-5: logout --all revoga todas as sessões do usuário', async () => {
-  const users = createUserRepository();
-  const sessions = createAuthSessionRepository();
-  const password = `pw-${randomUUID()}`;
-  const user = await users.create({ name: `nio-logoutall-${randomUUID()}`, password });
-  try {
-    await login(user.name, password);
-    await login(user.name, password);
-    expect((await sessions.listActiveByUser(user.id)).length).toBeGreaterThan(0);
-    await logoutAll(user.id);
-    expect(await sessions.listActiveByUser(user.id)).toHaveLength(0);
-  } finally {
-    await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
-  }
-}, 20_000);
-
-dbTest('JWT rotação (§E): token com kid é aceito por authenticate; kid removido → recusa', async () => {
-  const users = createUserRepository();
-  const password = `pw-${randomUUID()}`;
-  const user = await users.create({ name: `nio-kid-${randomUUID()}`, password });
-  const oldJwtSecrets = process.env.JWT_SECRETS;
-  const A = 'segredo-jwt-antigo-com-mais-de-32-caracteres';
-  const B = 'segredo-jwt-novo-com-mais-de-32-caracteres!!';
-  try {
-    process.env.JWT_SECRETS = `k1:${A},k2:${B}`;
-    __resetJwtSecrets();
-    const out = await login(user.name, password);
-    if (!out.ok || out.step !== 'done') throw new Error('esperava done');
-
-    // token foi assinado com o kid mais novo (k2) e authenticate resolve a chave
-    expect(jwt.decode(out.session.token, { complete: true })?.header.kid).toBe('k2');
-    expect((await authenticate(`Bearer ${out.session.token}`)).ok).toBe(true);
-
-    // aposenta o k2 → o token vira inválido (chave não reconhecida)
-    process.env.JWT_SECRETS = `k1:${A}`;
-    __resetJwtSecrets();
-    const after = await authenticate(`Bearer ${out.session.token}`);
-    expect(after.ok).toBe(false);
-    if (!after.ok) expect(after.reason).toBe('token_invalido');
-  } finally {
-    if (oldJwtSecrets === undefined) delete process.env.JWT_SECRETS;
-    else process.env.JWT_SECRETS = oldJwtSecrets;
-    __resetJwtSecrets();
-    await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
-  }
-}, 20_000);
+  },
+  20_000,
+);

@@ -71,7 +71,13 @@ function walkCommands(cmd: Command, prefix = ''): { name: string; desc: string }
     if (nm === 'help') continue;
     const full = prefix ? `${prefix} ${nm}` : nm;
     // Grupos (com subcomandos) não mostram args; folhas mostram (`[pat]`, `<jobId>`…).
-    const args = sub.commands.length > 0 ? '' : sub.usage().replace(/^\[options\]\s*/, '').trim();
+    const args =
+      sub.commands.length > 0
+        ? ''
+        : sub
+            .usage()
+            .replace(/^\[options\]\s*/, '')
+            .trim();
     const display = args ? `${full} ${args}` : full;
     const desc = sub.description();
     if (desc) out.push({ name: display, desc });

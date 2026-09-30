@@ -43,7 +43,11 @@ export function resolveGatewayCommand(): { cmd: string; args: string[] } | null 
   if (isBinaryInstalled('nio-gateway')) return { cmd: 'nio-gateway', args: [] };
   const entry = process.argv[1];
   if (!entry) return null;
-  const sibling = join(dirname(entry), 'gateway', basename(entry).endsWith('.ts') ? 'index.ts' : 'index.js');
+  const sibling = join(
+    dirname(entry),
+    'gateway',
+    basename(entry).endsWith('.ts') ? 'index.ts' : 'index.js',
+  );
   return existsSync(sibling) ? { cmd: process.execPath, args: [sibling] } : null;
 }
 
@@ -162,8 +166,14 @@ export interface GatewayVersionSkew {
 
 /** Distância entre releases, ignorando sufixo: mesma, patch, minor ou major. */
 export function releaseDrift(a: string, b: string): 'same' | 'patch' | 'minor' | 'major' {
-  const pa = a.split('-')[0]!.split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = b.split('-')[0]!.split('.').map((n) => parseInt(n, 10) || 0);
+  const pa = a
+    .split('-')[0]!
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+  const pb = b
+    .split('-')[0]!
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
   if ((pa[0] ?? 0) !== (pb[0] ?? 0)) return 'major';
   if ((pa[1] ?? 0) !== (pb[1] ?? 0)) return 'minor';
   if ((pa[2] ?? 0) !== (pb[2] ?? 0)) return 'patch';
@@ -172,20 +182,41 @@ export function releaseDrift(a: string, b: string): 'same' | 'patch' | 'minor' |
 
 /** Lê `GET <base>/health` e classifica a deriva CLI×gateway (pura a partir do JSON). */
 export function classifyGatewayVersion(cliVersion: string, body: unknown): GatewayVersionSkew {
-  const gw = typeof (body as { version?: unknown })?.version === 'string' && (body as { version: string }).version;
-  if (!gw) return { status: 'warn', detail: 'gateway não informa versão (anterior ao skew-check?) — se der 404 em rota válida, atualize o gateway' };
+  const gw =
+    typeof (body as { version?: unknown })?.version === 'string' &&
+    (body as { version: string }).version;
+  if (!gw)
+    return {
+      status: 'warn',
+      detail:
+        'gateway não informa versão (anterior ao skew-check?) — se der 404 em rota válida, atualize o gateway',
+    };
   const drift = releaseDrift(cliVersion, gw);
   if (drift === 'same' || drift === 'patch') {
-    return drift === 'same' ? { status: 'ok' } : { status: 'warn', detail: `CLI ${cliVersion} x gateway ${gw} (só patch) — alinhe quando puder` };
+    return drift === 'same'
+      ? { status: 'ok' }
+      : {
+          status: 'warn',
+          detail: `CLI ${cliVersion} x gateway ${gw} (só patch) — alinhe quando puder`,
+        };
   }
   if (semverGt(cliVersion, gw)) {
-    return { status: 'block', detail: `CLI ${cliVersion} fala com gateway ${gw} — rotas podem faltar (ex.: 404 'rota desconhecida'). Atualize o gateway (rebuild do container / imagem GHCR) ou aponte NIO_GATEWAY_URL para um atual.` };
+    return {
+      status: 'block',
+      detail: `CLI ${cliVersion} fala com gateway ${gw} — rotas podem faltar (ex.: 404 'rota desconhecida'). Atualize o gateway (rebuild do container / imagem GHCR) ou aponte NIO_GATEWAY_URL para um atual.`,
+    };
   }
-  return { status: 'warn', detail: `gateway ${gw} mais novo que a CLI ${cliVersion} — atualize a CLI quando puder` };
+  return {
+    status: 'warn',
+    detail: `gateway ${gw} mais novo que a CLI ${cliVersion} — atualize a CLI quando puder`,
+  };
 }
 
 /** Busca a versão no `/health` e classifica; qualquer falha de rede vira `warn` (o health já passou). */
-export async function checkGatewayVersion(baseUrl: string = GATEWAY_URL, timeoutMs = 3000): Promise<GatewayVersionSkew> {
+export async function checkGatewayVersion(
+  baseUrl: string = GATEWAY_URL,
+  timeoutMs = 3000,
+): Promise<GatewayVersionSkew> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -193,7 +224,10 @@ export async function checkGatewayVersion(baseUrl: string = GATEWAY_URL, timeout
     if (!res.ok) return { status: 'warn', detail: `gateway respondeu ${res.status} no /health` };
     return classifyGatewayVersion(VERSION, await res.json().catch(() => ({})));
   } catch (err) {
-    return { status: 'warn', detail: `não deu para ler a versão do gateway (${(err as Error).message ?? err})` };
+    return {
+      status: 'warn',
+      detail: `não deu para ler a versão do gateway (${(err as Error).message ?? err})`,
+    };
   } finally {
     clearTimeout(timer);
   }

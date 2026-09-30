@@ -1,10 +1,9 @@
-// Versão da CLI e do SDK, para nio-version 
+// Versão da CLI e do SDK, para nio-version
 import { test, expect } from 'bun:test';
 import { VERSION, OPENCODE_SDK_VERSION, semverGt } from './version.js';
 
 test('VERSION: string x.y.z do package.json', () => {
   expect(VERSION).toMatch(/^\d+\.\d+\.\d+/);
-  
 });
 
 test('OPENCODE_SDK_VERSION: pin do @opencode-ai/sdk (sem ^/~)', () => {

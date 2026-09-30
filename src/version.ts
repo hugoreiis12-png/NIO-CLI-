@@ -22,8 +22,14 @@ export const VERSION = pkg.version;
 
 /** `a > b` em semver simples (major.minor.patch; ignora pré-release). */
 export function semverGt(a: string, b: string): boolean {
-  const pa = a.split('-')[0]!.split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = b.split('-')[0]!.split('.').map((n) => parseInt(n, 10) || 0);
+  const pa = a
+    .split('-')[0]!
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+  const pb = b
+    .split('-')[0]!
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
   for (let i = 0; i < 3; i++) {
     if ((pa[i] ?? 0) > (pb[i] ?? 0)) return true;
     if ((pa[i] ?? 0) < (pb[i] ?? 0)) return false;
@@ -37,4 +43,5 @@ export function semverGt(a: string, b: string): boolean {
  * protocolo do `opencode serve` (stream SSE, shape do `session.prompt`) pode
  * divergir entre minors (auditoria §4.2).
  */
-export const OPENCODE_SDK_VERSION = pkg.dependencies?.['@opencode-ai/sdk']?.replace(/^[\^~]/, '') ?? null;
+export const OPENCODE_SDK_VERSION =
+  pkg.dependencies?.['@opencode-ai/sdk']?.replace(/^[\^~]/, '') ?? null;

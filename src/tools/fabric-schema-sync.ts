@@ -32,7 +32,10 @@ export const definition: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      workspace_id: { type: 'string', description: 'GUID do workspace. Default: NIO_FABRIC_WORKSPACE.' },
+      workspace_id: {
+        type: 'string',
+        description: 'GUID do workspace. Default: NIO_FABRIC_WORKSPACE.',
+      },
       dataset_id: { type: 'string', description: 'GUID do dataset. Default: NIO_FABRIC_DATASET.' },
       force: { type: 'boolean', description: 'Reindexa mesmo se o schema não mudou.' },
     },
@@ -84,7 +87,12 @@ export async function handler(args: unknown, _ctx: ToolContext): Promise<CallToo
   if (!datasetId) return errorResult('dataset_id ausente e NIO_FABRIC_DATASET não definido.');
 
   return runSchemaSync(
-    { fabric: fabricGateway(), embedder: createLocalEmbedder(), index: createDocIndexRepository(), scanner: createFabricScanner() },
+    {
+      fabric: fabricGateway(),
+      embedder: createLocalEmbedder(),
+      index: createDocIndexRepository(),
+      scanner: createFabricScanner(),
+    },
     workspaceId,
     datasetId,
     parsed.data.force,

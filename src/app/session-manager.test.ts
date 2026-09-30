@@ -31,7 +31,8 @@ function fakeRepo(seed: Session[] = []): SessionRepository & { rows: Session[] }
   return {
     rows,
     async create(input: NewSessionInput) {
-      for (const r of rows) if (r.userId === input.userId && r.status === 'active') r.status = 'archived';
+      for (const r of rows)
+        if (r.userId === input.userId && r.status === 'active') r.status = 'archived';
       const s = mkSession({
         id: `id-${rows.length}`,
         userId: input.userId,
@@ -87,7 +88,9 @@ function fakeBuilder(fail?: string): EnvironmentBuilder & { lastRecipe?: unknown
       b.lastRecipe = recipe;
       if (fail) throw new Error(fail);
       return {
-        config: recipe ? { ...FAKE_CONFIG, extra: { recipe: (recipe as { slug: string }).slug } } : FAKE_CONFIG,
+        config: recipe
+          ? { ...FAKE_CONFIG, extra: { recipe: (recipe as { slug: string }).slug } }
+          : FAKE_CONFIG,
         mcps: [
           { id: 'nio-lang', command: ['nio-lang'] },
           { id: 'postgres', command: ['x'] },
@@ -130,7 +133,10 @@ test('matchByIdPrefix: filtra pelo prefixo do id', () => {
 });
 
 test('resolve: um match devolve a sessão', async () => {
-  const repo = fakeRepo([mkSession({ id: 'abcd1111' }), mkSession({ id: 'ef992222', status: 'paused' })]);
+  const repo = fakeRepo([
+    mkSession({ id: 'abcd1111' }),
+    mkSession({ id: 'ef992222', status: 'paused' }),
+  ]);
   const m = new SessionManager(repo, fakeBuilder());
   expect((await m.resolve(1, 'abcd')).id).toBe('abcd1111');
 });
@@ -149,7 +155,10 @@ test('resolve: prefixo ambíguo lança AmbiguousSessionError com a contagem', as
 });
 
 test('resolveOrActive: sem prefixo devolve a sessão ativa', async () => {
-  const repo = fakeRepo([mkSession({ id: 'p1', status: 'paused' }), mkSession({ id: 'a1', status: 'active' })]);
+  const repo = fakeRepo([
+    mkSession({ id: 'p1', status: 'paused' }),
+    mkSession({ id: 'a1', status: 'active' }),
+  ]);
   const m = new SessionManager(repo, fakeBuilder());
   expect((await m.resolveOrActive(1)).id).toBe('a1');
 });
@@ -161,7 +170,10 @@ test('resolveOrActive: sem ativa e sem prefixo lança SessionNotFoundError', asy
 });
 
 test('activate: ativa a alvo e arquiva a que estava ativa', async () => {
-  const repo = fakeRepo([mkSession({ id: 'a1', status: 'active' }), mkSession({ id: 'b2', status: 'paused' })]);
+  const repo = fakeRepo([
+    mkSession({ id: 'a1', status: 'active' }),
+    mkSession({ id: 'b2', status: 'paused' }),
+  ]);
   const m = new SessionManager(repo, fakeBuilder());
   const updated = await m.activate(1, 'b2');
   expect(updated.status).toBe('active');
@@ -171,7 +183,13 @@ test('activate: ativa a alvo e arquiva a que estava ativa', async () => {
 test('create: cria a sessão e persiste o config materializado', async () => {
   const repo = fakeRepo();
   const m = new SessionManager(repo, fakeBuilder());
-  const built = await m.create({ userId: 7, name: 'nova', profile: 'dba', projectPath: '/p', ide: 'vscode' });
+  const built = await m.create({
+    userId: 7,
+    name: 'nova',
+    profile: 'dba',
+    projectPath: '/p',
+    ide: 'vscode',
+  });
   expect(built.session.config).toEqual(FAKE_CONFIG);
   expect(built.mcps.map((x) => x.id)).toEqual(['nio-lang', 'postgres']);
   expect(built.materializeError).toBeUndefined();
@@ -181,7 +199,13 @@ test('create: cria a sessão e persiste o config materializado', async () => {
 test('create: materialização falha → sessão preservada + materializeError', async () => {
   const repo = fakeRepo();
   const m = new SessionManager(repo, fakeBuilder('perfil sem definição'));
-  const built = await m.create({ userId: 7, name: 'nova', profile: 'dba', projectPath: '/p', ide: 'vscode' });
+  const built = await m.create({
+    userId: 7,
+    name: 'nova',
+    profile: 'dba',
+    projectPath: '/p',
+    ide: 'vscode',
+  });
   expect(built.materializeError).toBe('perfil sem definição');
   expect(repo.rows).toHaveLength(1); // não perdeu a sessão
   expect(built.mcps).toEqual([]);
@@ -206,7 +230,12 @@ test('create: recipe é passada pro builder e o slug entra em config.extra', asy
   const builder = fakeBuilder();
   const m = new SessionManager(repo, builder, fakeRecipes());
   const built = await m.create({
-    userId: 7, name: 'x', profile: 'dba', projectPath: '/p', ide: 'other', recipe: RECIPE,
+    userId: 7,
+    name: 'x',
+    profile: 'dba',
+    projectPath: '/p',
+    ide: 'other',
+    recipe: RECIPE,
   });
   expect(builder.lastRecipe).toBe(RECIPE);
   expect(built.config.extra).toEqual({ recipe: 'dba-postgres' });

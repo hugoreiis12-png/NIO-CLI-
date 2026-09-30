@@ -126,7 +126,7 @@ export class TaskManager {
   /** Lista para o usuário. Sem `kinds`, mostra só trabalho de agente — turno
    *  de chat encheria a listagem com cada mensagem já digitada. */
   list(userId: number, opts: ListTasksOpts = {}): Promise<Task[]> {
-    return this.repo.listByUser(userId, { kinds: ["agent"], ...opts });
+    return this.repo.listByUser(userId, { kinds: ['agent'], ...opts });
   }
 
   /** Resolve uma task do usuário pelo prefixo do id. Lança se ausente ou ambíguo. */

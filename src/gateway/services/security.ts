@@ -16,7 +16,12 @@ import { createLoginChallengeRepository } from '../../adapters/pg/login-challeng
 import { createLoginIpRepository } from '../../adapters/pg/login-ip-repository.js';
 import { createAuthEventRepository } from '../../adapters/pg/auth-event-repository.js';
 import { createAuthSessionRepository } from '../../adapters/pg/auth-session-repository.js';
-import { createWhatsAppSender, smsMode, smsProviderHost, type SmsMode } from '../../adapters/sms/whatsapp.js';
+import {
+  createWhatsAppSender,
+  smsMode,
+  smsProviderHost,
+  type SmsMode,
+} from '../../adapters/sms/whatsapp.js';
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../auth/password.js';
 import { checkPasswordBreach } from '../auth/breach-check.js';
 import { generateOtp, hashOtp, verifyOtp } from '../auth/otp.js';
@@ -26,7 +31,13 @@ import {
   markUsed,
   countRemaining,
 } from '../auth/backup-codes.js';
-import { challengeUsable, maskPhone, OTP_TTL_MS, OTP_MAX_ATTEMPTS, CHALLENGE_MAX_ATTEMPTS } from './login.js';
+import {
+  challengeUsable,
+  maskPhone,
+  OTP_TTL_MS,
+  OTP_MAX_ATTEMPTS,
+  CHALLENGE_MAX_ATTEMPTS,
+} from './login.js';
 import { smsAllowed } from '../throttle.js';
 import { currentPepperId } from '../auth/secrets.js';
 
@@ -51,13 +62,19 @@ export async function changePassword(
   deps: SecurityDeps = {},
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (newPassword.length < MIN_PASSWORD_LENGTH) {
-    return { ok: false, error: `senha nova muito curta (mínimo ${MIN_PASSWORD_LENGTH} caracteres)` };
+    return {
+      ok: false,
+      error: `senha nova muito curta (mínimo ${MIN_PASSWORD_LENGTH} caracteres)`,
+    };
   }
   if (newPassword === currentPassword) {
     return { ok: false, error: 'a senha nova é igual à atual' };
   }
   if ((await checkPasswordBreach(newPassword)).breached) {
-    return { ok: false, error: 'senha nova apareceu em vazamento de dados conhecido — escolha outra' };
+    return {
+      ok: false,
+      error: 'senha nova apareceu em vazamento de dados conhecido — escolha outra',
+    };
   }
   const users = deps.users ?? createUserRepository();
   const user = await users.findById(userId);
@@ -93,7 +110,8 @@ export async function startSecurityChallenge(
   toPhone: string,
   deps: SecurityDeps = {},
 ): Promise<StartResult> {
-  if (!isE164(toPhone)) return { ok: false, error: 'número inválido (use E.164, ex.: +5511999998888)' };
+  if (!isE164(toPhone))
+    return { ok: false, error: 'número inválido (use E.164, ex.: +5511999998888)' };
   // M-4: `enable-2fa` aceita telefone arbitrário — sem cap, um Bearer válido
   // torrava mensagens pra qualquer número (toll fraud).
   if (!smsAllowed(userId, toPhone)) {
@@ -153,7 +171,10 @@ async function consumeSecurityCode(
     const idx = await verifyBackupCode(code, stored.codes, stored.pepperId);
     if (idx < 0) {
       const n = await challenges.incrementAttempts(ch.id);
-      return { ok: false, error: n >= CHALLENGE_MAX_ATTEMPTS ? 'tentativas esgotadas' : 'código de backup inválido' };
+      return {
+        ok: false,
+        error: n >= CHALLENGE_MAX_ATTEMPTS ? 'tentativas esgotadas' : 'código de backup inválido',
+      };
     }
     await users.updateBackupCodes(userId, markUsed(stored.codes!, idx), stored.pepperId);
   } else {
@@ -245,7 +266,14 @@ export async function status(userId: number, deps: SecurityDeps = {}): Promise<S
 
   const user = await users.findById(userId);
   if (!user || !user.auth2) {
-    return { enabled: false, phoneHint: null, backupCodesRemaining: 0, recentIps, recentFailedAttempts, sms };
+    return {
+      enabled: false,
+      phoneHint: null,
+      backupCodesRemaining: 0,
+      recentIps,
+      recentFailedAttempts,
+      sms,
+    };
   }
   const stored = await users.getBackupCodes(userId);
   return {

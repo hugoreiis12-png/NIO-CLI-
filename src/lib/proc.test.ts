@@ -10,7 +10,10 @@ test('spawnSyncPortable: acha o node e roda --version (sem error)', () => {
 });
 
 test('spawnSyncPortable: binário ausente → falha (error no POSIX, exit!=0 no Windows via shell)', () => {
-  const res = spawnSyncPortable('this-binary-does-not-exist-xyz', ['--version'], { stdio: 'ignore', timeout: 5000 });
+  const res = spawnSyncPortable('this-binary-does-not-exist-xyz', ['--version'], {
+    stdio: 'ignore',
+    timeout: 5000,
+  });
   const falhou = Boolean(res.error) || (res.status !== 0 && res.status !== null);
   expect(falhou).toBe(true);
 });

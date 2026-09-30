@@ -41,10 +41,7 @@ export async function pickLanguageChoices(recipe: LanguageRecipe): Promise<Scaff
   // Espelha o framework: "(nenhum)" + os ORMs da recipe (n8n tem lista vazia → só "(nenhum)").
   const orm = await select<string | undefined>({
     message: `[${recipe.language}] ORM?`,
-    choices: [
-      { name: NONE, value: undefined },
-      ...recipe.orms.map((o) => ({ name: o, value: o })),
-    ],
+    choices: [{ name: NONE, value: undefined }, ...recipe.orms.map((o) => ({ name: o, value: o }))],
   });
 
   return { packageManager, framework, orm };

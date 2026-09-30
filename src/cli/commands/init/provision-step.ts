@@ -58,9 +58,8 @@ export function provisionTargetsStep(
     try {
       const result = provision({ target, selection: config.selection });
       const { status, summary } = summarizeProvision(result.files);
-      report.addCaptured(
-        { id: `prov-${target.id}`, title: target.label, status, summary },
-        () => printProvisionResult(result),
+      report.addCaptured({ id: `prov-${target.id}`, title: target.label, status, summary }, () =>
+        printProvisionResult(result),
       );
       track({
         type: "provision",

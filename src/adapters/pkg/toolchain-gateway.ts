@@ -38,7 +38,11 @@ function ensure(spec: ToolchainSpec): EnsureResult {
   }
   // Confirma que a instalação de fato materializou o toolchain (quando há `detect`).
   if (spec.detect && !isPresent(spec)) {
-    return { id: spec.id, status: 'failed', error: 'instalador rodou mas o toolchain não foi detectado' };
+    return {
+      id: spec.id,
+      status: 'failed',
+      error: 'instalador rodou mas o toolchain não foi detectado',
+    };
   }
   return { id: spec.id, status: 'installed' };
 }

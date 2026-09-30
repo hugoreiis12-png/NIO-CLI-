@@ -21,26 +21,20 @@ export function registerPlanCommand(program: Command): void {
     .requiredOption("--instruction <texto>", "a ideia ou o ajuste a planejar")
     .option("--project <path>", "raiz do projeto onde vive o plan.md", process.cwd())
     .option("--quiet", "não streama o log do agente no stderr")
-    .action(
-      async (opts: {
-        instruction: string;
-        project: string;
-        quiet?: boolean;
-      }) => {
-        if (!existsSync(opts.project)) {
-          emit({ error: `projeto não encontrado: ${opts.project}` });
-          process.exitCode = 1;
-          return;
-        }
+    .action(async (opts: { instruction: string; project: string; quiet?: boolean }) => {
+      if (!existsSync(opts.project)) {
+        emit({ error: `projeto não encontrado: ${opts.project}` });
+        process.exitCode = 1;
+        return;
+      }
 
-        const result = await runPlan({
-          project: opts.project,
-          instruction: opts.instruction,
-          echo: opts.quiet !== true,
-        });
+      const result = await runPlan({
+        project: opts.project,
+        instruction: opts.instruction,
+        echo: opts.quiet !== true,
+      });
 
-        emit(result);
-        if (!result.ok) process.exitCode = 1;
-      },
-    );
+      emit(result);
+      if (!result.ok) process.exitCode = 1;
+    });
 }

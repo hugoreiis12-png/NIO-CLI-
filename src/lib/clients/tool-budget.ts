@@ -48,8 +48,7 @@ export const EXCEL_TOOLS_EDICAO = [
   'delete_sheet_columns',
 ] as const;
 
-const ligado = (nome: string): boolean =>
-  /^(1|true|yes|on)$/i.test((env(nome) ?? '').trim());
+const ligado = (nome: string): boolean => /^(1|true|yes|on)$/i.test((env(nome) ?? '').trim());
 
 /** Nomes extras a desligar, via `NIO_AI_TOOLS_OFF="a,b,c"`. */
 function extrasDesligadas(): string[] {

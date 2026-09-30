@@ -1,4 +1,4 @@
-// Plan delegate: roda o Qwen local (API direta) sobre a raiz do projeto e escreve um 'plan.md' 
+// Plan delegate: roda o Qwen local (API direta) sobre a raiz do projeto e escreve um 'plan.md'
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { QWEN_ENGINE, qwenComplete } from './qwen-client.js';
@@ -117,4 +117,3 @@ export function runPlan(opts: {
   const prompt = buildPlanPrompt(opts.instruction, planBase(opts.project));
   return apiPlan(prompt, opts.project, opts.echo === true);
 }
-

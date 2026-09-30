@@ -71,11 +71,10 @@ export async function launchAiClient(
   }
 
   return new Promise((resolve) => {
-    const child = spawnFn(
-      'opencode',
-      ['run', '--model', NIO_OPERATOR_MODEL, opts.prompt],
-      { stdio: 'inherit', cwd: opts.cwd },
-    );
+    const child = spawnFn('opencode', ['run', '--model', NIO_OPERATOR_MODEL, opts.prompt], {
+      stdio: 'inherit',
+      cwd: opts.cwd,
+    });
     child.on('exit', (code) => resolve(code ?? 0));
     child.on('error', (err) => {
       console.error(`[erro] Falha ao iniciar o OpenCode: ${err.message}`);

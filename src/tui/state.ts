@@ -126,9 +126,13 @@ export function permGroupLabel(kind: string): string {
  */
 export function toPermissionReq(raw: Record<string, unknown>): PermissionReq | null {
   const perm = raw as {
-    id?: string; sessionID?: string; title?: string;
-    permission?: string; type?: string;
-    patterns?: string[]; pattern?: string | string[];
+    id?: string;
+    sessionID?: string;
+    title?: string;
+    permission?: string;
+    type?: string;
+    patterns?: string[];
+    pattern?: string | string[];
     always?: string[];
     metadata?: { command?: string };
     tool?: { name?: string };
@@ -197,7 +201,9 @@ export function reconcilePendingPermissions(
  */
 export function toQuestionReq(raw: Record<string, unknown>): QuestionReq | null {
   const r = raw as {
-    id?: string; requestID?: string; sessionID?: string;
+    id?: string;
+    requestID?: string;
+    sessionID?: string;
     questions?: Array<Record<string, unknown>>;
     input?: { questions?: Array<Record<string, unknown>> };
   };
@@ -301,7 +307,13 @@ interface RawPart {
   type?: string;
   text?: string;
   tool?: string;
-  state?: { status?: string; output?: string; error?: string; title?: string; input?: Record<string, unknown> };
+  state?: {
+    status?: string;
+    output?: string;
+    error?: string;
+    title?: string;
+    input?: Record<string, unknown>;
+  };
   tokens?: { input?: number; output?: number };
   cost?: number;
   /** part `subtask` (fork disparado pelo modelo). */
@@ -337,7 +349,9 @@ function withMessage(
   const msg = messages[i]!;
   const parts = transform(msg.parts);
   const metaChanged =
-    !!meta && ((meta.mode !== undefined && meta.mode !== msg.mode) || (meta.summary !== undefined && meta.summary !== msg.summary));
+    !!meta &&
+    ((meta.mode !== undefined && meta.mode !== msg.mode) ||
+      (meta.summary !== undefined && meta.summary !== msg.summary));
   if (parts === msg.parts && !metaChanged) return messages;
   const next = messages.slice();
   next[i] = { ...msg, parts, ...meta };
@@ -345,7 +359,10 @@ function withMessage(
 }
 
 /** Extrai `mode`/`summary` do `info` de um evento/mensagem (só chaves presentes). */
-function metaFromInfo(info: { mode?: unknown; summary?: unknown }): { mode?: string; summary?: boolean } {
+function metaFromInfo(info: { mode?: unknown; summary?: unknown }): {
+  mode?: string;
+  summary?: boolean;
+} {
   const meta: { mode?: string; summary?: boolean } = {};
   if (typeof info.mode === 'string') meta.mode = info.mode;
   if (typeof info.summary === 'boolean') meta.summary = info.summary;
@@ -409,16 +426,26 @@ function computePart(prev: ChatPart | undefined, raw: RawPart): ChatPart | null 
   if (type === 'step-start' || type === 'compaction') return null;
   if (type === 'step-finish') {
     return {
-      id, kind: 'step', text: prev?.text ?? '',
-      step: { tokensIn: raw.tokens?.input ?? 0, tokensOut: raw.tokens?.output ?? 0, cost: raw.cost ?? 0 },
+      id,
+      kind: 'step',
+      text: prev?.text ?? '',
+      step: {
+        tokensIn: raw.tokens?.input ?? 0,
+        tokensOut: raw.tokens?.output ?? 0,
+        cost: raw.cost ?? 0,
+      },
     };
   }
   if (type === 'tool') {
     return {
-      id, kind: 'tool', text: raw.state?.title ?? raw.tool ?? 'tool',
+      id,
+      kind: 'tool',
+      text: raw.state?.title ?? raw.tool ?? 'tool',
       tool: {
-        name: raw.tool ?? 'tool', status: raw.state?.status ?? 'running',
-        input: raw.state?.input, output: String(raw.state?.output ?? raw.state?.error ?? ''),
+        name: raw.tool ?? 'tool',
+        status: raw.state?.status ?? 'running',
+        input: raw.state?.input,
+        output: String(raw.state?.output ?? raw.state?.error ?? ''),
       },
     };
   }
@@ -430,7 +457,11 @@ function computePart(prev: ChatPart | undefined, raw: RawPart): ChatPart | null 
   // aviso sintético do opencode: anexo grande removido + contexto compactado. Mostra
   // um marcador conciso no lugar do parágrafo longo (senão parece que travou raciocinando).
   if (raw.metadata?.compaction_continue) {
-    return { id, kind: 'text', text: '✂ anexo grande removido — contexto compactado; reenvie menor se precisar.' };
+    return {
+      id,
+      kind: 'text',
+      text: '✂ anexo grande removido — contexto compactado; reenvie menor se precisar.',
+    };
   }
   if (typeof raw.text === 'string') {
     const kind = type === 'reasoning' ? 'reasoning' : 'text';
@@ -485,7 +516,11 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
   }
   // `rejected` some junto com `replied`: a pergunta saiu do ar de qualquer modo, e sem
   // isto um reject externo deixava o modal órfão na fila.
-  if (qtype === 'question.replied' || qtype === 'question.answered' || qtype === 'question.rejected') {
+  if (
+    qtype === 'question.replied' ||
+    qtype === 'question.answered' ||
+    qtype === 'question.rejected'
+  ) {
     const id = (p.requestID ?? p.questionID) as string | undefined;
     state.questions = id ? state.questions.filter((x) => x.id !== id) : [];
     return state;
@@ -493,7 +528,12 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
 
   switch (evt.type) {
     case 'message.updated': {
-      const info = (p.info ?? p) as { id?: string; role?: string; mode?: unknown; summary?: unknown };
+      const info = (p.info ?? p) as {
+        id?: string;
+        role?: string;
+        mode?: unknown;
+        summary?: unknown;
+      };
       if (info.id) {
         const role = info.role === 'user' ? 'user' : 'assistant';
         state.messages = withMessage(
@@ -539,12 +579,17 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
     case 'tui.toast.show': {
       const t = p as { title?: string; message?: string; variant?: string; duration?: number };
       const message = [t.title, t.message].filter(Boolean).join(' — ') || 'aviso';
-      const variant = (['info', 'success', 'warning', 'error'].includes(t.variant ?? '')
-        ? t.variant
-        : 'info') as Toast['variant'];
+      const variant = (
+        ['info', 'success', 'warning', 'error'].includes(t.variant ?? '') ? t.variant : 'info'
+      ) as Toast['variant'];
       state.toasts = [
         ...state.toasts.slice(-4), // teto de 5
-        { id: `toast-${Date.now()}-${state.toasts.length}`, message, variant, until: Date.now() + Math.max(1500, t.duration ?? 4000) },
+        {
+          id: `toast-${Date.now()}-${state.toasts.length}`,
+          message,
+          variant,
+          until: Date.now() + Math.max(1500, t.duration ?? 4000),
+        },
       ];
       break;
     }
@@ -586,7 +631,8 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
       break;
     }
     case 'session.diff': {
-      const files = (p.diff as Array<{ file?: string; additions?: number; deletions?: number }>) ?? [];
+      const files =
+        (p.diff as Array<{ file?: string; additions?: number; deletions?: number }>) ?? [];
       state.diff = files
         .filter((d) => d.file)
         .map((d) => ({ file: String(d.file), added: d.additions ?? 0, removed: d.deletions ?? 0 }));
@@ -595,14 +641,24 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
     case 'session.compacted':
       state.toasts = [
         ...state.toasts.slice(-4),
-        { id: `toast-${Date.now()}`, message: '✂ contexto compactado', variant: 'info', until: Date.now() + 4000 },
+        {
+          id: `toast-${Date.now()}`,
+          message: '✂ contexto compactado',
+          variant: 'info',
+          until: Date.now() + 4000,
+        },
       ];
       break;
     case 'installation.update-available': {
       const v = (p as { version?: string }).version;
       state.toasts = [
         ...state.toasts.slice(-4),
-        { id: `toast-${Date.now()}`, message: `nova versão do opencode: ${v ?? '?'}`, variant: 'info', until: Date.now() + 6000 },
+        {
+          id: `toast-${Date.now()}`,
+          message: `nova versão do opencode: ${v ?? '?'}`,
+          variant: 'info',
+          until: Date.now() + 6000,
+        },
       ];
       break;
     }
@@ -631,7 +687,10 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
  */
 export function syncMessages(
   prev: ChatState,
-  raw: Array<{ info?: { id?: string; role?: string; mode?: unknown; summary?: unknown }; parts?: Array<Record<string, unknown>> }>,
+  raw: Array<{
+    info?: { id?: string; role?: string; mode?: unknown; summary?: unknown };
+    parts?: Array<Record<string, unknown>>;
+  }>,
   busy: boolean,
 ): ChatState {
   let messages: ChatMessage[] = [];
@@ -660,7 +719,11 @@ export function syncMessages(
 }
 
 function sameText(a: ChatMessage, b: ChatMessage): boolean {
-  const t = (m: ChatMessage) => m.parts.map((p) => p.text).join('').trim();
+  const t = (m: ChatMessage) =>
+    m.parts
+      .map((p) => p.text)
+      .join('')
+      .trim();
   return t(a) === t(b);
 }
 
@@ -690,8 +753,14 @@ export function pushUserMessage(prev: ChatState, text: string): ChatState {
  * opencode e de "work-state/handoff"). Token = a keyword; semântica = header de seção.
  */
 const SCAFFOLD_MARKERS = [
-  'objective', 'important details', 'work state', 'completed',
-  'active', 'blocked', 'next move', 'relevant files',
+  'objective',
+  'important details',
+  'work state',
+  'completed',
+  'active',
+  'blocked',
+  'next move',
+  'relevant files',
 ];
 
 /** `true` se o texto casa o padrão de scaffolding (≥3 headers de seção). Puro. */
@@ -711,14 +780,27 @@ export function looksLikeScaffolding(text: string): boolean {
  */
 export function isInternalMessage(m: ChatMessage): boolean {
   if (m.mode === 'compaction' || m.summary === true) return true;
-  const text = m.parts.filter((p) => p.kind === 'text').map((p) => p.text).join('\n');
+  const text = m.parts
+    .filter((p) => p.kind === 'text')
+    .map((p) => p.text)
+    .join('\n');
   return looksLikeScaffolding(text);
 }
 
 /** Resumo curto dos args de uma tool (arquivo / comando / pattern / url…). */
 export function summarizeToolInput(input?: Record<string, unknown>): string {
   if (!input) return '';
-  const keys = ['filePath', 'file_path', 'command', 'pattern', 'query', 'url', 'path', 'prompt', 'description'];
+  const keys = [
+    'filePath',
+    'file_path',
+    'command',
+    'pattern',
+    'query',
+    'url',
+    'path',
+    'prompt',
+    'description',
+  ];
   for (const k of keys) if (typeof input[k] === 'string' && input[k]) return String(input[k]);
   const first = Object.values(input).find((v) => typeof v === 'string' && v);
   return first ? String(first) : '';
@@ -748,8 +830,12 @@ export function contextUsage(messages: ChatMessage[]): { tokensIn: number; token
 }
 
 /** Soma dos tokens/custo de todos os `step` parts de uma mensagem. */
-export function messageUsage(msg: ChatMessage): { tokensIn: number; tokensOut: number; cost: number } | null {
-  const steps = msg.parts.filter((p): p is ChatPart & { step: NonNullable<ChatPart['step']> } => !!p.step);
+export function messageUsage(
+  msg: ChatMessage,
+): { tokensIn: number; tokensOut: number; cost: number } | null {
+  const steps = msg.parts.filter(
+    (p): p is ChatPart & { step: NonNullable<ChatPart['step']> } => !!p.step,
+  );
   if (steps.length === 0) return null;
   return steps.reduce(
     (acc, s) => ({
@@ -784,7 +870,10 @@ function idleAssistantText(state: ChatState): string | null {
 export function pendingQuestion(state: ChatState): string | null {
   const text = idleAssistantText(state);
   if (!text) return null;
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
   const lastLine = lines.at(-1) ?? '';
   if (/\?["'`)\]]*$/.test(lastLine)) return lastLine;
   // pergunta seguida de opções: pega a última linha que termina com `?`

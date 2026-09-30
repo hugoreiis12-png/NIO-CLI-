@@ -3,10 +3,10 @@
  * "arte" de `nio docs --html`. Design: terminal phosphor, tema claro/escuro.
  * Manutenção: `.claude/skills/nio-docs-page/SKILL.md`.
  */
-import type { Block, DocSection } from './content.js';
+import type { Block, DocSection } from "./content.js";
 
 const esc = (s: string): string =>
-  s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);
+  s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
 
 /** `texto com \`código\`` → HTML com <code>. */
 const inline = (s: string): string =>
@@ -70,13 +70,13 @@ td:first-child{font-family:var(--mono);font-size:.85rem;white-space:nowrap}
 `;
 
 function renderBlock(b: Block): string {
-  if (b.kind === 'p') return `<p>${inline(b.text)}</p>`;
-  if (b.kind === 'code') return `<pre><code>${esc(b.text)}</code></pre>`;
-  if (b.kind === 'list') return `<ul>${b.items.map((i) => `<li>${inline(i)}</li>`).join('')}</ul>`;
-  const head = b.head.map((h) => `<th>${esc(h)}</th>`).join('');
+  if (b.kind === "p") return `<p>${inline(b.text)}</p>`;
+  if (b.kind === "code") return `<pre><code>${esc(b.text)}</code></pre>`;
+  if (b.kind === "list") return `<ul>${b.items.map((i) => `<li>${inline(i)}</li>`).join("")}</ul>`;
+  const head = b.head.map((h) => `<th>${esc(h)}</th>`).join("");
   const rows = b.rows
-    .map((r) => `<tr>${r.map((cell) => `<td>${inline(cell)}</td>`).join('')}</tr>`)
-    .join('');
+    .map((r) => `<tr>${r.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`)
+    .join("");
   return `<div class="tbl"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
@@ -95,23 +95,17 @@ addEventListener('scroll',()=>{let on=links[0];
   links.forEach(l=>l.classList.toggle('on',l===on))},{passive:true});
 `;
 
-export function renderHtml(
-  sections: DocSection[],
-  version: string,
-  tagline: string,
-): string {
-  const nav = sections
-    .map((s) => `<a href="#${s.id}">${esc(s.title)}</a>`)
-    .join(' ');
+export function renderHtml(sections: DocSection[], version: string, tagline: string): string {
+  const nav = sections.map((s) => `<a href="#${s.id}">${esc(s.title)}</a>`).join(" ");
   const body = sections
     .map(
       (s) =>
         `<section id="${s.id}"><h2>${esc(s.title)}</h2>` +
-        (s.blurb ? `<p class="blurb">${inline(s.blurb)}</p>` : '') +
-        s.blocks.map(renderBlock).join('') +
+        (s.blurb ? `<p class="blurb">${inline(s.blurb)}</p>` : "") +
+        s.blocks.map(renderBlock).join("") +
         `</section>`,
     )
-    .join('');
+    .join("");
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NIO-CLI — documentação</title><style>${STYLE}</style></head><body>

@@ -16,7 +16,11 @@ test('tenant+client+secret → service principal', () => {
 });
 
 test('par de usuário vence o secret (é o que respeita RLS)', () => {
-  const env = { ...SP, NIO_FABRIC_USERNAME: 'a@b.c', NIO_FABRIC_PASSWORD: 'x' } as NodeJS.ProcessEnv;
+  const env = {
+    ...SP,
+    NIO_FABRIC_USERNAME: 'a@b.c',
+    NIO_FABRIC_PASSWORD: 'x',
+  } as NodeJS.ProcessEnv;
   expect(fabricConfigStatus(env).grant).toBe('user');
 });
 

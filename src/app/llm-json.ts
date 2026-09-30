@@ -10,7 +10,10 @@ import type { ZodType } from 'zod';
 import { stripFence } from '../lib/exec/plan-delegate.js';
 
 export class LlmJsonError extends Error {
-  constructor(motivo: string, readonly bruto: string) {
+  constructor(
+    motivo: string,
+    readonly bruto: string,
+  ) {
     // O bruto vai truncado: resposta de LLM cabe em log, não em mensagem de erro.
     super(`${motivo} Resposta: ${bruto.slice(0, 200)}`);
     this.name = 'LlmJsonError';

@@ -56,7 +56,11 @@ export function DiffSummary({
     <Box paddingX={1}>
       <Text color={theme.accent} wrap="truncate-end">
         {'✎ '}
-        {changes.length} arquivo(s): <Text color={theme.dim}>{parts.join(' · ')}{more > 0 ? ` · +${more}` : ''}</Text>
+        {changes.length} arquivo(s):{' '}
+        <Text color={theme.dim}>
+          {parts.join(' · ')}
+          {more > 0 ? ` · +${more}` : ''}
+        </Text>
       </Text>
     </Box>
   );
@@ -86,7 +90,12 @@ export function QuestionPicker({
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={theme.accentBright} paddingX={1}>
       {options.map((o, i) => (
-        <Text key={i} inverse={i === sel} color={i === sel ? theme.accentBright : undefined} wrap="truncate-end">
+        <Text
+          key={i}
+          inverse={i === sel}
+          color={i === sel ? theme.accentBright : undefined}
+          wrap="truncate-end"
+        >
           {' '}
           {i + 1}. {o}
         </Text>
@@ -111,9 +120,7 @@ export function ErrorBlock({
         {'  '}
         {error.message}
       </Text>
-      {error.retryable && (
-        <Text color={theme.dim}>{'  reenvie o prompt pra tentar de novo'}</Text>
-      )}
+      {error.retryable && <Text color={theme.dim}>{'  reenvie o prompt pra tentar de novo'}</Text>}
     </Box>
   );
 }
@@ -268,7 +275,8 @@ function UsageFooter({
   files?: number;
 }): React.ReactElement | null {
   const bits: string[] = [];
-  if (usage && (usage.tokensIn || usage.tokensOut)) bits.push(`↑${kfmt(usage.tokensIn)} ↓${kfmt(usage.tokensOut)}`);
+  if (usage && (usage.tokensIn || usage.tokensOut))
+    bits.push(`↑${kfmt(usage.tokensIn)} ↓${kfmt(usage.tokensOut)}`);
   if (usage && usage.cost > 0) bits.push(`$${usage.cost.toFixed(3)}`);
   if (files > 0) bits.push(`${files} arquivo(s)`);
   if (bits.length === 0) return null;
@@ -343,7 +351,10 @@ export function LiveMessage({
   expandReasoning?: boolean;
 }): React.ReactElement {
   if (isInternalMessage(message)) return <InternalMarker />; // resumo/scaffolding: ofusca já ao vivo
-  const text = message.parts.filter((p) => p.kind === 'text').map((p) => p.text).join('');
+  const text = message.parts
+    .filter((p) => p.kind === 'text')
+    .map((p) => p.text)
+    .join('');
   const reasoningRaw = message.parts
     .filter((p) => p.kind === 'reasoning')
     .map((p) => p.text)
@@ -400,7 +411,9 @@ export function LiveMessage({
         <Box flexDirection="column">
           <Text color={theme.accent}>
             {'  ✻ raciocínio'}
-            {reasoningLines.length > reasoningShown.length ? ` · ${reasoningLines.length} linhas` : ''}
+            {reasoningLines.length > reasoningShown.length
+              ? ` · ${reasoningLines.length} linhas`
+              : ''}
           </Text>
           {reasoningShown.map((l, i) => (
             <Text key={i} color={theme.dim} wrap="truncate-end">
@@ -410,9 +423,11 @@ export function LiveMessage({
           ))}
         </Box>
       )}
-      {clipped && <Text color={theme.dim}>  … (rolagem acima)</Text>}
+      {clipped && <Text color={theme.dim}> … (rolagem acima)</Text>}
       {shown.map((l, i) => (
-        <Text key={i} wrap="truncate-end">{l || ' '}</Text>
+        <Text key={i} wrap="truncate-end">
+          {l || ' '}
+        </Text>
       ))}
       <UsageFooter usage={messageUsage(message)} files={files.length} />
     </Box>
@@ -461,13 +476,18 @@ function SlashList({ items, sel }: { items: PaletteItem[]; sel: number }): React
           wrap="truncate-end"
         >
           {' '}
-          <Text color={theme.dim}>[{KIND_LABEL[it.kind]}]</Text> {it.name}  <Text color={theme.dim}>{it.desc}</Text>
+          <Text color={theme.dim}>[{KIND_LABEL[it.kind]}]</Text> {it.name}{' '}
+          <Text color={theme.dim}>{it.desc}</Text>
         </Text>
       ))}
       <Text color={theme.dim}>
         ↑↓ · Enter{' '}
-        {cur?.kind === 'capability' ? 'manda pro agente' : cur?.kind === 'command' ? 'roda' : 'abre'} ·
-        Esc sai
+        {cur?.kind === 'capability'
+          ? 'manda pro agente'
+          : cur?.kind === 'command'
+            ? 'roda'
+            : 'abre'}{' '}
+        · Esc sai
       </Text>
     </Box>
   );
@@ -587,7 +607,9 @@ export function InputBox({
               ? '↑↓ pra escolher, ou digite'
               : ''
         }
-        borderColor={disabled ? theme.dim : inPalette || picking ? theme.accentBright : theme.accent}
+        borderColor={
+          disabled ? theme.dim : inPalette || picking ? theme.accentBright : theme.accent
+        }
       />
       {inPalette && active && <SlashList items={matches} sel={selC} />}
     </Box>

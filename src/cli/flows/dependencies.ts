@@ -25,9 +25,7 @@ export async function offerDependencyInstall(
   if (deps.length === 0) return;
 
   console.log("");
-  console.log(
-    sectionTitle("Dependências externas", "libs que seus commands/skills usam"),
-  );
+  console.log(sectionTitle("Dependências externas", "libs que seus commands/skills usam"));
   console.log(rule());
 
   const enabled = opts.enabled !== false;

@@ -20,7 +20,10 @@ test('handler: linguagem válida → conteúdo do store, sem erro', () => {
 });
 
 test('handler: cache ausente (found:false) → isError true', () => {
-  const res = handleLangReference({ language: 'python' }, fakeStore({ found: false, content: 'sync' }));
+  const res = handleLangReference(
+    { language: 'python' },
+    fakeStore({ found: false, content: 'sync' }),
+  );
   expect(res.isError).toBe(true);
 });
 

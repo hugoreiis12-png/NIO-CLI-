@@ -33,8 +33,7 @@ interface TemplateRow {
   score?: number;
 }
 
-const COLS =
-  'id, request_name, question_norm, workspace_id, dataset_id, dax, output_summary';
+const COLS = 'id, request_name, question_norm, workspace_id, dataset_id, dax, output_summary';
 
 /** Literal de vetor do pgvector: `[0.1,0.2,…]`. */
 function toVector(embedding: number[]): string {
@@ -57,9 +56,8 @@ function mapTemplateRow(row: TemplateRow, score: number): ScoredTemplate {
 /** Banco fora do ar é `unavailable` (dá pra tentar de novo); o resto é `failed`. */
 function fail(err: unknown): RagResult<never> {
   const message = (err as Error).message ?? String(err);
-  const offline = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH|terminating connection|57P03/i.test(
-    message,
-  );
+  const offline =
+    /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH|terminating connection|57P03/i.test(message);
   return { status: offline ? 'unavailable' : 'failed', error: message };
 }
 

@@ -24,7 +24,9 @@ export async function ensureUserConfig(opts: {
 }): Promise<void> {
   if (migrateConfigSplit()) {
     fixGitignoreForSplit();
-    console.log(`  ${c.dim(`migrado: ide → ${USER_CONFIG_FILE}; ${brand.projectConfigFile} versionado`)}`);
+    console.log(
+      `  ${c.dim(`migrado: ide → ${USER_CONFIG_FILE}; ${brand.projectConfigFile} versionado`)}`,
+    );
   }
 
   if (!opts.hasRepoConfig) return; // sem binding do repo → é caso de `nio init`

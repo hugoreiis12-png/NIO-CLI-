@@ -1,5 +1,12 @@
 import { spawnSyncPortable } from '../proc.js';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, isAbsolute, parse } from 'node:path';
 import { homePath } from '../../brand.js';
@@ -28,12 +35,7 @@ function readMarker(): Record<string, { kind: string; ref: string; at: string }>
 export function recordDependencyInstalled(dep: ResolvedDependency): void {
   const plan = dep.plan;
   if (!plan) return;
-  const ref =
-    plan.kind === 'npm'
-      ? plan.pkg
-      : plan.kind === 'skills'
-        ? plan.repo
-        : plan.url; // git
+  const ref = plan.kind === 'npm' ? plan.pkg : plan.kind === 'skills' ? plan.repo : plan.url; // git
   const marker = readMarker();
   marker[dep.id] = { kind: plan.kind, ref, at: new Date().toISOString() };
   try {
@@ -57,9 +59,7 @@ function pathExists(p: string): boolean {
 
 /** Expande `~` inicial pro home. */
 function expandTilde(p: string): string {
-  return p === '~' || p.startsWith('~/') || p.startsWith('~\\')
-    ? join(homedir(), p.slice(1))
-    : p;
+  return p === '~' || p.startsWith('~/') || p.startsWith('~\\') ? join(homedir(), p.slice(1)) : p;
 }
 
 /**

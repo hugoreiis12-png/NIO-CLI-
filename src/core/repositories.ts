@@ -53,7 +53,12 @@ export interface UserRepository {
   updatePasswordHash(userId: number, phc: string, pepperId: number): Promise<void>;
 
   /** Liga o 2º fator: `auth_2 = true`, grava `phone` (E.164), os hashes dos códigos de backup e o pepper usado. */
-  enable2fa(userId: number, phone: string, backupCodeHashes: string, backupPepperId: number): Promise<void>;
+  enable2fa(
+    userId: number,
+    phone: string,
+    backupCodeHashes: string,
+    backupPepperId: number,
+  ): Promise<void>;
 
   /** Desliga o 2º fator: `auth_2 = false`, limpa `phone` e `backup_codes`. */
   disable2fa(userId: number): Promise<void>;
@@ -212,7 +217,11 @@ export interface AuthEventRepository {
   record(input: AuthEventInput): Promise<void>;
 
   /** Últimas falhas (`password_fail`/`2fa_fail`/`2fa_expired`) de um usuário — por `userId` OU `name`. */
-  recentFailures(opts: { userId?: number | null; name?: string | null; limit?: number }): Promise<AuthFailure[]>;
+  recentFailures(opts: {
+    userId?: number | null;
+    name?: string | null;
+    limit?: number;
+  }): Promise<AuthFailure[]>;
 
   /** Retenção — apaga eventos com `at` mais velho que `days`. Devolve quantos. */
   pruneOlderThan(days: number): Promise<number>;
@@ -223,7 +232,9 @@ export interface DependencyEventRepository {
    * Registra o evento se ainda não houver um pro trio (session, file, name).
    * `created: false` + o evento existente quando já registrado (não duplica).
    */
-  recordIfNew(input: NewDependencyEventInput): Promise<{ event: DependencyEvent; created: boolean }>;
+  recordIfNew(
+    input: NewDependencyEventInput,
+  ): Promise<{ event: DependencyEvent; created: boolean }>;
 
   /** Marca um evento como instalado (`installed = true`, `installed_at = now()`). */
   markInstalled(id: string): Promise<void>;

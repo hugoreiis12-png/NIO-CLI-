@@ -12,7 +12,11 @@ function repos(): {
   steps: StepRepository;
   registro: { criadas: unknown[]; finalizados: unknown[]; completadas: unknown[] };
 } {
-  const registro = { criadas: [] as unknown[], finalizados: [] as unknown[], completadas: [] as unknown[] };
+  const registro = {
+    criadas: [] as unknown[],
+    finalizados: [] as unknown[],
+    completadas: [] as unknown[],
+  };
   const tasks = {
     create: async (input: unknown) => {
       registro.criadas.push(input);
@@ -38,8 +42,19 @@ function repos(): {
 
 /** Repositório que explode em tudo — simula Postgres fora do ar. */
 const quebrado = {
-  tasks: { create: async () => { throw new Error('banco fora'); } } as unknown as TaskRepository,
-  steps: { finish: async () => { throw new Error('banco fora'); }, failStep: async () => { throw new Error('banco fora'); } } as unknown as StepRepository,
+  tasks: {
+    create: async () => {
+      throw new Error('banco fora');
+    },
+  } as unknown as TaskRepository,
+  steps: {
+    finish: async () => {
+      throw new Error('banco fora');
+    },
+    failStep: async () => {
+      throw new Error('banco fora');
+    },
+  } as unknown as StepRepository,
 };
 
 test('abre o turno como task chat, com um step só', async () => {
@@ -56,7 +71,10 @@ test('abre o turno como task chat, com um step só', async () => {
 
 test('NÃO planeja: a mensagem do usuário já é a instrução', async () => {
   const { tasks, steps } = repos();
-  const ref = await beginTurn({ userId: 7, sessionId: null, profile: 'qa', text: 'oi' }, { tasks, steps });
+  const ref = await beginTurn(
+    { userId: 7, sessionId: null, profile: 'qa', text: 'oi' },
+    { tasks, steps },
+  );
   // Um "oi" não pode virar um plano de 5 passos — por isso o turno de chat
   // nasce com o step único já pronto, sem passar pelo Planner.
   expect(ref).not.toBeNull();
@@ -83,7 +101,9 @@ test('ref nulo é no-op — o caller não precisa checar', async () => {
 
 test('mensagem vazia não vira task', async () => {
   const { tasks, steps, registro } = repos();
-  expect(await beginTurn({ userId: 7, sessionId: null, profile: 'qa', text: '   ' }, { tasks, steps })).toBeNull();
+  expect(
+    await beginTurn({ userId: 7, sessionId: null, profile: 'qa', text: '   ' }, { tasks, steps }),
+  ).toBeNull();
   expect(registro.criadas).toEqual([]);
 });
 
@@ -91,7 +111,12 @@ test('end grava saída e tokens e conclui a task', async () => {
   const { tasks, steps, registro } = repos();
   await endTurn(
     { taskId: 'task-1', stepId: 42 },
-    { text: 'achei 12', toolCalls: [{ tool: 'grep', status: 'completed' }], tokensIn: 90, tokensOut: 8 },
+    {
+      text: 'achei 12',
+      toolCalls: [{ tool: 'grep', status: 'completed' }],
+      tokensIn: 90,
+      tokensOut: 8,
+    },
     { tasks, steps },
   );
   expect(registro.finalizados[0]).toMatchObject({ id: 42 });

@@ -3,7 +3,9 @@ import { fetchPendingQuestions, fetchPendingPermissions } from './opencode.js';
 
 const BASE = 'http://127.0.0.1:4096';
 const original = globalThis.fetch;
-afterEach(() => { globalThis.fetch = original; });
+afterEach(() => {
+  globalThis.fetch = original;
+});
 
 /** Servidor falso que responde JSON só na rota certa — e HTML no resto, como o opencode. */
 function fakeServer(rotaValida: string, corpo: unknown) {
@@ -12,10 +14,16 @@ function fakeServer(rotaValida: string, corpo: unknown) {
     const url = new URL(String(input));
     chamadas.push(url.pathname);
     if (url.pathname === rotaValida) {
-      return new Response(JSON.stringify(corpo), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify(corpo), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
     }
     // O opencode serve o web UI em rota desconhecida — não dá 404.
-    return new Response('<!doctype html><html>…</html>', { status: 200, headers: { 'content-type': 'text/html' } });
+    return new Response('<!doctype html><html>…</html>', {
+      status: 200,
+      headers: { 'content-type': 'text/html' },
+    });
   }) as typeof fetch;
   return chamadas;
 }
@@ -53,7 +61,9 @@ test('corpo que não é array vira null (não confia em resposta estranha)', asy
 });
 
 test('rede fora → null, para a fila não ser apagada', async () => {
-  globalThis.fetch = (async () => { throw new Error('ECONNREFUSED'); }) as typeof fetch;
+  globalThis.fetch = (async () => {
+    throw new Error('ECONNREFUSED');
+  }) as typeof fetch;
   expect(await fetchPendingQuestions(BASE)).toBeNull();
 });
 

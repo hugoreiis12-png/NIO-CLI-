@@ -121,7 +121,9 @@ dbTest('fence velho não grava: worker zumbi é barrado', async () => {
     expect((await tasks.findById(primeira.id))!.status).toBe('planning');
 
     // O dono atual do lease escreve normalmente.
-    expect(await tasks.setStatus(segunda.id, 'running', segunda.fence, { currentStep: 10 })).toBe(true);
+    expect(await tasks.setStatus(segunda.id, 'running', segunda.fence, { currentStep: 10 })).toBe(
+      true,
+    );
   } finally {
     await limpar();
   }
@@ -131,11 +133,18 @@ dbTest('o worker NUNCA reivindica turno de chat', async () => {
   if (!temTabela) return;
   const users = createUserRepository();
   const tasks = createTaskRepository();
-  const user = await users.create({ name: `nio-kind-${randomUUID()}`, password: `pw-${randomUUID()}` });
+  const user = await users.create({
+    name: `nio-kind-${randomUUID()}`,
+    password: `pw-${randomUUID()}`,
+  });
   const fila = createTaskQueue();
   try {
     const chat = await tasks.create({
-      userId: user.id, sessionId: null, profile: 'qa', goal: 'oi', kind: 'chat',
+      userId: user.id,
+      sessionId: null,
+      profile: 'qa',
+      goal: 'oi',
+      kind: 'chat',
     });
     expect(chat.kind).toBe('chat');
 
@@ -143,7 +152,12 @@ dbTest('o worker NUNCA reivindica turno de chat', async () => {
     // RE-EXECUTARIA com o Planner — a mensagem viraria um plano rodando sozinha.
     expect(await fila.claim('worker-a', user.id)).toBeNull();
 
-    const agente = await tasks.create({ userId: user.id, sessionId: null, profile: 'qa', goal: 'trabalho' });
+    const agente = await tasks.create({
+      userId: user.id,
+      sessionId: null,
+      profile: 'qa',
+      goal: 'trabalho',
+    });
     expect(agente.kind).toBe('agent'); // default sem passar nada
     const pega = await fila.claim('worker-a', user.id);
     expect(pega?.id).toBe(agente.id);

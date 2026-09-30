@@ -1,7 +1,8 @@
 import { test, expect } from 'bun:test';
 import { runFabricMeasure } from './fabric-measure.js';
 
-const COM_FORMULA = 'Medida: 2024_FAT_BRUTO\nTabela: VISAO_COMERCIAL\nExpressão DAX: CALCULATE([X])';
+const COM_FORMULA =
+  'Medida: 2024_FAT_BRUTO\nTabela: VISAO_COMERCIAL\nExpressão DAX: CALCULATE([X])';
 const SEM_FORMULA = 'Medida: OUTRA\nTabela: VISAO_COMERCIAL';
 const texto = (r: { content: { text?: string }[] }) => String(r.content[0]?.text ?? '');
 
@@ -36,6 +37,14 @@ test('nada encontrado → erro que ensina o próximo passo', async () => {
 
 test('o limite chega ao buscador', async () => {
   let visto = 0;
-  await runFabricMeasure(async (_r, _t, l) => { visto = l; return [COM_FORMULA]; }, 'ds', 'x', 3);
+  await runFabricMeasure(
+    async (_r, _t, l) => {
+      visto = l;
+      return [COM_FORMULA];
+    },
+    'ds',
+    'x',
+    3,
+  );
   expect(visto).toBe(3);
 });

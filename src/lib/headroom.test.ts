@@ -1,5 +1,10 @@
 import { test, expect } from 'bun:test';
-import { HEADROOM_PORT, HEADROOM_URL, HEADROOM_URL_CONTAINER, headroomHealthy } from './headroom.js';
+import {
+  HEADROOM_PORT,
+  HEADROOM_URL,
+  HEADROOM_URL_CONTAINER,
+  headroomHealthy,
+} from './headroom.js';
 
 test('HEADROOM_URL: default no host, com /v1', () => {
   expect(HEADROOM_PORT).toBe(8787);

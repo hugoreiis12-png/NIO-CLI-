@@ -64,7 +64,12 @@ export async function checkForUpdate(timeoutMs = 3000): Promise<UpdateStatus | n
     const data = (await res.json()) as { version?: string };
     const latest = data.version;
     if (!latest) return null;
-    return { name: pkg.name, current: pkg.version, latest, hasUpdate: semverGt(latest, pkg.version) };
+    return {
+      name: pkg.name,
+      current: pkg.version,
+      latest,
+      hasUpdate: semverGt(latest, pkg.version),
+    };
   } catch {
     return null;
   }

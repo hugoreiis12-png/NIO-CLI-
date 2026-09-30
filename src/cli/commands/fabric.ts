@@ -31,7 +31,8 @@ async function probe(): Promise<FabricStatusReport> {
   const grant = fabricGrant();
   if (!grant) return { configured: false, status: "unconfigured" };
   const out = await createFabricGateway().listWorkspaces();
-  if (out.status === "ok") return { configured: true, grant, status: "ok", workspaceCount: out.data?.length ?? 0 };
+  if (out.status === "ok")
+    return { configured: true, grant, status: "ok", workspaceCount: out.data?.length ?? 0 };
   return { configured: true, grant, status: out.status, error: out.error };
 }
 
@@ -60,11 +61,15 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
   }
   if (r.status === "ok") {
     const via = GRANT_LABEL[r.grant ?? "service_principal"];
-    console.log(`${c.green(sym.ok)} Fabric conectado via ${via} — ${r.workspaceCount} workspace(s) visível(is).`);
+    console.log(
+      `${c.green(sym.ok)} Fabric conectado via ${via} — ${r.workspaceCount} workspace(s) visível(is).`,
+    );
   } else if (r.status === "unconfigured") {
     console.log(`${c.yellow(sym.warn)} Fabric não configurado. ${c.dim(HINT)}`);
   } else {
-    console.log(`${c.red(sym.err)} Fabric ${statusLabel(r.status, r.error)}. ${c.dim(r.error ?? "")}`);
+    console.log(
+      `${c.red(sym.err)} Fabric ${statusLabel(r.status, r.error)}. ${c.dim(r.error ?? "")}`,
+    );
   }
 
   // Independe da nuvem, e é **quando a credencial falha** que saber do Desktop aberto
@@ -80,9 +85,13 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
 async function reportLocalXmla(): Promise<void> {
   const local = await discoverLocalXmla();
   if (local.status === "ok") {
-    console.log(`${c.green(sym.ok)} Power BI Desktop local — XMLA em ${c.cyan(local.endpoint ?? "")} ${c.dim("(porta muda a cada abertura)")}`);
+    console.log(
+      `${c.green(sym.ok)} Power BI Desktop local — XMLA em ${c.cyan(local.endpoint ?? "")} ${c.dim("(porta muda a cada abertura)")}`,
+    );
   } else if (local.status === "not_running") {
-    console.log(`${c.dim("  sem Desktop local com modelo aberto — o modo `--local` não tem onde conectar.")}`);
+    console.log(
+      `${c.dim("  sem Desktop local com modelo aberto — o modo `--local` não tem onde conectar.")}`,
+    );
   }
 }
 
@@ -112,7 +121,8 @@ async function runLogin(): Promise<void> {
 
   // Só em TTY: num pipe/captura o relógio vira ruído (mesma regra do logo).
   const tick = (restanteSec: number): void => {
-    if (process.stdout.isTTY) process.stdout.write(`\r  ${c.dim(`aguardando aprovação… ${mmss(restanteSec)}`)}   `);
+    if (process.stdout.isTTY)
+      process.stdout.write(`\r  ${c.dim(`aguardando aprovação… ${mmss(restanteSec)}`)}   `);
   };
   const tokens = await pollDeviceToken(auth, start.data, { onWaiting: tick });
   if (process.stdout.isTTY) process.stdout.write("\r\x1b[K");
@@ -123,8 +133,13 @@ async function runLogin(): Promise<void> {
   }
 
   const { warning } = saveRefreshToken(tokens.data.refreshToken, auth);
-  if (warning) console.log(`${c.yellow(sym.warn)} não consegui restringir a permissão do arquivo: ${c.dim(warning)}`);
-  console.log(`${c.green(sym.ok)} Login concluído — as consultas passam a rodar como você, com o RLS aplicado.`);
+  if (warning)
+    console.log(
+      `${c.yellow(sym.warn)} não consegui restringir a permissão do arquivo: ${c.dim(warning)}`,
+    );
+  console.log(
+    `${c.green(sym.ok)} Login concluído — as consultas passam a rodar como você, com o RLS aplicado.`,
+  );
   console.log(c.dim("  sai com `nio fabric logout`."));
 }
 
@@ -134,9 +149,16 @@ function tempo(ms: number): string {
 }
 
 const OUTCOME_ORDER = [
-  "ok", "column_not_found", "table_not_found", "type_mismatch",
-  "syntax_error", "function_error", "other_dax_error",
-  "unauthorized", "throttled", "unavailable",
+  "ok",
+  "column_not_found",
+  "table_not_found",
+  "type_mismatch",
+  "syntax_error",
+  "function_error",
+  "other_dax_error",
+  "unauthorized",
+  "throttled",
+  "unavailable",
 ];
 
 function runMetrics(opts: { dias?: string; json?: boolean }): void {
@@ -148,14 +170,18 @@ function runMetrics(opts: { dias?: string; json?: boolean }): void {
   }
   if (s.total === 0) {
     console.log(`${c.yellow(sym.warn)} Nenhuma consulta registrada nos últimos ${dias} dias.`);
-    console.log(c.dim("  a métrica começa a gravar na próxima consulta (desligue com NIO_METRICS=0)."));
+    console.log(
+      c.dim("  a métrica começa a gravar na próxima consulta (desligue com NIO_METRICS=0)."),
+    );
     return;
   }
 
   const erros = s.total - (s.porOutcome.ok ?? 0);
   console.log(`\n  ${c.bold("Consultas ao Fabric")} ${c.dim(`— últimos ${dias} dias`)}\n`);
   console.log(`  total          ${s.total}`);
-  console.log(`  taxa de erro   ${(s.taxaErro * 100).toFixed(0)}% ${c.dim(`(${erros} de ${s.total})`)}`);
+  console.log(
+    `  taxa de erro   ${(s.taxaErro * 100).toFixed(0)}% ${c.dim(`(${erros} de ${s.total})`)}`,
+  );
   console.log("");
   for (const k of OUTCOME_ORDER) {
     const n = s.porOutcome[k];
@@ -169,7 +195,9 @@ function runMetrics(opts: { dias?: string; json?: boolean }): void {
 
 function runLogout(): void {
   clearRefreshToken();
-  console.log(`${c.green(sym.ok)} Sessão do Fabric encerrada. ${c.dim("volta a usar a credencial do config.env.")}`);
+  console.log(
+    `${c.green(sym.ok)} Sessão do Fabric encerrada. ${c.dim("volta a usar a credencial do config.env.")}`,
+  );
 }
 
 export function registerFabricCommand(program: Command): void {

@@ -38,7 +38,10 @@ const ROWS = {
     coluna('DATA', 'CALENDARIO', 'DateTime'),
     coluna('OCULTA', 'VISAO_COMERCIAL'),
   ],
-  measures: [medida('TOTAL_LIQUIDO', 'VISAO_COMERCIAL'), medida('OCULTA', 'VISAO_COMERCIAL', { '[IsHidden]': 'true' })],
+  measures: [
+    medida('TOTAL_LIQUIDO', 'VISAO_COMERCIAL'),
+    medida('OCULTA', 'VISAO_COMERCIAL', { '[IsHidden]': 'true' }),
+  ],
 };
 
 test('descarta tabelas ocultas (auto date/time) — não viram vocabulário', () => {
@@ -85,7 +88,9 @@ test('sem fórmula (INFO.VIEW devolve nulo) o chunk não ganha linha vazia', () 
 
 test('medida oculta não entra', () => {
   const paths = buildSchemaChunks(ROWS, 'ds').map((c) => c.path);
-  expect(paths.filter((p) => p.startsWith('medida/'))).toEqual(['medida/VISAO_COMERCIAL/TOTAL_LIQUIDO']);
+  expect(paths.filter((p) => p.startsWith('medida/'))).toEqual([
+    'medida/VISAO_COMERCIAL/TOTAL_LIQUIDO',
+  ]);
 });
 
 test('repo é por dataset — schema de um modelo não mistura com o de outro', () => {

@@ -100,13 +100,19 @@ function scatterRain(
       const row = start + i;
       const key = `${row},${col}`;
       if (row < 0 || row >= height || canvas.logoArea.has(key)) continue;
-      canvas.cells[row][col] = i >= trail - 4 ? pickChar(rand, MATRIX_CHARS) : pickChar(rand, TRAIL_CHARS);
+      canvas.cells[row][col] =
+        i >= trail - 4 ? pickChar(rand, MATRIX_CHARS) : pickChar(rand, TRAIL_CHARS);
     }
   }
 }
 
 /** Pixels soltos, pra preencher o fundo sem ficar tão vazio. */
-function scatterLoosePixels(rand: () => number, canvas: Canvas, width: number, height: number): void {
+function scatterLoosePixels(
+  rand: () => number,
+  canvas: Canvas,
+  width: number,
+  height: number,
+): void {
   for (let n = 0; n < 50; n++) {
     const row = randInt(rand, 0, height - 1);
     const col = randInt(rand, 0, width - 1);
@@ -117,7 +123,13 @@ function scatterLoosePixels(rand: () => number, canvas: Canvas, width: number, h
 }
 
 /** Colore: logo em verde sólido, chuva/pixels em tons variados de verde. */
-function colorize(rand: () => number, canvas: Canvas, width: number, height: number, colored: boolean): string {
+function colorize(
+  rand: () => number,
+  canvas: Canvas,
+  width: number,
+  height: number,
+  colored: boolean,
+): string {
   const lines: string[] = [];
   for (let r = 0; r < height; r++) {
     let line = '';

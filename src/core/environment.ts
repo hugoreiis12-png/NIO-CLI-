@@ -40,7 +40,7 @@ export interface ToolchainSpec {
 
 /**
  * Definição hardcoded de um perfil (`src/profiles/`) — o que ele materializa.
- * É a ENTRADA do `EnvironmentBuilder`; a saída resolvida é o EnviromentConfig (core/types.ts) 
+ * É a ENTRADA do `EnvironmentBuilder`; a saída resolvida é o EnviromentConfig (core/types.ts)
  */
 export interface ProfileDefinition {
   profile: Profile;

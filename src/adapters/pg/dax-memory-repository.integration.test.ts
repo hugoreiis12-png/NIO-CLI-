@@ -32,7 +32,9 @@ async function ragSchemaReady(): Promise<boolean> {
 
 const ragReady = await ragSchemaReady();
 if (hasDb && !ragReady) {
-  console.warn('  [skip] tabelas do RAG ausentes (pgvector + migration 0010) — testes de DaxMemory pulados');
+  console.warn(
+    '  [skip] tabelas do RAG ausentes (pgvector + migration 0010) — testes de DaxMemory pulados',
+  );
 }
 const dbTest = ragReady ? test : test.skip;
 

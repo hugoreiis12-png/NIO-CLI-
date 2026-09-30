@@ -103,7 +103,8 @@ async function runWithRetry(
     return { status: 'failed', error: first.error };
   }
   const second = await deps.fabric.executeDax(input.workspaceId, input.datasetId, retry.data);
-  if (second.status === 'ok') return { status: 'ok', data: { dax: retry.data, rows: second.data ?? [] } };
+  if (second.status === 'ok')
+    return { status: 'ok', data: { dax: retry.data, rows: second.data ?? [] } };
   return { status: 'failed', error: second.error ?? first.error };
 }
 
@@ -151,7 +152,12 @@ export async function askDax(deps: DaxRagDeps, input: AskInput): Promise<RagResu
       await deps.memory.markHit(exact.data.id);
       return {
         status: 'ok',
-        data: { tier: 'replay', dax: exact.data.dax, rows: run.data ?? [], templateId: exact.data.id },
+        data: {
+          tier: 'replay',
+          dax: exact.data.dax,
+          rows: run.data ?? [],
+          templateId: exact.data.id,
+        },
       };
     }
     // Template envelheceu (modelo mudou): cai pros níveis seguintes em vez de falhar.
@@ -177,7 +183,14 @@ export async function askDax(deps: DaxRagDeps, input: AskInput): Promise<RagResu
     if (adapted.status === 'ok' && adapted.data) {
       const run = await runWithRetry(deps, input, adapted.data, request);
       if (run.status === 'ok' && run.data) {
-        const id = await rememberSuccess(deps, input, questionNorm, run.data.dax, run.data.rows, embedding);
+        const id = await rememberSuccess(
+          deps,
+          input,
+          questionNorm,
+          run.data.dax,
+          run.data.rows,
+          embedding,
+        );
         return {
           status: 'ok',
           data: {
@@ -204,7 +217,14 @@ export async function askDax(deps: DaxRagDeps, input: AskInput): Promise<RagResu
   const run = await runWithRetry(deps, input, generated.data, request);
   if (run.status !== 'ok' || !run.data) return propagate<DaxAnswer>(run);
 
-  const id = await rememberSuccess(deps, input, questionNorm, run.data.dax, run.data.rows, embedding);
+  const id = await rememberSuccess(
+    deps,
+    input,
+    questionNorm,
+    run.data.dax,
+    run.data.rows,
+    embedding,
+  );
   return {
     status: 'ok',
     data: { tier: 'generated', dax: run.data.dax, rows: run.data.rows, templateId: id },

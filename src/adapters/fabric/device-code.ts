@@ -53,7 +53,11 @@ function fail(error: string): DeviceResult<never> {
   return { status: 'failed', error: error.slice(0, ERROR_CHARS) };
 }
 
-async function postForm(url: string, body: URLSearchParams, fetchImpl: typeof fetch): Promise<Response> {
+async function postForm(
+  url: string,
+  body: URLSearchParams,
+  fetchImpl: typeof fetch,
+): Promise<Response> {
   return fetchImpl(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -75,8 +79,10 @@ export async function startDeviceAuth(
       fetchImpl,
     );
     const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok) return fail(`${j.error ?? res.status}: ${String(j.error_description ?? '').split('\n')[0]}`);
-    if (!j.device_code || !j.user_code) return fail('resposta do devicecode sem device_code/user_code');
+    if (!res.ok)
+      return fail(`${j.error ?? res.status}: ${String(j.error_description ?? '').split('\n')[0]}`);
+    if (!j.device_code || !j.user_code)
+      return fail('resposta do devicecode sem device_code/user_code');
     return {
       status: 'ok',
       data: {
@@ -96,7 +102,8 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 function tokensFrom(j: Record<string, unknown>): DeviceResult<DeviceTokens> {
   if (!j.access_token) return fail('resposta sem access_token');
-  if (!j.refresh_token) return fail('resposta sem refresh_token — o scope offline_access foi recusado');
+  if (!j.refresh_token)
+    return fail('resposta sem refresh_token — o scope offline_access foi recusado');
   return {
     status: 'ok',
     data: {
@@ -143,7 +150,8 @@ export async function pollDeviceToken(
         intervaloMs += slowDownStepMs;
         continue;
       }
-      if (erro === 'expired_token') return fail('o código expirou — rode `nio fabric login` de novo');
+      if (erro === 'expired_token')
+        return fail('o código expirou — rode `nio fabric login` de novo');
       if (erro === 'authorization_declined') return fail('acesso negado no navegador');
       return fail(`${erro}: ${String(j.error_description ?? '').split('\n')[0]}`);
     } catch (err) {
@@ -172,7 +180,8 @@ export async function refreshAccessToken(
       fetchImpl,
     );
     const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok) return fail(`${j.error ?? res.status}: ${String(j.error_description ?? '').split('\n')[0]}`);
+    if (!res.ok)
+      return fail(`${j.error ?? res.status}: ${String(j.error_description ?? '').split('\n')[0]}`);
     return tokensFrom(j);
   } catch (err) {
     return fail((err as Error).message);

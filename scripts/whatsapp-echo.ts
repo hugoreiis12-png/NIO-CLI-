@@ -29,7 +29,9 @@ const server = createServer((req, res) => {
     const raw = Buffer.concat(chunks).toString('utf8');
     count += 1;
     const auth = Object.entries(req.headers)
-      .filter(([k]) => !['host', 'content-type', 'content-length', 'connection', 'accept'].includes(k))
+      .filter(
+        ([k]) => !['host', 'content-type', 'content-length', 'connection', 'accept'].includes(k),
+      )
       .map(([k, v]) => `${k}: ${v}`);
 
     let to = '(?)';
@@ -45,7 +47,10 @@ const server = createServer((req, res) => {
         const params = (comp.parameters ?? []) as Array<Record<string, unknown>>;
         for (const p of params) {
           const txt = String(p.text ?? '');
-          if (/^\d{6}$/.test(txt)) { code = txt; break; }
+          if (/^\d{6}$/.test(txt)) {
+            code = txt;
+            break;
+          }
         }
         if (code) break;
       }
@@ -55,7 +60,10 @@ const server = createServer((req, res) => {
 
     if (code) {
       try {
-        writeFileSync(LAST_FILE, JSON.stringify({ to, code, templateName, at: new Date().toISOString() }) + '\n');
+        writeFileSync(
+          LAST_FILE,
+          JSON.stringify({ to, code, templateName, at: new Date().toISOString() }) + '\n',
+        );
       } catch {
         /* best-effort */
       }
@@ -70,7 +78,9 @@ const server = createServer((req, res) => {
     console.log('─'.repeat(60));
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ messaging_product: 'whatsapp', status: 'queued', id: `echo-${count}` }));
+    res.end(
+      JSON.stringify({ messaging_product: 'whatsapp', status: 'queued', id: `echo-${count}` }),
+    );
   });
 });
 

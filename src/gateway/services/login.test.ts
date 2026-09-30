@@ -57,8 +57,14 @@ describe('challengeUsable', () => {
   };
   test('null → not_found; consumido → consumed; expirado → expired; ok', () => {
     expect(challengeUsable(null)).toEqual({ ok: false, reason: 'not_found' });
-    expect(challengeUsable({ ...base, consumedAt: new Date() })).toEqual({ ok: false, reason: 'consumed' });
-    expect(challengeUsable({ ...base, expiresAt: new Date(Date.now() - 1) })).toEqual({ ok: false, reason: 'expired' });
+    expect(challengeUsable({ ...base, consumedAt: new Date() })).toEqual({
+      ok: false,
+      reason: 'consumed',
+    });
+    expect(challengeUsable({ ...base, expiresAt: new Date(Date.now() - 1) })).toEqual({
+      ok: false,
+      reason: 'expired',
+    });
     expect(challengeUsable(base).ok).toBe(true);
   });
 });
@@ -66,13 +72,25 @@ describe('challengeUsable', () => {
 // ─── fakes ──────────────────────────────────────────────────────────
 function user(over: Partial<UserCli> = {}): UserCli {
   return {
-    id: 1, name: 'hugo', auth2: false, phone: null, ipsUsing: [],
-    timestampCreation: new Date(), timestampPasswordChange: null, timestampLastSession: null,
+    id: 1,
+    name: 'hugo',
+    auth2: false,
+    phone: null,
+    ipsUsing: [],
+    timestampCreation: new Date(),
+    timestampPasswordChange: null,
+    timestampLastSession: null,
     ...over,
   };
 }
 
-function deps(over: Partial<{ u: UserCli | null; challenge: LoginChallenge | null; sms: OtpSender['sendOtp'] }> = {}): LoginDeps {
+function deps(
+  over: Partial<{
+    u: UserCli | null;
+    challenge: LoginChallenge | null;
+    sms: OtpSender['sendOtp'];
+  }> = {},
+): LoginDeps {
   let stored: LoginChallenge | null = over.challenge ?? null;
   const users: Partial<UserRepository> = {
     verifyCredentials: async () => over.u ?? null,
@@ -82,15 +100,31 @@ function deps(over: Partial<{ u: UserCli | null; challenge: LoginChallenge | nul
   };
   const challenges: Partial<LoginChallengeRepository> = {
     create: async (i) => {
-      stored = { id: 'ch-new', userId: i.userId, purpose: i.purpose, codeHash: i.codeHash, channel: 'whatsapp', attempts: 0, expiresAt: i.expiresAt, consumedAt: null, createdAt: new Date() };
+      stored = {
+        id: 'ch-new',
+        userId: i.userId,
+        purpose: i.purpose,
+        codeHash: i.codeHash,
+        channel: 'whatsapp',
+        attempts: 0,
+        expiresAt: i.expiresAt,
+        consumedAt: null,
+        createdAt: new Date(),
+      };
       return stored;
     },
     findById: async () => stored,
     incrementAttempts: async () => (stored ? ++stored.attempts : 0),
-    consume: async () => { if (stored) stored.consumedAt = new Date(); },
+    consume: async () => {
+      if (stored) stored.consumedAt = new Date();
+    },
   };
   const sms: OtpSender = { sendOtp: over.sms ?? (async () => ({ status: 'sent' })) };
-  return { users: users as UserRepository, challenges: challenges as LoginChallengeRepository, sms };
+  return {
+    users: users as UserRepository,
+    challenges: challenges as LoginChallengeRepository,
+    sms,
+  };
 }
 
 // ─── login: caminhos sem DB (não chegam no issueSession) ─────────────
@@ -104,17 +138,28 @@ describe('login', () => {
     // Hermético SÓ aqui: este caso exige WHATSAPP_* AUSENTE (→ unconfigured). O Bun
     // auto-carrega o `.env`, que os seta. Limpo local (não num beforeEach) pra NÃO mudar
     // o caminho que os testes `echo`/`não configurado`/`falhou` abaixo exercitam.
-    const WA = ['WHATSAPP_ENDPOINT_URL', 'WHATSAPP_TOKEN', 'WHATSAPP_TEMPLATE_NAME', 'WHATSAPP_TEMPLATE_LANGUAGE'] as const;
+    const WA = [
+      'WHATSAPP_ENDPOINT_URL',
+      'WHATSAPP_TOKEN',
+      'WHATSAPP_TEMPLATE_NAME',
+      'WHATSAPP_TEMPLATE_LANGUAGE',
+    ] as const;
     const saved = WA.map((k) => [k, process.env[k]] as const);
     for (const k of WA) delete process.env[k];
     try {
-      const out = await login('hugo', 'pw', deps({ u: user({ auth2: true, phone: '+5511988887777' }) }));
+      const out = await login(
+        'hugo',
+        'pw',
+        deps({ u: user({ auth2: true, phone: '+5511988887777' }) }),
+      );
       expect(out.ok).toBe(true);
       expect(out.ok && out.step).toBe('2fa_required');
       expect(out.ok && out.step === '2fa_required' && out.phoneHint).toBe('+55•••••••7777');
       expect(out.ok && out.step === '2fa_required' && out.smsMode).toBe('unconfigured');
     } finally {
-      for (const [k, v] of saved) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+      for (const [k, v] of saved)
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
     }
   });
 
@@ -122,7 +167,11 @@ describe('login', () => {
     process.env.WHATSAPP_ENDPOINT_URL = 'http://127.0.0.1:4545/send';
     process.env.WHATSAPP_TOKEN = 'dummy';
     try {
-      const out = await login('hugo', 'pw', deps({ u: user({ auth2: true, phone: '+5511988887777' }) }));
+      const out = await login(
+        'hugo',
+        'pw',
+        deps({ u: user({ auth2: true, phone: '+5511988887777' }) }),
+      );
       if (!out.ok || out.step !== '2fa_required') throw new Error('esperava 2fa_required');
       expect(out.smsMode).toBe('echo');
       expect(out.devCode).toMatch(/^\d{6}$/);
@@ -133,18 +182,30 @@ describe('login', () => {
   });
 
   test('WhatsApp não configurado → server_error, challenge consumido', async () => {
-    const out = await login('hugo', 'pw', deps({
-      u: user({ auth2: true, phone: '+55119' }),
-      sms: async () => ({ status: 'skipped' }),
-    }));
-    expect(out).toEqual({ ok: false, reason: 'server_error', error: expect.stringContaining('não configurado') });
+    const out = await login(
+      'hugo',
+      'pw',
+      deps({
+        u: user({ auth2: true, phone: '+55119' }),
+        sms: async () => ({ status: 'skipped' }),
+      }),
+    );
+    expect(out).toEqual({
+      ok: false,
+      reason: 'server_error',
+      error: expect.stringContaining('não configurado'),
+    });
   });
 
   test('WhatsApp falhou no provedor → server_error', async () => {
-    const out = await login('hugo', 'pw', deps({
-      u: user({ auth2: true, phone: '+55119' }),
-      sms: async () => ({ status: 'failed', error: '429' }),
-    }));
+    const out = await login(
+      'hugo',
+      'pw',
+      deps({
+        u: user({ auth2: true, phone: '+55119' }),
+        sms: async () => ({ status: 'failed', error: '429' }),
+      }),
+    );
     expect(out.ok).toBe(false);
     expect(out.ok === false && out.reason).toBe('server_error');
   });
@@ -153,8 +214,16 @@ describe('login', () => {
 // ─── verifyLogin: caminhos de falha (sem issueSession) ───────────────
 describe('verifyLogin', () => {
   const ch = (over: Partial<LoginChallenge> = {}): LoginChallenge => ({
-    id: 'ch1', userId: 1, purpose: 'login', codeHash: hashOtp('481920'), channel: 'whatsapp',
-    attempts: 0, expiresAt: new Date(Date.now() + 60_000), consumedAt: null, createdAt: new Date(), ...over,
+    id: 'ch1',
+    userId: 1,
+    purpose: 'login',
+    codeHash: hashOtp('481920'),
+    channel: 'whatsapp',
+    attempts: 0,
+    expiresAt: new Date(Date.now() + 60_000),
+    consumedAt: null,
+    createdAt: new Date(),
+    ...over,
   });
 
   test('challenge inexistente → not_found', async () => {
@@ -163,15 +232,32 @@ describe('verifyLogin', () => {
   });
 
   test('expirado → expired', async () => {
-    const out = await verifyLogin('ch1', '481920', 'otp', deps({ challenge: ch({ expiresAt: new Date(Date.now() - 1) }), u: user() }));
+    const out = await verifyLogin(
+      'ch1',
+      '481920',
+      'otp',
+      deps({ challenge: ch({ expiresAt: new Date(Date.now() - 1) }), u: user() }),
+    );
     expect(out).toEqual({ ok: false, reason: 'expired' });
   });
 
   test('OTP errado → invalid com remaining; 3ª vez → attempts_exhausted + requiresBackupCode', async () => {
     const d = deps({ challenge: ch(), u: user() });
-    expect(await verifyLogin('ch1', '000001', 'otp', d)).toMatchObject({ ok: false, reason: 'invalid', remaining: 2 });
-    expect(await verifyLogin('ch1', '000002', 'otp', d)).toMatchObject({ ok: false, reason: 'invalid', remaining: 1 });
-    expect(await verifyLogin('ch1', '000003', 'otp', d)).toMatchObject({ ok: false, reason: 'attempts_exhausted', requiresBackupCode: true });
+    expect(await verifyLogin('ch1', '000001', 'otp', d)).toMatchObject({
+      ok: false,
+      reason: 'invalid',
+      remaining: 2,
+    });
+    expect(await verifyLogin('ch1', '000002', 'otp', d)).toMatchObject({
+      ok: false,
+      reason: 'invalid',
+      remaining: 1,
+    });
+    expect(await verifyLogin('ch1', '000003', 'otp', d)).toMatchObject({
+      ok: false,
+      reason: 'attempts_exhausted',
+      requiresBackupCode: true,
+    });
   });
 
   test('backup code inválido → invalid com remaining; teto absoluto → attempts_exhausted (L-2)', async () => {

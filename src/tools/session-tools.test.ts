@@ -2,7 +2,11 @@ import { test, expect } from 'bun:test';
 import { definition as listDef, runSessionList } from './session-list.js';
 import { definition as activateDef, runSessionActivate } from './session-activate.js';
 import { definition as createDef, runSessionCreate } from './session-create.js';
-import { SessionManager, SessionNotFoundError, AmbiguousSessionError } from '../app/session-manager.js';
+import {
+  SessionManager,
+  SessionNotFoundError,
+  AmbiguousSessionError,
+} from '../app/session-manager.js';
 import type { MaterializedSession } from '../app/session-manager.js';
 import type { Session } from '../core/types.js';
 
@@ -30,11 +34,15 @@ test('definitions: nomes prefixados e schema fechado', () => {
   expect(activateDef.name).toBe('nio_session_activate');
   expect(activateDef.inputSchema.required).toContain('id');
   expect(createDef.name).toBe('nio_session_create');
-  expect(createDef.inputSchema.required).toEqual(expect.arrayContaining(['name', 'profile', 'project_path']));
+  expect(createDef.inputSchema.required).toEqual(
+    expect.arrayContaining(['name', 'profile', 'project_path']),
+  );
 });
 
 test('session_list: devolve count + sessões serializadas (datas ISO)', async () => {
-  const m = fakeManager({ list: async () => [mkSession(), mkSession({ id: 'b', status: 'paused' })] });
+  const m = fakeManager({
+    list: async () => [mkSession(), mkSession({ id: 'b', status: 'paused' })],
+  });
   const r = await runSessionList(m, 1);
   expect(r.isError).toBeFalsy();
   const out = JSON.parse(textOf(r));
@@ -95,7 +103,12 @@ test('session_create: sucesso → sessão + mcps + nota sobre opencode.json', as
     recipeWarnings: ['MCP "xyz"'],
   };
   const m = fakeManager({ create: async () => built });
-  const r = await runSessionCreate(m, 7, { name: 'nova', profile: 'dba', projectPath: '/p', ide: 'vscode' });
+  const r = await runSessionCreate(m, 7, {
+    name: 'nova',
+    profile: 'dba',
+    projectPath: '/p',
+    ide: 'vscode',
+  });
   const out = JSON.parse(textOf(r));
   expect(out.mcps.map((x: { id: string }) => x.id)).toEqual(['nio-lang', 'postgres']);
   expect(out.toolchains_failed).toEqual([{ id: 'postgresql-client', error: 'sem plano' }]);
@@ -114,7 +127,12 @@ test('session_create: materialização falha → materialize_error preenchido, s
     materializeError: 'perfil sem definição',
   };
   const m = fakeManager({ create: async () => built });
-  const r = await runSessionCreate(m, 7, { name: 'x', profile: 'dba', projectPath: '/p', ide: 'other' });
+  const r = await runSessionCreate(m, 7, {
+    name: 'x',
+    profile: 'dba',
+    projectPath: '/p',
+    ide: 'other',
+  });
   expect(r.isError).toBeFalsy();
   expect(JSON.parse(textOf(r)).materialize_error).toBe('perfil sem definição');
 });
@@ -125,7 +143,12 @@ test('session_create: erro de banco → errorResult com contexto', async () => {
       throw new Error('timeout');
     },
   });
-  const r = await runSessionCreate(m, 7, { name: 'x', profile: 'dba', projectPath: '/p', ide: 'other' });
+  const r = await runSessionCreate(m, 7, {
+    name: 'x',
+    profile: 'dba',
+    projectPath: '/p',
+    ide: 'other',
+  });
   expect(r.isError).toBe(true);
   expect(textOf(r)).toMatch(/Falha ao criar a sessão: timeout/);
 });

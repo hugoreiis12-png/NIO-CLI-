@@ -3,7 +3,8 @@ import { parseTasklistPids, parseListeningPort, discoverLocalXmla } from './loca
 
 // Saídas REAIS capturadas na máquina (2026-09-25), não formato imaginado.
 const TASKLIST_OK = '"msmdsrv.exe","15812","Console","1","123.456 K"';
-const TASKLIST_VAZIO = 'INFORMAÇÕES: nenhuma tarefa em execução correspondente aos critérios\r\nespecificados.';
+const TASKLIST_VAZIO =
+  'INFORMAÇÕES: nenhuma tarefa em execução correspondente aos critérios\r\nespecificados.';
 const NETSTAT = [
   '  TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       1508',
   '  TCP    127.0.0.1:31272        0.0.0.0:0              LISTENING       15812',
@@ -70,7 +71,9 @@ test('fora do Windows diz que não se aplica, em vez de tentar', async () => {
 test('comando indisponível vira failed com o motivo — nunca lança', async () => {
   const r = await discoverLocalXmla({
     platform: 'win32',
-    exec: async () => { throw new Error('tasklist não encontrado'); },
+    exec: async () => {
+      throw new Error('tasklist não encontrado');
+    },
   });
   expect(r.status).toBe('failed');
   expect(r.error).toContain('tasklist');

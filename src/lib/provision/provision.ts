@@ -1,11 +1,11 @@
-/* Provisonamento de skills comandos do provider para o client de */ 
-import { existsSync } from "node:fs";
-import { brand } from "../../brand.js";
-import { opencodeTarget, type ProvisionTarget } from "../clients/targets.js";
-import { filterDocsForSurface, skillsDir } from "../skills/skills.js";
-import { filterForSelection, flattenSelection, type Selection } from "../skills/sections.js";
-import { collectSkillFiles } from "./provision-collect.js";
-import { applyProvision, type ProvisionOptions, type ProvisionResult } from "./provision-apply.js";
+/* Provisonamento de skills comandos do provider para o client de */
+import { existsSync } from 'node:fs';
+import { brand } from '../../brand.js';
+import { opencodeTarget, type ProvisionTarget } from '../clients/targets.js';
+import { filterDocsForSurface, skillsDir } from '../skills/skills.js';
+import { filterForSelection, flattenSelection, type Selection } from '../skills/sections.js';
+import { collectSkillFiles } from './provision-collect.js';
+import { applyProvision, type ProvisionOptions, type ProvisionResult } from './provision-apply.js';
 
 /**
  * Provisiona skills/commands/agents do nio (o MCP não grava em `~/.config/opencode`; a CLI
@@ -64,4 +64,4 @@ export {
   type ProvisionInputDoc,
   type ProvisionOptions,
   type UninstallResult,
-} from "./provision-apply.js";
+} from './provision-apply.js';

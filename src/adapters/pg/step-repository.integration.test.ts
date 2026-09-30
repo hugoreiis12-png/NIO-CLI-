@@ -36,11 +36,16 @@ async function semear(): Promise<{ taskId: string; limpar: () => Promise<void> }
     password: `pw-${randomUUID()}`,
   });
   const task = await createTaskRepository().create({
-    userId: user.id, sessionId: null, profile: 'qa', goal: 'g',
+    userId: user.id,
+    sessionId: null,
+    profile: 'qa',
+    goal: 'g',
   });
   return {
     taskId: task.id,
-    limpar: async () => { await query('DELETE FROM user_cli WHERE id = $1', [user.id]); },
+    limpar: async () => {
+      await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
+    },
   };
 }
 

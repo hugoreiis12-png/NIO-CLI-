@@ -32,34 +32,44 @@ export function registerCommandCommand(program: Command): void {
         nameArg ??
         (await input({
           message: "Nome do comando (kebab-case, ex.: revisar-pr):",
-          validate: (v) => NAME_RE.test(v.trim()) || "Use só minúsculas, dígitos e hífen, começando por letra.",
+          validate: (v) =>
+            NAME_RE.test(v.trim()) || "Use só minúsculas, dígitos e hífen, começando por letra.",
         }))
       ).trim();
 
       if (!NAME_RE.test(name)) {
-        console.error(`${c.red(sym.err)} Nome inválido "${name}". Use kebab-case (ex.: revisar-pr).`);
+        console.error(
+          `${c.red(sym.err)} Nome inválido "${name}". Use kebab-case (ex.: revisar-pr).`,
+        );
         process.exitCode = 1;
         return;
       }
 
       const path = commandPath(name);
       if (existsSync(path)) {
-        const overwrite = await confirm({ message: `Já existe /${name}. Sobrescrever?`, default: false });
+        const overwrite = await confirm({
+          message: `Já existe /${name}. Sobrescrever?`,
+          default: false,
+        });
         if (!overwrite) {
           console.log("Cancelado.");
           return;
         }
       }
 
-      const description = (await input({
-        message: "Descrição curta (o que o comando faz):",
-        validate: (v) => v.trim().length > 0 || "A descrição não pode ficar vazia.",
-      })).trim();
+      const description = (
+        await input({
+          message: "Descrição curta (o que o comando faz):",
+          validate: (v) => v.trim().length > 0 || "A descrição não pode ficar vazia.",
+        })
+      ).trim();
 
-      const body = (await input({
-        message: "Instrução do comando (o prompt que o operador vai seguir):",
-        validate: (v) => v.trim().length > 0 || "A instrução não pode ficar vazia.",
-      })).trim();
+      const body = (
+        await input({
+          message: "Instrução do comando (o prompt que o operador vai seguir):",
+          validate: (v) => v.trim().length > 0 || "A instrução não pode ficar vazia.",
+        })
+      ).trim();
 
       try {
         mkdirSync(dirname(path), { recursive: true });

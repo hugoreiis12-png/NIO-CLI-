@@ -4,7 +4,12 @@
  * `DEFINITIONS`. Nenhum IO: só dados + resolução.
  */
 import type { Profile } from '../core/types.js';
-import type { ProfileCatalog, ProfileDefinition, McpSpec, ToolchainSpec } from '../core/environment.js';
+import type {
+  ProfileCatalog,
+  ProfileDefinition,
+  McpSpec,
+  ToolchainSpec,
+} from '../core/environment.js';
 import { dbaProfile } from './dba.js';
 import { fullstackProfile } from './fullstack.js';
 import { analystProfile } from './analyst.js';
@@ -53,10 +58,9 @@ export function createProfileCatalog(): ProfileCatalog {
  * fora daqui numa recipe → aviso, ignora (não gera `opencode.json` quebrado).
  */
 export const KNOWN_TOOLCHAINS: Record<string, ToolchainSpec> = Object.fromEntries(
-  [nodeToolchain, pythonToolchain, ...Object.values(DEFINITIONS).flatMap((d) => d.toolchains)].map((t) => [
-    t.id,
-    t,
-  ]),
+  [nodeToolchain, pythonToolchain, ...Object.values(DEFINITIONS).flatMap((d) => d.toolchains)].map(
+    (t) => [t.id, t],
+  ),
 );
 
 export const KNOWN_MCPS: Record<string, McpSpec> = Object.fromEntries(

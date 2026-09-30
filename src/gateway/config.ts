@@ -28,8 +28,7 @@ export const GATEWAY_HOST = env('GATEWAY_HOST')?.trim() || '127.0.0.1';
  * setup single-user não tem Kong. Quem roda o Kong na frente aponta
  * `NIO_GATEWAY_URL=http://127.0.0.1:8000`.
  */
-export const GATEWAY_URL =
-  env('GATEWAY_URL')?.trim() || `http://127.0.0.1:${GATEWAY_PORT}`;
+export const GATEWAY_URL = env('GATEWAY_URL')?.trim() || `http://127.0.0.1:${GATEWAY_PORT}`;
 
 /**
  * Valida a força de um `JWT_SECRET`. Devolve o motivo da rejeição, ou `null` se

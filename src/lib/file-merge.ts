@@ -1,10 +1,4 @@
-import {
-  readFileSync,
-  writeFileSync,
-  existsSync,
-  mkdirSync,
-  copyFileSync,
-} from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 

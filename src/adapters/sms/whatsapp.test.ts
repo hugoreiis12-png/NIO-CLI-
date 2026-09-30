@@ -57,7 +57,9 @@ describe('smsMode / smsProviderHost', () => {
     expect(smsMode({ url: 'http://localhost:4545/send', token: TOKEN })).toBe('echo');
   });
   test('host externo → provider + host', () => {
-    expect(smsMode({ url: 'https://graph.facebook.com/v25.0/x/messages', token: TOKEN })).toBe('provider');
+    expect(smsMode({ url: 'https://graph.facebook.com/v25.0/x/messages', token: TOKEN })).toBe(
+      'provider',
+    );
     expect(smsProviderHost({ url: 'https://graph.facebook.com/v25.0/x/messages' })).toBe(
       'graph.facebook.com',
     );

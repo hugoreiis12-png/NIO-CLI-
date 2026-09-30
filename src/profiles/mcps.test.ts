@@ -8,13 +8,19 @@ import {
   resolveFabricMcps,
 } from './mcps.js';
 
-const SP = { AZURE_TENANT_ID: 't', AZURE_CLIENT_ID: 'c', AZURE_CLIENT_SECRET: 's' } as NodeJS.ProcessEnv;
+const SP = {
+  AZURE_TENANT_ID: 't',
+  AZURE_CLIENT_ID: 'c',
+  AZURE_CLIENT_SECRET: 's',
+} as NodeJS.ProcessEnv;
 const LOCAL = { NIO_PBI_LOCAL: '1' } as NodeJS.ProcessEnv;
 const SP_LOCAL = { ...SP, ...LOCAL } as NodeJS.ProcessEnv;
 
 test('hasFabricServicePrincipal: só true com as 3 credenciais', () => {
   expect(hasFabricServicePrincipal(SP)).toBe(true);
-  expect(hasFabricServicePrincipal({ AZURE_TENANT_ID: 't', AZURE_CLIENT_ID: 'c' } as NodeJS.ProcessEnv)).toBe(false);
+  expect(
+    hasFabricServicePrincipal({ AZURE_TENANT_ID: 't', AZURE_CLIENT_ID: 'c' } as NodeJS.ProcessEnv),
+  ).toBe(false);
   expect(hasFabricServicePrincipal({} as NodeJS.ProcessEnv)).toBe(false);
 });
 

@@ -181,7 +181,10 @@ export async function ensureSkillsCache(): Promise<FetchResult> {
  * "x.y.z" }`. Ausente / ilegível → `null` (bundle antigo, sem contrato). Warn,
  * não bloqueio: o caller avisa e segue.
  */
-export function skillsMinCliWarning(dir: string = skillsCacheDir(), cliVersion: string = VERSION): string | null {
+export function skillsMinCliWarning(
+  dir: string = skillsCacheDir(),
+  cliVersion: string = VERSION,
+): string | null {
   try {
     const raw = readFileSync(join(dir, 'nio-skills.json'), 'utf8');
     const min = (JSON.parse(raw) as { min_cli_version?: unknown }).min_cli_version;

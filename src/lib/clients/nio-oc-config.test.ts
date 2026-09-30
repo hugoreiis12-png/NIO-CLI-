@@ -5,7 +5,10 @@ import { NIO_OPERATOR_MODEL, NIO_AI_PROVIDER } from './client-configs.js';
 import { createProfileCatalog } from '../../profiles/index.js';
 import type { McpSpec } from '../../core/environment.js';
 
-const powerbi: McpSpec = { id: 'powerbi-modeling', command: ['npx', '@microsoft/powerbi-modeling-mcp'] };
+const powerbi: McpSpec = {
+  id: 'powerbi-modeling',
+  command: ['npx', '@microsoft/powerbi-modeling-mcp'],
+};
 
 // global do usuário: MCPs pessoais (excel + lixo) + um provider próprio + shell validado.
 const GLOBAL = {
@@ -24,7 +27,11 @@ test('buildNioOpencodeConfig: com NIO_PBI_LOCAL=1 o powerbi-modeling entra (cone
   const antes = process.env.NIO_PBI_LOCAL;
   process.env.NIO_PBI_LOCAL = '1';
   try {
-    const cfg = buildNioOpencodeConfig(GLOBAL, [{ id: 'nio-lang', command: ['nio-lang'] }, powerbi], ['excel']);
+    const cfg = buildNioOpencodeConfig(
+      GLOBAL,
+      [{ id: 'nio-lang', command: ['nio-lang'] }, powerbi],
+      ['excel'],
+    );
     const mcp = cfg.mcp as Record<string, unknown>;
     expect(Object.keys(mcp).sort()).toEqual(['excel', 'nio', 'nio-lang', 'powerbi-modeling']);
   } finally {
@@ -34,7 +41,11 @@ test('buildNioOpencodeConfig: com NIO_PBI_LOCAL=1 o powerbi-modeling entra (cone
 });
 
 test('buildNioOpencodeConfig: filtra o mcp pro conjunto do perfil, herda excel do global, força provider/model', () => {
-  const cfg = buildNioOpencodeConfig(GLOBAL, [{ id: 'nio-lang', command: ['nio-lang'] }, powerbi], ['excel']);
+  const cfg = buildNioOpencodeConfig(
+    GLOBAL,
+    [{ id: 'nio-lang', command: ['nio-lang'] }, powerbi],
+    ['excel'],
+  );
   const mcp = cfg.mcp as Record<string, unknown>;
 
   // só nio + nio-lang + excel (herdado) — NADA do lixo do global.
@@ -45,7 +56,11 @@ test('buildNioOpencodeConfig: filtra o mcp pro conjunto do perfil, herda excel d
   expect(mcp.mermaid).toBeUndefined(); // lixo fora
 
   // excel copiado da def validada do global
-  expect(mcp.excel).toEqual({ type: 'local', command: ['uvx', 'excel-mcp-server', 'stdio'], enabled: true });
+  expect(mcp.excel).toEqual({
+    type: 'local',
+    command: ['uvx', 'excel-mcp-server', 'stdio'],
+    enabled: true,
+  });
 
   // provider/model forçados pro NIO (nio-local), não o provider do global
   expect(cfg.model).toBe(NIO_OPERATOR_MODEL);
@@ -73,7 +88,11 @@ test('buildNioOpencodeConfig: semeia agentes-fork do NIO (subagent) e preserva o
 });
 
 test('buildNioOpencodeConfig: id herdado ausente no global é ignorado (sem quebrar)', () => {
-  const cfg = buildNioOpencodeConfig({ mcp: {} }, [{ id: 'nio-lang', command: ['nio-lang'] }], ['excel']);
+  const cfg = buildNioOpencodeConfig(
+    { mcp: {} },
+    [{ id: 'nio-lang', command: ['nio-lang'] }],
+    ['excel'],
+  );
   const mcp = cfg.mcp as Record<string, unknown>;
   expect(mcp.excel).toBeUndefined();
   expect(Object.keys(mcp).sort()).toEqual(['nio', 'nio-lang']);
@@ -93,11 +112,7 @@ test('profileModeledMcps: base (nio-lang) + os do perfil; qa não tem powerbi/ex
 test('ACEITE: instrução com caminho inexistente é descartada (some em silêncio)', () => {
   // Medido em prod: o global apontava um ARCHITECT.md de um checkout antigo, e o
   // grounding de BI que se acreditava ativo nunca chegava ao modelo.
-  const cfg = buildNioOpencodeConfig(
-    { instructions: ['C:/nao/existe/ARCHITECT.md'] },
-    [],
-    [],
-  );
+  const cfg = buildNioOpencodeConfig({ instructions: ['C:/nao/existe/ARCHITECT.md'] }, [], []);
   const instr = cfg.instructions as string[];
   expect(instr.some((p) => p.includes('nao/existe'))).toBe(false);
   expect(instr[instr.length - 1]).toContain('nio-operator.md'); // a do NIO continua por último

@@ -89,7 +89,8 @@ async function readSchemaPreferindoScanner(
 ): Promise<RagResult<SchemaRows>> {
   if (deps.scanner) {
     const scan = await deps.scanner.scanDataset(input.workspaceId, input.datasetId);
-    if (scan.status === 'ok' && scan.data) return { status: 'ok', data: scanToSchemaRows(scan.data) };
+    if (scan.status === 'ok' && scan.data)
+      return { status: 'ok', data: scanToSchemaRows(scan.data) };
   }
   return readSchema(deps.fabric, input.workspaceId, input.datasetId);
 }

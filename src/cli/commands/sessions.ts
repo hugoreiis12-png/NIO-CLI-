@@ -37,7 +37,9 @@ function printRow(s: Session): void {
 }
 
 /** Roda `fn` com o manager + userId; erros de resolução e de banco viram mensagem + exit 1. */
-async function withManager(fn: (m: SessionManager, userId: number) => Promise<void>): Promise<void> {
+async function withManager(
+  fn: (m: SessionManager, userId: number) => Promise<void>,
+): Promise<void> {
   const userId = await requireUserId();
   try {
     await fn(new SessionManager(), userId);
@@ -63,7 +65,11 @@ async function list(): Promise<void> {
   });
 }
 
-async function changeStatus(id: string, status: Exclude<SessionStatus, "active">, label: string): Promise<void> {
+async function changeStatus(
+  id: string,
+  status: Exclude<SessionStatus, "active">,
+  label: string,
+): Promise<void> {
   await withManager(async (m, userId) => {
     const s = await m.setStatus(userId, id, status);
     console.log(`${c.yellow(sym.ok)} Sessão ${c.bold(s.name)} ${c.yellow(label)}.`);
@@ -71,7 +77,9 @@ async function changeStatus(id: string, status: Exclude<SessionStatus, "active">
 }
 
 export function registerSessionsCommand(program: Command): void {
-  const cmd = program.command("sessions").description("Gerencia as sessões de ambiente (list/activate/pause/delete)");
+  const cmd = program
+    .command("sessions")
+    .description("Gerencia as sessões de ambiente (list/activate/pause/delete)");
 
   cmd.command("list", { isDefault: true }).description("Lista as suas sessões").action(list);
 

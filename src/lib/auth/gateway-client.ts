@@ -49,7 +49,10 @@ async function errorFromResponse(res: Response): Promise<Error> {
 }
 
 async function baseHeaders(): Promise<Record<string, string>> {
-  return { 'Content-Type': 'application/json', 'X-Nio-Gateway-Token': await getOrCreateGatewayToken() };
+  return {
+    'Content-Type': 'application/json',
+    'X-Nio-Gateway-Token': await getOrCreateGatewayToken(),
+  };
 }
 
 /** `baseHeaders` + `Authorization: Bearer` (rotas `/security/*`). */
@@ -92,7 +95,10 @@ export async function gatewayRegister(
   return (await res.json()) as { userId: number; name: string; passwordWarning?: string };
 }
 
-export async function gatewayLogin(name: string, password: string): Promise<GatewayLoginResult | null> {
+export async function gatewayLogin(
+  name: string,
+  password: string,
+): Promise<GatewayLoginResult | null> {
   const res = await gwFetch('POST', '/login', {
     headers: await baseHeaders(),
     body: JSON.stringify({ name, password }),
@@ -122,7 +128,11 @@ export async function gatewayVerify2fa(
     };
   }
   if (!res.ok) throw new Error((body.error as string) ?? `gateway respondeu ${res.status}`);
-  return { ok: true, ...(body as unknown as GatewaySession), backupCodesRemaining: body.backupCodesRemaining as number };
+  return {
+    ok: true,
+    ...(body as unknown as GatewaySession),
+    backupCodesRemaining: body.backupCodesRemaining as number,
+  };
 }
 
 export async function gatewayLogout(sessionId: string, token: string): Promise<void> {
@@ -179,9 +189,18 @@ export const gatewaySecurity = {
     post<ChallengeStarted>('/security/challenge', {}, await authedHeaders(token)),
 
   disable: async (token: string, challengeId: string, code: string, type: 'otp' | 'backup') =>
-    post<{ ok: true }>('/security/disable-2fa', { challengeId, code, type }, await authedHeaders(token)),
+    post<{ ok: true }>(
+      '/security/disable-2fa',
+      { challengeId, code, type },
+      await authedHeaders(token),
+    ),
 
-  regenerateBackupCodes: async (token: string, challengeId: string, code: string, type: 'otp' | 'backup') =>
+  regenerateBackupCodes: async (
+    token: string,
+    challengeId: string,
+    code: string,
+    type: 'otp' | 'backup',
+  ) =>
     post<{ backupCodes: string[] }>(
       '/security/regenerate-backup-codes',
       { challengeId, code, type },

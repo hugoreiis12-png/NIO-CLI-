@@ -8,14 +8,27 @@ import {
 } from './lesson-detector.js';
 import type { ToolAttempt } from '../core/learning.js';
 
-const erro = (tool: string, output: string, input: Record<string, unknown>, reasoning?: string): ToolAttempt =>
-  ({ tool, status: 'error', output, input, reasoning });
-const ok = (tool: string, input: Record<string, unknown>): ToolAttempt =>
-  ({ tool, status: 'completed', output: 'ok', input });
+const erro = (
+  tool: string,
+  output: string,
+  input: Record<string, unknown>,
+  reasoning?: string,
+): ToolAttempt => ({ tool, status: 'error', output, input, reasoning });
+const ok = (tool: string, input: Record<string, unknown>): ToolAttempt => ({
+  tool,
+  status: 'completed',
+  output: 'ok',
+  input,
+});
 
 test('ACEITE: errou e depois acertou na mesma tool → vira lição', () => {
   const licoes = detectLessons([
-    erro('nio_fabric_query', "Cannot find table 'VENDAS'", { dax: "EVALUATE 'VENDAS'" }, 'assumi que a tabela fosse VENDAS'),
+    erro(
+      'nio_fabric_query',
+      "Cannot find table 'VENDAS'",
+      { dax: "EVALUATE 'VENDAS'" },
+      'assumi que a tabela fosse VENDAS',
+    ),
     ok('nio_fabric_query', { dax: "EVALUATE 'VISAO_COMERCIAL'" }),
   ]);
 
@@ -45,8 +58,12 @@ test('falha sem acerto depois fica pendente, não inventa solução', () => {
 
 test('normalizeSintoma remove o que muda a cada ocorrência do MESMO erro', () => {
   // Sem isto cada 400 com id diferente viraria uma lição nova e o acervo viraria lixo.
-  const a = normalizeSintoma('Erro 400 no request 3f2b1a9c-1111-2222-3333-444455556666 às 2026-09-25T10:00:00Z');
-  const b = normalizeSintoma('Erro 400 no request 9a8b7c6d-9999-8888-7777-666655554444 às 2026-09-25T11:30:00Z');
+  const a = normalizeSintoma(
+    'Erro 400 no request 3f2b1a9c-1111-2222-3333-444455556666 às 2026-09-25T10:00:00Z',
+  );
+  const b = normalizeSintoma(
+    'Erro 400 no request 9a8b7c6d-9999-8888-7777-666655554444 às 2026-09-25T11:30:00Z',
+  );
   expect(a).toBe(b);
 });
 
@@ -66,7 +83,10 @@ test('duas falhas seguidas: a lição usa a ÚLTIMA antes do acerto', () => {
 });
 
 test('texto do embedding junta tool, sintoma e causa (é por ele que o recall acha)', () => {
-  const [l] = detectLessons([erro('bash', 'no such file', { cmd: 'a' }, 'supus o caminho'), ok('bash', { cmd: 'b' })]);
+  const [l] = detectLessons([
+    erro('bash', 'no such file', { cmd: 'a' }, 'supus o caminho'),
+    ok('bash', { cmd: 'b' }),
+  ]);
   const txt = lessonEmbeddingText(l!);
   expect(txt).toContain('bash');
   expect(txt).toContain('no such file');

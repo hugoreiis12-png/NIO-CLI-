@@ -60,10 +60,7 @@ test('tools = toolDefinitions mapeados (nome + descrição normalizada, até 160
   const manifest = buildCoworkManifest() as { tools: { name: string; description: string }[] };
   const expected = toolDefinitions.map((t) => ({
     name: t.name,
-    description: (t.description ?? '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 160),
+    description: (t.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 160),
   }));
   expect(manifest.tools).toEqual(expected);
   expect(manifest.tools.length).toBe(toolDefinitions.length);

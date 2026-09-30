@@ -58,7 +58,14 @@ test('MessageView: fork (subtask) aparece como ⑂ agente · descrição (Item 5
   const msg: ChatMessage = {
     id: 'a',
     role: 'assistant',
-    parts: [{ id: 'f', kind: 'fork', text: 'explore', fork: { agent: 'explore', description: 'varrer o core' } }],
+    parts: [
+      {
+        id: 'f',
+        kind: 'fork',
+        text: 'explore',
+        fork: { agent: 'explore', description: 'varrer o core' },
+      },
+    ],
   };
   const f = render(<MessageView message={msg} />).lastFrame() ?? '';
   expect(f).toContain('⑂');
@@ -129,7 +136,11 @@ test('InputBox: Enter num comando dispara ação "run" (Sprint 6)', async () => 
 
 test('LiveMessage: limita a `maxLines` (não estoura a tela)', () => {
   const long = Array.from({ length: 50 }, (_, i) => `linha ${i}`).join('\n');
-  const msg: ChatMessage = { id: 'a', role: 'assistant', parts: [{ id: 'p', kind: 'text', text: long }] };
+  const msg: ChatMessage = {
+    id: 'a',
+    role: 'assistant',
+    parts: [{ id: 'p', kind: 'text', text: long }],
+  };
   const f = render(<LiveMessage message={msg} maxLines={10} />).lastFrame() ?? '';
   const bodyLines = f.split('\n').filter((l) => /linha \d/.test(l));
   expect(bodyLines.length).toBeLessThanOrEqual(10);
@@ -146,7 +157,12 @@ test('LiveMessage: reflete o motor — checklist, tool(args+saída), retry, toke
         id: 't1',
         kind: 'tool',
         text: 'Lendo messaging.ts',
-        tool: { name: 'read', status: 'completed', input: { filePath: 'src/core/messaging.ts' }, output: 'export interface OtpSender {\n  ...' },
+        tool: {
+          name: 'read',
+          status: 'completed',
+          input: { filePath: 'src/core/messaging.ts' },
+          output: 'export interface OtpSender {\n  ...',
+        },
       },
       { id: 's1', kind: 'step', text: '', step: { tokensIn: 1200, tokensOut: 3400, cost: 0.012 } },
       { id: 'x1', kind: 'text', text: 'pronto' },
@@ -190,7 +206,8 @@ test('LiveMessage: raciocínio colapsado (padrão) vs expandido — Sprint 3', (
   expect(collapsed).toContain('Ctrl-R'); // a dica
   expect(collapsed.split('\n').filter((l) => l.includes('passo de raciocínio')).length).toBe(1); // 1 linha só
 
-  const expanded = render(<LiveMessage message={msg} maxLines={16} expandReasoning />).lastFrame() ?? '';
+  const expanded =
+    render(<LiveMessage message={msg} maxLines={16} expandReasoning />).lastFrame() ?? '';
   expect(expanded).toContain('✻ raciocínio');
   const shown = expanded.split('\n').filter((l) => l.includes('passo de raciocínio'));
   expect(shown.length).toBeGreaterThanOrEqual(6); // várias linhas
@@ -199,8 +216,16 @@ test('LiveMessage: raciocínio colapsado (padrão) vs expandido — Sprint 3', (
 
 test('MessageView: mensagem interna (mode:compaction) vira marcador discreto, sem o conteúdo', () => {
   const msg: ChatMessage = {
-    id: 'a', role: 'assistant', mode: 'compaction',
-    parts: [{ id: 't', kind: 'text', text: '## Objective\nlistar tools\n## Work State\nfeito\n## Next Move\naguardar' }],
+    id: 'a',
+    role: 'assistant',
+    mode: 'compaction',
+    parts: [
+      {
+        id: 't',
+        kind: 'text',
+        text: '## Objective\nlistar tools\n## Work State\nfeito\n## Next Move\naguardar',
+      },
+    ],
   };
   const f = render(<MessageView message={msg} />).lastFrame() ?? '';
   expect(f).toContain('resumo interno ocultado');
@@ -210,11 +235,24 @@ test('MessageView: mensagem interna (mode:compaction) vira marcador discreto, se
 
 test('MessageView: texto-scaffolding (sem flag) também é ofuscado; resposta normal passa', () => {
   const scaffold: ChatMessage = {
-    id: 'a', role: 'assistant',
-    parts: [{ id: 't', kind: 'text', text: '## Objective\nx\n## Important Details\ny\n## Relevant Files\nz' }],
+    id: 'a',
+    role: 'assistant',
+    parts: [
+      {
+        id: 't',
+        kind: 'text',
+        text: '## Objective\nx\n## Important Details\ny\n## Relevant Files\nz',
+      },
+    ],
   };
-  expect((render(<MessageView message={scaffold} />).lastFrame() ?? '')).toContain('resumo interno ocultado');
-  const normal: ChatMessage = { id: 'b', role: 'assistant', parts: [{ id: 't', kind: 'text', text: 'resposta de verdade' }] };
+  expect(render(<MessageView message={scaffold} />).lastFrame() ?? '').toContain(
+    'resumo interno ocultado',
+  );
+  const normal: ChatMessage = {
+    id: 'b',
+    role: 'assistant',
+    parts: [{ id: 't', kind: 'text', text: 'resposta de verdade' }],
+  };
   const nf = render(<MessageView message={normal} />).lastFrame() ?? '';
   expect(nf).toContain('resposta de verdade');
   expect(nf).not.toContain('resumo interno ocultado');
@@ -225,7 +263,11 @@ test('MessageView: raciocínio NÃO vai pro histórico/output (só ao vivo no Li
     id: 'a',
     role: 'assistant',
     parts: [
-      { id: 'r', kind: 'reasoning', text: 'primeira linha\nsegunda linha\nterceira linha\nquarta linha' },
+      {
+        id: 'r',
+        kind: 'reasoning',
+        text: 'primeira linha\nsegunda linha\nterceira linha\nquarta linha',
+      },
       { id: 'x', kind: 'text', text: 'resposta' },
     ],
   };

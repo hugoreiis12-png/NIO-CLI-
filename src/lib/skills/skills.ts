@@ -124,7 +124,10 @@ function unquote(value: string): string {
  * folded (`>`) e literal (`|`). Suficiente pros metadados (não é YAML completo).
  * Exportado pro `RecipeCatalog` (`adapters/skills/`) reusar sem duplicar.
  */
-export function parseFrontmatter(raw: string): { frontmatter: Record<string, string>; body: string } {
+export function parseFrontmatter(raw: string): {
+  frontmatter: Record<string, string>;
+  body: string;
+} {
   const fm: Record<string, string> = {};
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(raw);
   if (!match) return { frontmatter: fm, body: raw };
@@ -186,7 +189,9 @@ export function filterDocsForSurface<T extends { relPath: string; content: Buffe
   surface: string | null,
 ): T[] {
   if (!surface) return docs;
-  const parsed = toSkillDocs(docs.map((d) => ({ path: d.relPath, raw: d.content.toString('utf8') })));
+  const parsed = toSkillDocs(
+    docs.map((d) => ({ path: d.relPath, raw: d.content.toString('utf8') })),
+  );
   const hidden = new Set(parsed.filter((n) => !docForSurface(n, surface)).map((n) => n.path));
   return docs.filter((d) => !hidden.has(d.relPath));
 }
@@ -224,7 +229,9 @@ const SKILL_KINDS = ['commands', 'skills', 'agents', 'dependencies'] as const;
 /** Lê os `.md` dos kinds do pacote (`@nio-cli/skills`) como RawDoc[]. */
 export function readSkillFiles(dir: string = skillsDir()): RawDoc[] {
   if (!existsSync(dir)) {
-    throw new Error(`Pacote de skills não encontrado em ${dir}. Instale/publique ${brand.skillsPackage}.`);
+    throw new Error(
+      `Pacote de skills não encontrado em ${dir}. Instale/publique ${brand.skillsPackage}.`,
+    );
   }
   const docs: RawDoc[] = [];
   for (const kind of SKILL_KINDS) {

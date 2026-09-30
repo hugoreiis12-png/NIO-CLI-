@@ -52,7 +52,10 @@ export function readFabricAuthEnv(env: NodeJS.ProcessEnv = process.env): FabricA
  */
 export function readFabricAuth(env: NodeJS.ProcessEnv = process.env): FabricAuthEnv {
   const base = readFabricAuthEnv(env);
-  return { ...base, deviceRefreshToken: readRefreshToken(base.tenantId, base.clientId) ?? undefined };
+  return {
+    ...base,
+    deviceRefreshToken: readRefreshToken(base.tenantId, base.clientId) ?? undefined,
+  };
 }
 
 // Exporta só para teste; o resto da CLI não precisa saber do grant nem do endpoint
@@ -110,14 +113,29 @@ function grantBody(grant: TokenGrant, auth: FabricAuthEnv): URLSearchParams {
 
 /** Dicas por código AADSTS — só os que mudam a ação do usuário (doc: reference-error-codes). */
 const AAD_HINTS: ReadonlyArray<[RegExp, string]> = [
-  [/AADSTS5007[69]|AADSTS53003|AADSTS50158/, 'a conta exige MFA/Conditional Access — o grant de usuário (ROPC) não passa por MFA; use service principal ou peça exceção ao admin'],
-  [/AADSTS7000222/, 'client secret EXPIRADO — gere outro em Entra → App registrations → Certificates & secrets e atualize AZURE_CLIENT_SECRET'],
-  [/AADSTS7000215|AADSTS7000218/, 'client secret inválido ou ausente — AZURE_CLIENT_SECRET é o Value do segredo, não o Secret ID'],
+  [
+    /AADSTS5007[69]|AADSTS53003|AADSTS50158/,
+    'a conta exige MFA/Conditional Access — o grant de usuário (ROPC) não passa por MFA; use service principal ou peça exceção ao admin',
+  ],
+  [
+    /AADSTS7000222/,
+    'client secret EXPIRADO — gere outro em Entra → App registrations → Certificates & secrets e atualize AZURE_CLIENT_SECRET',
+  ],
+  [
+    /AADSTS7000215|AADSTS7000218/,
+    'client secret inválido ou ausente — AZURE_CLIENT_SECRET é o Value do segredo, não o Secret ID',
+  ],
   [/AADSTS50126/, 'usuário ou senha inválidos (NIO_FABRIC_USERNAME/NIO_FABRIC_PASSWORD)'],
   [/AADSTS50053/, 'conta bloqueada por tentativas repetidas — aguarde antes de tentar de novo'],
   [/AADSTS5005[57]|AADSTS50034/, 'conta desabilitada, senha expirada ou usuário fora do tenant'],
-  [/AADSTS65001|AADSTS90094/, 'app sem consentimento — o admin precisa conceder as permissões (Power BI Service) ao app'],
-  [/AADSTS700016|AADSTS90002|AADSTS500011/, 'tenant ou client id errado — confira AZURE_TENANT_ID/AZURE_CLIENT_ID'],
+  [
+    /AADSTS65001|AADSTS90094/,
+    'app sem consentimento — o admin precisa conceder as permissões (Power BI Service) ao app',
+  ],
+  [
+    /AADSTS700016|AADSTS90002|AADSTS500011/,
+    'tenant ou client id errado — confira AZURE_TENANT_ID/AZURE_CLIENT_ID',
+  ],
 ];
 
 /** Traduz o corpo de erro do Entra em mensagem acionável, preservando o código AADSTS. */
@@ -164,12 +182,16 @@ function failureResult(res: Response, body: string): { result: TokenResult; bloc
   if (res.status === 429) {
     const s = retryAfterSeconds(res);
     return {
-      result: { status: 'unavailable', error: `token endpoint limitou (429)${s !== null ? ` — aguarde ${s}s` : ''}` },
+      result: {
+        status: 'unavailable',
+        error: `token endpoint limitou (429)${s !== null ? ` — aguarde ${s}s` : ''}`,
+      },
       // O servidor disse quando voltar; obedecer é o mínimo. Sem header, 30 s.
       blockMs: (s ?? DEFAULT_RETRY_AFTER_S) * 1000,
     };
   }
-  const status: TokenStatus = res.status === 400 || res.status === 401 ? 'unauthorized' : 'unavailable';
+  const status: TokenStatus =
+    res.status === 400 || res.status === 401 ? 'unauthorized' : 'unavailable';
   return {
     result: { status, error: describeAadFailure(res.status, body) },
     // Credencial recusada não se conserta sozinha — só com `nio config setup`,
@@ -188,7 +210,10 @@ type Acquisition =
  * refresh a cada troca, então o novo é persistido — não fazer isso faz o login
  * morrer sozinho na renovação seguinte.
  */
-async function acquireViaDevice(auth: FabricAuthEnv, fetchImpl: typeof fetch): Promise<Acquisition> {
+async function acquireViaDevice(
+  auth: FabricAuthEnv,
+  fetchImpl: typeof fetch,
+): Promise<Acquisition> {
   // Lê do store, e não de `auth`: em processo longo (MCP server) o refresh é
   // rotacionado a cada renovação, então o que veio em `auth` fica obsoleto logo
   // na primeira — e a segunda renovação falharia com um erro opaco do Entra.
@@ -197,7 +222,10 @@ async function acquireViaDevice(auth: FabricAuthEnv, fetchImpl: typeof fetch): P
   if (r.status !== 'ok') {
     return {
       ok: false,
-      result: { status: 'unauthorized', error: `a sessão do \`nio fabric login\` não vale mais (${r.error}) — rode o login de novo` },
+      result: {
+        status: 'unauthorized',
+        error: `a sessão do \`nio fabric login\` não vale mais (${r.error}) — rode o login de novo`,
+      },
       blockMs: UNAUTHORIZED_BLOCK_MS,
     };
   }
@@ -219,17 +247,28 @@ async function acquireViaEndpoint(
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) {
-      const { result, blockMs } = failureResult(res, (await res.text().catch(() => '')).slice(0, ERROR_BODY_CHARS));
+      const { result, blockMs } = failureResult(
+        res,
+        (await res.text().catch(() => '')).slice(0, ERROR_BODY_CHARS),
+      );
       return { ok: false, result, blockMs };
     }
     const json = (await res.json()) as { access_token?: string; expires_in?: number };
     if (!json.access_token) {
-      return { ok: false, result: { status: 'unavailable', error: 'resposta do token sem access_token' }, blockMs: UNAVAILABLE_BLOCK_MS };
+      return {
+        ok: false,
+        result: { status: 'unavailable', error: 'resposta do token sem access_token' },
+        blockMs: UNAVAILABLE_BLOCK_MS,
+      };
     }
     return { ok: true, token: json.access_token, ttlMs: (json.expires_in ?? 3600) * 1000 };
   } catch (err) {
     // Timeout/DNS/rede: 10 s perdidos por tentativa — segurar vale ainda mais.
-    return { ok: false, result: { status: 'unavailable', error: (err as Error).message }, blockMs: UNAVAILABLE_BLOCK_MS };
+    return {
+      ok: false,
+      result: { status: 'unavailable', error: (err as Error).message },
+      blockMs: UNAVAILABLE_BLOCK_MS,
+    };
   }
 }
 
@@ -249,7 +288,10 @@ export function createTokenProvider(
 
   return {
     // Também derruba o bloqueio: quem chama isto acabou de trocar a credencial.
-    invalidate: () => { cached = null; blocked = null; },
+    invalidate: () => {
+      cached = null;
+      blocked = null;
+    },
     async get(): Promise<TokenResult> {
       const grant = fabricGrant(auth);
       if (!auth.tenantId || !grant) return unconfiguredResult();
@@ -286,7 +328,11 @@ const shared = new Map<string, TokenProvider>();
  */
 export function sharedTokenProvider(auth: FabricAuthEnv = readFabricAuth()): TokenProvider {
   const key = JSON.stringify([
-    auth.tenantId, auth.clientId, auth.username, auth.clientSecret, auth.password,
+    auth.tenantId,
+    auth.clientId,
+    auth.username,
+    auth.clientSecret,
+    auth.password,
     auth.deviceRefreshToken?.slice(-24),
   ]);
   let provider = shared.get(key);

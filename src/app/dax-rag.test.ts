@@ -17,7 +17,7 @@ const TEMPLATE_VENDAS: ScoredTemplate = {
   questionNorm: 'qual o total de vendas por regiao em 2026',
   workspaceId: 'ws',
   datasetId: 'ds',
-  dax: "EVALUATE SUMMARIZECOLUMNS('Regiao'[Nome], \"Total\", [Total Vendas])",
+  dax: 'EVALUATE SUMMARIZECOLUMNS(\'Regiao\'[Nome], "Total", [Total Vendas])',
   outputSummary: { rowCount: 3, columns: ['Total'], sample: [] },
 };
 
@@ -76,12 +76,19 @@ function makeDeps(opts: {
   return { deps: { memory, embedder, fabric, generate, templateMin: 0.88 }, spy };
 }
 
-const ask = { question: 'qual o total de compras por regiao em 2026', workspaceId: 'ws', datasetId: 'ds' };
+const ask = {
+  question: 'qual o total de compras por regiao em 2026',
+  workspaceId: 'ws',
+  datasetId: 'ds',
+};
 
 // ─────────────────────────── CRITÉRIO DE ACEITE ───────────────────────────
 
 test('ACEITE: template de VENDAS achado por similaridade NUNCA é executado para pergunta de COMPRAS', async () => {
-  const { deps, spy } = makeDeps({ similar: TEMPLATE_VENDAS, generated: 'EVALUATE ROW("Compras", 5)' });
+  const { deps, spy } = makeDeps({
+    similar: TEMPLATE_VENDAS,
+    generated: 'EVALUATE ROW("Compras", 5)',
+  });
   const out = await askDax(deps, ask);
 
   expect(out.status).toBe('ok');
@@ -141,7 +148,11 @@ test('Nível 2: sem template → usa documentação e gera do zero', async () =>
 });
 
 test('retry: 400 legível volta pro modelo COM o erro e a 2ª tentativa vale', async () => {
-  const { deps, spy } = makeDeps({ similar: null, generated: 'EVALUATE RUIM', failDax: 'EVALUATE RUIM' });
+  const { deps, spy } = makeDeps({
+    similar: null,
+    generated: 'EVALUATE RUIM',
+    failDax: 'EVALUATE RUIM',
+  });
   deps.searchDocs = async () => ({ status: 'ok', data: ['Tabela: VENDAS | Colunas: VALOR'] });
   let call = 0;
   deps.generate = async (req) => {

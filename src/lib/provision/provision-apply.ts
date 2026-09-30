@@ -1,9 +1,17 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, lstatSync, readlinkSync } from "node:fs";
-import { createHash } from "node:crypto";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { VERSION } from "../../version.js";
-import { brand } from "../../brand.js";
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  lstatSync,
+  readlinkSync,
+} from 'node:fs';
+import { createHash } from 'node:crypto';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { VERSION } from '../../version.js';
+import { brand } from '../../brand.js';
 
 /**
  * Motor do provisionamento: hash/manifesto (`.<marca>-provision.json`), escrita
@@ -14,13 +22,13 @@ import { brand } from "../../brand.js";
 export const MANIFEST_NAME = `.${brand.name}-provision.json`;
 
 export type ProvisionAction =
-  | "create"
-  | "update"
-  | "unchanged"
-  | "skip-conflict"
-  | "prune"
-  | "prune-kept"
-  | "write-error";
+  | 'create'
+  | 'update'
+  | 'unchanged'
+  | 'skip-conflict'
+  | 'prune'
+  | 'prune-kept'
+  | 'write-error';
 
 export interface ProvisionFileResult {
   /** Path relativo ao destino, ex.: `commands/implement.md`. */
@@ -71,18 +79,18 @@ interface Manifest {
 }
 
 export function defaultTargetDir(): string {
-  return join(homedir(), ".claude");
+  return join(homedir(), '.claude');
 }
 
 function sha256(buf: Buffer): string {
-  return createHash("sha256").update(buf).digest("hex");
+  return createHash('sha256').update(buf).digest('hex');
 }
 
 function readManifest(path: string): Manifest | null {
   if (!existsSync(path)) return null;
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf-8")) as Manifest;
-    if (parsed && typeof parsed === "object" && parsed.files) return parsed;
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Manifest;
+    if (parsed && typeof parsed === 'object' && parsed.files) return parsed;
   } catch {
     // manifesto corrompido → trata como ausente e reconstrói
   }
@@ -124,7 +132,7 @@ export function ensureDir(dir: string): void {
       mkdirSync(dir, { recursive: true });
       return;
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
       if (!materializeDanglingLink(dir)) throw err;
     }
   }
@@ -170,7 +178,7 @@ export function applyProvision(
     try {
       if (!existsSync(targetAbs)) {
         if (!dryRun) writeFile(targetAbs, f.content);
-        results.push({ relPath: f.relPath, action: "create" });
+        results.push({ relPath: f.relPath, action: 'create' });
         newFiles[f.relPath] = f.hash;
         continue;
       }
@@ -178,7 +186,7 @@ export function applyProvision(
       const existingHash = sha256(readFileSync(targetAbs));
 
       if (existingHash === f.hash) {
-        results.push({ relPath: f.relPath, action: "unchanged" });
+        results.push({ relPath: f.relPath, action: 'unchanged' });
         newFiles[f.relPath] = f.hash;
         continue;
       }
@@ -190,27 +198,22 @@ export function applyProvision(
         if (!dryRun) writeFile(targetAbs, f.content);
         results.push({
           relPath: f.relPath,
-          action: "update",
-          detail: wasOursUntouched
-            ? undefined
-            : "forçado sobre arquivo divergente",
+          action: 'update',
+          detail: wasOursUntouched ? undefined : 'forçado sobre arquivo divergente',
         });
         newFiles[f.relPath] = f.hash;
       } else {
         results.push({
           relPath: f.relPath,
-          action: "skip-conflict",
-          detail:
-            oldFiles[f.relPath] !== undefined
-              ? "editado localmente"
-              : "arquivo de terceiros",
+          action: 'skip-conflict',
+          detail: oldFiles[f.relPath] !== undefined ? 'editado localmente' : 'arquivo de terceiros',
         });
         // Não reivindica propriedade: fica de fora do novo manifesto.
       }
     } catch (err) {
       results.push({
         relPath: f.relPath,
-        action: "write-error",
+        action: 'write-error',
         detail: (err as Error).message,
       });
     }
@@ -231,12 +234,12 @@ export function applyProvision(
       const existingHash = sha256(readFileSync(targetAbs));
       if (existingHash === oldHash) {
         if (!dryRun) rmSync(targetAbs);
-        results.push({ relPath, action: "prune" });
+        results.push({ relPath, action: 'prune' });
       } else {
         results.push({
           relPath,
-          action: "prune-kept",
-          detail: "modificado localmente — mantido",
+          action: 'prune-kept',
+          detail: 'modificado localmente — mantido',
         });
       }
     }
@@ -249,11 +252,7 @@ export function applyProvision(
       files: newFiles,
     };
     mkdirSync(targetDir, { recursive: true });
-    writeFileSync(
-      manifestPath,
-      JSON.stringify(manifest, null, 2) + "\n",
-      "utf-8",
-    );
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
   }
 
   return { targetDir, version: VERSION, dryRun, files: results };

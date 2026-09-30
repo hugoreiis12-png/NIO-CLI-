@@ -13,7 +13,8 @@ test('executeDax: 200 extrai as linhas de results[0].tables[0].rows', async () =
   const rows = [{ 'T[Ano]': 2010 }, { 'T[Ano]': 2011 }];
   const gw = createFabricGateway({
     token: okToken,
-    fetchImpl: (async () => jsonRes({ results: [{ tables: [{ rows }] }] })) as unknown as typeof fetch,
+    fetchImpl: (async () =>
+      jsonRes({ results: [{ tables: [{ rows }] }] })) as unknown as typeof fetch,
   });
   const out = await gw.executeDax('ws', 'ds', 'EVALUATE T');
   expect(out.status).toBe('ok');
@@ -32,14 +33,23 @@ test('executeDax: POST no endpoint certo com o corpo executeQueries', async () =
     }) as unknown as typeof fetch,
   });
   await gw.executeDax('WS 1', 'DS 1', 'EVALUATE VALUES(T)');
-  expect(seenUrl).toBe('https://api.powerbi.com/v1.0/myorg/groups/WS%201/datasets/DS%201/executeQueries');
-  expect(JSON.parse(seenBody)).toEqual({ queries: [{ query: 'EVALUATE VALUES(T)' }], serializerSettings: { includeNulls: true } });
+  expect(seenUrl).toBe(
+    'https://api.powerbi.com/v1.0/myorg/groups/WS%201/datasets/DS%201/executeQueries',
+  );
+  expect(JSON.parse(seenBody)).toEqual({
+    queries: [{ query: 'EVALUATE VALUES(T)' }],
+    serializerSettings: { includeNulls: true },
+  });
 });
 
 test('executeDax: 400 (DAX ruim) → failed com a mensagem do erro', async () => {
   const gw = createFabricGateway({
     token: okToken,
-    fetchImpl: (async () => jsonRes({ error: { code: 'DAX', message: 'Query (1, 1) erro de sintaxe' } }, 400)) as unknown as typeof fetch,
+    fetchImpl: (async () =>
+      jsonRes(
+        { error: { code: 'DAX', message: 'Query (1, 1) erro de sintaxe' } },
+        400,
+      )) as unknown as typeof fetch,
   });
   const out = await gw.executeDax('ws', 'ds', 'EVALUATE ???');
   expect(out.status).toBe('failed');
@@ -124,7 +134,10 @@ test('executeDax: erro embutido com HTTP 200 também usa o details aninhado', as
 test('executeDax: erro embutido com HTTP 200 (mais de uma tabela) → failed', async () => {
   const gw = createFabricGateway({
     token: okToken,
-    fetchImpl: (async () => jsonRes({ results: [{ error: { message: 'More than one result table in a query' } }] })) as unknown as typeof fetch,
+    fetchImpl: (async () =>
+      jsonRes({
+        results: [{ error: { message: 'More than one result table in a query' } }],
+      })) as unknown as typeof fetch,
   });
   const out = await gw.executeDax('ws', 'ds', 'EVALUATE T EVALUATE U');
   expect(out.status).toBe('failed');
@@ -134,7 +147,8 @@ test('executeDax: erro embutido com HTTP 200 (mais de uma tabela) → failed', a
 test('executeDax: 403 → unauthorized', async () => {
   const gw = createFabricGateway({
     token: okToken,
-    fetchImpl: (async () => jsonRes({ error: { message: 'forbidden' } }, 403)) as unknown as typeof fetch,
+    fetchImpl: (async () =>
+      jsonRes({ error: { message: 'forbidden' } }, 403)) as unknown as typeof fetch,
   });
   expect((await gw.executeDax('ws', 'ds', 'EVALUATE T')).status).toBe('unauthorized');
 });
@@ -142,7 +156,11 @@ test('executeDax: 403 → unauthorized', async () => {
 test('executeDax: 401 traz os 3 checks reais (tenant setting, Build, RLS/SSO)', async () => {
   const gw = createFabricGateway({
     token: okToken,
-    fetchImpl: (async () => jsonRes({ error: { code: 'PowerBINotAuthorizedException' } }, 401)) as unknown as typeof fetch,
+    fetchImpl: (async () =>
+      jsonRes(
+        { error: { code: 'PowerBINotAuthorizedException' } },
+        401,
+      )) as unknown as typeof fetch,
   });
   const out = await gw.executeDax('ws', 'ds', 'EVALUATE T');
   expect(out.status).toBe('unauthorized');
@@ -156,7 +174,10 @@ test('executeDax: 429 → throttled com o Retry-After, sem tentar de novo', asyn
   let calls = 0;
   const gw = createFabricGateway({
     token: okToken,
-    fetchImpl: (async () => { calls++; return new Response('{}', { status: 429, headers: { 'Retry-After': '42' } }); }) as unknown as typeof fetch,
+    fetchImpl: (async () => {
+      calls++;
+      return new Response('{}', { status: 429, headers: { 'Retry-After': '42' } });
+    }) as unknown as typeof fetch,
   });
   const out = await gw.executeDax('ws', 'ds', 'EVALUATE T');
   expect(out.status).toBe('throttled');
@@ -169,7 +190,9 @@ test('executeDax: 401 com token em cache → invalida e repete UMA vez (token ex
   let calls = 0;
   const token: TokenProvider = {
     get: async () => ({ status: 'ok', token: invalidated ? 'fresh' : 'stale' }),
-    invalidate: () => { invalidated++; },
+    invalidate: () => {
+      invalidated++;
+    },
   };
   const seenAuth: string[] = [];
   const gw = createFabricGateway({
@@ -177,7 +200,9 @@ test('executeDax: 401 com token em cache → invalida e repete UMA vez (token ex
     fetchImpl: (async (_url: string, init: RequestInit) => {
       calls++;
       seenAuth.push((init.headers as Record<string, string>).Authorization);
-      return calls === 1 ? jsonRes({}, 401) : jsonRes({ results: [{ tables: [{ rows: [{ a: 1 }] }] }] });
+      return calls === 1
+        ? jsonRes({}, 401)
+        : jsonRes({ results: [{ tables: [{ rows: [{ a: 1 }] }] }] });
     }) as unknown as typeof fetch,
   });
   const out = await gw.executeDax('ws', 'ds', 'EVALUATE T');
@@ -188,10 +213,16 @@ test('executeDax: 401 com token em cache → invalida e repete UMA vez (token ex
 
 test('executeDax: 401 duas vezes → unauthorized, só 2 chamadas (sem loop)', async () => {
   let calls = 0;
-  const token: TokenProvider = { get: async () => ({ status: 'ok', token: 'tok' }), invalidate: () => {} };
+  const token: TokenProvider = {
+    get: async () => ({ status: 'ok', token: 'tok' }),
+    invalidate: () => {},
+  };
   const gw = createFabricGateway({
     token,
-    fetchImpl: (async () => { calls++; return jsonRes({}, 401); }) as unknown as typeof fetch,
+    fetchImpl: (async () => {
+      calls++;
+      return jsonRes({}, 401);
+    }) as unknown as typeof fetch,
   });
   expect((await gw.executeDax('ws', 'ds', 'EVALUATE T')).status).toBe('unauthorized');
   expect(calls).toBe(2);
@@ -211,7 +242,10 @@ test('executeDax: token não configurado → failed, sem tocar a rede', async ()
   let called = false;
   const gw = createFabricGateway({
     token: { get: async () => ({ status: 'unconfigured', error: 'sem AZURE_*' }) },
-    fetchImpl: (async () => { called = true; return jsonRes({}); }) as unknown as typeof fetch,
+    fetchImpl: (async () => {
+      called = true;
+      return jsonRes({});
+    }) as unknown as typeof fetch,
   });
   const out = await gw.executeDax('ws', 'ds', 'EVALUATE T');
   expect(out.status).toBe('failed');
@@ -225,12 +259,18 @@ test('listWorkspaces: pagina o @odata.nextLink e concatena', async () => {
     fetchImpl: (async () => {
       call++;
       return call === 1
-        ? jsonRes({ value: [{ id: '1', name: 'A' }], '@odata.nextLink': 'https://api.powerbi.com/next' })
+        ? jsonRes({
+            value: [{ id: '1', name: 'A' }],
+            '@odata.nextLink': 'https://api.powerbi.com/next',
+          })
         : jsonRes({ value: [{ id: '2', name: 'B' }] });
     }) as unknown as typeof fetch,
   });
   const out = await gw.listWorkspaces();
   expect(out.status).toBe('ok');
-  expect(out.data).toEqual([{ id: '1', name: 'A' }, { id: '2', name: 'B' }]);
+  expect(out.data).toEqual([
+    { id: '1', name: 'A' },
+    { id: '2', name: 'B' },
+  ]);
   expect(call).toBe(2);
 });

@@ -38,7 +38,9 @@ t(
       const results = gw.apply(plan, { dryRun: false });
 
       // Todos os passos concluíram (lista de falhas legível se algo quebrar).
-      const failed = results.filter((r) => r.status !== 'done').map((r) => `${r.step.label}: ${r.error ?? ''}`);
+      const failed = results
+        .filter((r) => r.status !== 'done')
+        .map((r) => `${r.step.label}: ${r.error ?? ''}`);
       expect(failed).toEqual([]);
 
       // Materializou de verdade.

@@ -36,7 +36,10 @@ import { syncCopy } from "../copy.js";
  * acabou de baixar uma versão possivelmente nova dela — oferece re-materializar
  * (Sprint 5.4). Best-effort: sem login / banco fora / sem recipe → silencioso.
  */
-async function offerRecipeRematerialize(opts: { interactive: boolean; assumeYes?: boolean }): Promise<void> {
+async function offerRecipeRematerialize(opts: {
+  interactive: boolean;
+  assumeYes?: boolean;
+}): Promise<void> {
   try {
     const stored = await loadSession();
     if (!stored) return;
@@ -59,8 +62,11 @@ async function offerRecipeRematerialize(opts: { interactive: boolean; assumeYes?
       return;
     }
     const built = await manager.materialize(stored.userId);
-    console.log(`  ${c.green(sym.ok)} ${active.name} re-materializada (${built.config.mcps?.length ?? 0} MCPs).`);
-    for (const w of built.recipeWarnings) console.log(`  ${c.yellow(sym.warn)} recipe: ${w} ignorado.`);
+    console.log(
+      `  ${c.green(sym.ok)} ${active.name} re-materializada (${built.config.mcps?.length ?? 0} MCPs).`,
+    );
+    for (const w of built.recipeWarnings)
+      console.log(`  ${c.yellow(sym.warn)} recipe: ${w} ignorado.`);
   } catch (err) {
     console.log(`  ${c.dim(`recipe da sessão ativa não checada: ${(err as Error).message}`)}`);
   }
@@ -76,14 +82,8 @@ export function registerSyncCommand(program: Command): void {
     .option("--force", "sobrescreve arquivos divergentes de mesmo nome")
     .option("--no-prune", "mantém arquivos que saíram do bundle")
     .option("--uninstall", "remove os arquivos que o nio instalou")
-    .option(
-      "--no-install-deps",
-      "não oferece instalar as libs externas requeridas",
-    )
-    .option(
-      "-y, --yes",
-      "aprova automaticamente a instalação das libs (não-interativo)",
-    )
+    .option("--no-install-deps", "não oferece instalar as libs externas requeridas")
+    .option("-y, --yes", "aprova automaticamente a instalação das libs (não-interativo)")
     .option(
       "--reanalyze",
       "re-roda a análise de patterns (regera docs/_patterns.md) mesmo se já existir",
@@ -125,11 +125,9 @@ export function registerSyncCommand(program: Command): void {
                   }))));
             if (doUpdate) {
               console.log(`  ${c.dim(`${sym.gear} rodando…`)}`);
-              const res = spawnSyncPortable(
-                "npm",
-                ["install", "-g", `${upd.name}@latest`],
-                { stdio: "inherit" },
-              );
+              const res = spawnSyncPortable("npm", ["install", "-g", `${upd.name}@latest`], {
+                stdio: "inherit",
+              });
               if (res.status === 0) {
                 console.log(
                   `  ${c.green(`${sym.ok} atualizado pra ${upd.latest}`)} ${c.dim(`— rode \`${brand.name} sync\` de novo.`)}`,
@@ -153,7 +151,13 @@ export function registerSyncCommand(program: Command): void {
             sp.stop();
             const minCliWarn = skillsMinCliWarning();
             if (minCliWarn) {
-              report.add({ id: "min-cli", title: "Versão da CLI", status: "warn", summary: minCliWarn, lines: [] });
+              report.add({
+                id: "min-cli",
+                title: "Versão da CLI",
+                status: "warn",
+                summary: minCliWarn,
+                lines: [],
+              });
             }
             if (fetched.status === "fetched") {
               report.add({
@@ -172,9 +176,7 @@ export function registerSyncCommand(program: Command): void {
                 lines: fetched.error ? [`    ${c.dim(fetched.error)}`] : [],
               });
             } else {
-              console.error(
-                `  ${c.red(sym.err)} não consegui obter as skills: ${fetched.error}`,
-              );
+              console.error(`  ${c.red(sym.err)} não consegui obter as skills: ${fetched.error}`);
               process.exit(1);
             }
           }
@@ -193,7 +195,7 @@ export function registerSyncCommand(program: Command): void {
               for (const rel of result.removed) console.log(`  [-] ${rel}`);
               for (const rel of result.kept)
                 console.log(`  [!] ${rel} (modificado localmente — mantido)`);
-const prefix = result.dryRun ? "[dry-run] " : "";
+              const prefix = result.dryRun ? "[dry-run] " : "";
               console.log(
                 `${prefix}${result.removed.length} removidos · ${result.kept.length} preservados → ${result.targetDir}`,
               );
@@ -317,7 +319,9 @@ const prefix = result.dryRun ? "[dry-run] " : "";
                 console.log(`  ${c.dim(`${sym.gear} analisando patterns…`)}`);
                 const out = await runPatternsAnalysis(cwd);
                 if (!out.ran) {
-                  console.log(`  ${c.yellow(sym.warn)} ${c.dim(out.reason ?? "análise não rodou")}`);
+                  console.log(
+                    `  ${c.yellow(sym.warn)} ${c.dim(out.reason ?? "análise não rodou")}`,
+                  );
                 } else {
                   console.log(
                     out.ok
@@ -341,14 +345,11 @@ const prefix = result.dryRun ? "[dry-run] " : "";
           });
 
           // Skills recomendadas (skills.sh) das stacks do nio.json.
-          await offerRuleSkills(
-            collectRuleSkills(config?.selection ?? { roles: [], stacks: {} }),
-            {
-              interactive: Boolean(process.stdout.isTTY),
-              assumeYes: opts.yes,
-              enabled: opts.installDeps !== false && !opts.dryRun,
-            },
-          );
+          await offerRuleSkills(collectRuleSkills(config?.selection ?? { roles: [], stacks: {} }), {
+            interactive: Boolean(process.stdout.isTTY),
+            assumeYes: opts.yes,
+            enabled: opts.installDeps !== false && !opts.dryRun,
+          });
 
           // Recipe da sessão ativa pode ter mudado no repo → oferece re-materializar (5.4).
           if (!opts.dryRun) {

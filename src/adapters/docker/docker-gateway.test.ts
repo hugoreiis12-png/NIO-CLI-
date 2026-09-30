@@ -1,10 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  composeArgs,
-  runArgs,
-  stackDeployArgs,
-  serviceScaleArgs,
-} from './docker-gateway.js';
+import { composeArgs, runArgs, stackDeployArgs, serviceScaleArgs } from './docker-gateway.js';
 
 describe('composeArgs', () => {
   test('up: detach por default, -f quando há file', () => {

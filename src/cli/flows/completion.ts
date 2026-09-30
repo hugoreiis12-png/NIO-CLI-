@@ -78,6 +78,8 @@ export async function offerShellCompletion(opts: {
         `${cmd(`source ${tilde(path)}`)}${c.dim(").")}`,
     );
   } catch (err) {
-    console.error(`  ${c.red(sym.err)} ${c.dim(`não consegui escrever em ${tilde(path)}: ${(err as Error).message}`)}`);
+    console.error(
+      `  ${c.red(sym.err)} ${c.dim(`não consegui escrever em ${tilde(path)}: ${(err as Error).message}`)}`,
+    );
   }
 }

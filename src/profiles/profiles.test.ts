@@ -22,7 +22,8 @@ test('ProfileCatalog.get: os 6 perfis resolvem e batem o próprio nome', () => {
 test('excel(modelado + herdado) nos perfis analytics; fora de fullstack/qa', () => {
   const catalog = createProfileCatalog();
   const hasExcel = (p: Profile) => catalog.get(p).mcps.some((m) => m.id === 'excel');
-  const inheritsExcel = (p: Profile) => (catalog.get(p).inheritGlobalMcpIds ?? []).includes('excel');
+  const inheritsExcel = (p: Profile) =>
+    (catalog.get(p).inheritGlobalMcpIds ?? []).includes('excel');
   for (const p of ['analyst', 'bi', 'scientist', 'dba'] as Profile[]) {
     expect(hasExcel(p)).toBe(true); // modelado (semeado no global), não só herdado
     expect(inheritsExcel(p)).toBe(true);
@@ -57,7 +58,10 @@ test('as tools nio_fabric_* seguem valendo para TODO perfil (vêm do MCP nio, n�
 
 test('ProfileCatalog.list: devolve os 6 perfis modelados', () => {
   const catalog = createProfileCatalog();
-  const ids = catalog.list().map((d) => d.profile).sort();
+  const ids = catalog
+    .list()
+    .map((d) => d.profile)
+    .sort();
   expect(ids).toEqual([...ALL_PROFILES].sort());
 });
 

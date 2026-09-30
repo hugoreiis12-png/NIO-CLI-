@@ -34,7 +34,9 @@ async function resolveSecondFactor(
   if (sms?.smsMode === "echo") {
     console.log(
       `  ${c.yellow(sym.warn)} modo echo (dev) — nenhum WhatsApp real foi enviado` +
-        (sms.devCode ? `. Código: ${c.bold(sms.devCode)}` : " (veja ~/.nio/whatsapp-echo-last.json)"),
+        (sms.devCode
+          ? `. Código: ${c.bold(sms.devCode)}`
+          : " (veja ~/.nio/whatsapp-echo-last.json)"),
     );
   } else {
     console.log(`  ${c.dim(`código enviado por WhatsApp para ${phoneHint}`)}`);
@@ -50,7 +52,9 @@ async function resolveSecondFactor(
     const res = await gatewayVerify2fa(challengeId, code, type);
     if (res.ok) return res;
     if (res.requiresBackupCode) {
-      console.log(`  ${c.yellow(sym.warn)} tentativas de código esgotadas — use um código de backup.`);
+      console.log(
+        `  ${c.yellow(sym.warn)} tentativas de código esgotadas — use um código de backup.`,
+      );
       type = "backup";
       continue;
     }
@@ -59,7 +63,6 @@ async function resolveSecondFactor(
   }
   return null;
 }
-
 
 /** Gateway no ar e compatível antes do login: sobe sozinho, ou orienta e reprova. */
 async function requireGateway(): Promise<boolean> {
@@ -77,7 +80,12 @@ async function requireGateway(): Promise<boolean> {
   }
   const skew = await checkGatewayVersion();
   if (skew.status === "block") {
-    console.error(box(`${c.red(sym.err)} ${c.bold("Gateway incompatível.")}\n\n${c.dim(skew.detail)}`, { borderColor: "red", title: "atualize o gateway" }));
+    console.error(
+      box(`${c.red(sym.err)} ${c.bold("Gateway incompatível.")}\n\n${c.dim(skew.detail)}`, {
+        borderColor: "red",
+        title: "atualize o gateway",
+      }),
+    );
     return false;
   }
   if (skew.status === "warn") console.log(`  ${c.yellow(sym.warn)} ${skew.detail}`);
@@ -162,13 +170,13 @@ export async function runRegister(): Promise<boolean> {
     const user = await gatewayRegister(name.trim(), pass);
     spinner.stop();
     console.log(`${c.green(sym.ok)} Usuário criado: ${user.name} (id ${user.userId})`);
-    if (user.passwordWarning === 'breached') {
+    if (user.passwordWarning === "breached") {
       console.log(
         box(
-          `${c.yellow(sym.warn)} ${c.bold('Sua senha aparece em vazamentos conhecidos.')}\n` +
-            `${c.dim('O cadastro foi concluído, mas considere trocar por uma senha exclusiva:')} ` +
+          `${c.yellow(sym.warn)} ${c.bold("Sua senha aparece em vazamentos conhecidos.")}\n` +
+            `${c.dim("O cadastro foi concluído, mas considere trocar por uma senha exclusiva:")} ` +
             `${cmd(`${brand.name} security change-password`)}`,
-          { borderColor: 'yellow', title: 'senha fraca' },
+          { borderColor: "yellow", title: "senha fraca" },
         ),
       );
     }

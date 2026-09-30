@@ -19,37 +19,25 @@ export function registerExecCommand(program: Command): void {
       "Delega a implementação ao Qwen (vLLM local) num worktree e aguarda. " +
         "stdout = JSON do resultado; stderr = log ao vivo.",
     )
-    .requiredOption(
-      "--worktree <path>",
-      "worktree onde implementar (criado pelo /implement)",
-    )
-    .requiredOption(
-      "--instruction <texto>",
-      "o que implementar (ticket + critérios)",
-    )
+    .requiredOption("--worktree <path>", "worktree onde implementar (criado pelo /implement)")
+    .requiredOption("--instruction <texto>", "o que implementar (ticket + critérios)")
     .option("--quiet", "não streama o log do agente no stderr")
-    .action(
-      async (opts: {
-        worktree: string;
-        instruction: string;
-        quiet?: boolean;
-      }) => {
-        if (!existsSync(opts.worktree)) {
-          emit({ error: `worktree não encontrado: ${opts.worktree}` });
-          process.exitCode = 1;
-          return;
-        }
+    .action(async (opts: { worktree: string; instruction: string; quiet?: boolean }) => {
+      if (!existsSync(opts.worktree)) {
+        emit({ error: `worktree não encontrado: ${opts.worktree}` });
+        process.exitCode = 1;
+        return;
+      }
 
-        const job = await runExec({
-          worktree: opts.worktree,
-          instruction: opts.instruction,
-          echo: opts.quiet !== true,
-        });
+      const job = await runExec({
+        worktree: opts.worktree,
+        instruction: opts.instruction,
+        echo: opts.quiet !== true,
+      });
 
-        emit(job);
-        if (job.state !== "done") process.exitCode = 1;
-      },
-    );
+      emit(job);
+      if (job.state !== "done") process.exitCode = 1;
+    });
 
   // Comando separado (não subcomando): opções `required` do pai bloqueariam o parse.
   program

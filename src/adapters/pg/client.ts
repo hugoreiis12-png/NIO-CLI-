@@ -64,7 +64,9 @@ function isLoopbackDbHost(url: string): boolean {
 }
 
 /** Opção `ssl` do `pg.Pool` a partir do ambiente. Pura o suficiente pra testar. */
-export type PgSslOption = boolean | { rejectUnauthorized: boolean; ca?: string; servername?: string };
+export type PgSslOption =
+  | boolean
+  | { rejectUnauthorized: boolean; ca?: string; servername?: string };
 
 /**
  * Monta a opção TLS **verificada** (`rejectUnauthorized: true`), com CA e servername
@@ -88,7 +90,9 @@ function verifiedSsl(ca?: string): PgSslOption {
  * de CA privada; só `NIO_DATABASE_SSL_INSECURE=1` desliga a verificação, e isso
  * grita no log.
  */
-export function readSslOption(url: string = process.env.NIO_DATABASE_URL?.trim() ?? ''): PgSslOption | undefined {
+export function readSslOption(
+  url: string = process.env.NIO_DATABASE_URL?.trim() ?? '',
+): PgSslOption | undefined {
   const explicit = envTriState('NIO_DATABASE_SSL');
   const enabled = explicit ?? !isLoopbackDbHost(url);
   if (!enabled) return undefined;
@@ -127,9 +131,7 @@ export function readSslOption(url: string = process.env.NIO_DATABASE_URL?.trim()
     try {
       return verifiedSsl(readFileSync(caPath, 'utf8'));
     } catch (err) {
-      throw new Error(
-        `NIO_DATABASE_CA não pôde ser lido ("${caPath}"): ${(err as Error).message}`,
-      );
+      throw new Error(`NIO_DATABASE_CA não pôde ser lido ("${caPath}"): ${(err as Error).message}`);
     }
   }
   return verifiedSsl();

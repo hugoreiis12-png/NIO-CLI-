@@ -28,7 +28,11 @@ function fakeTask(goal: string, maxSteps = 25): Task {
     lockedAt: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
-    completedAt: null, awaitingKind: null, awaitingSubject: null, approvedTools: [], kind: 'agent',
+    completedAt: null,
+    awaitingKind: null,
+    awaitingSubject: null,
+    approvedTools: [],
+    kind: 'agent',
   };
 }
 
@@ -88,8 +92,12 @@ test('SEGURANÇA: o prompt do planner é só goal + perfil + teto, nada mais', (
   // step, documento lido) reabre o vetor de prompt injection que o Planner
   // existe para não ter. Quebrou? Justifique antes de atualizar o esperado.
   expect(buildPlanPrompt('analisar contratos', 'bi', 25)).toBe(
-    ['Perfil do ambiente: bi', 'Limite de passos: 12', '', 'Objetivo do usuário:', 'analisar contratos'].join(
-      '\n',
-    ),
+    [
+      'Perfil do ambiente: bi',
+      'Limite de passos: 12',
+      '',
+      'Objetivo do usuário:',
+      'analisar contratos',
+    ].join('\n'),
   );
 });

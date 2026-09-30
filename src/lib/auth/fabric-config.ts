@@ -10,7 +10,12 @@
  */
 import { input, password, select } from '../prompts.js';
 import { c, sym } from '../colors.js';
-import { createTokenProvider, fabricGrant, readFabricAuthEnv, type TokenGrant } from '../../adapters/fabric/token.js';
+import {
+  createTokenProvider,
+  fabricGrant,
+  readFabricAuthEnv,
+  type TokenGrant,
+} from '../../adapters/fabric/token.js';
 
 /** Como cada grant se chama na UI. Fonte única — o `fabric status` usa o mesmo. */
 export const GRANT_LABEL: Record<TokenGrant, string> = {
@@ -140,11 +145,11 @@ export async function promptFabricCredentials(
     updates.NIO_FABRIC_USERNAME = '';
     updates.NIO_FABRIC_PASSWORD = '';
   } else {
+    console.log(c.dim('  o RLS é por pessoa: esta conta é sua, não a compartilhe com o time.'));
     console.log(
-      c.dim('  o RLS é por pessoa: esta conta é sua, não a compartilhe com o time.'),
-    );
-    console.log(
-      c.dim('  este grant (ROPC) não passa por MFA/Conditional Access: se o admin exigir MFA nesta conta, o login falha (AADSTS50076).'),
+      c.dim(
+        '  este grant (ROPC) não passa por MFA/Conditional Access: se o admin exigir MFA nesta conta, o login falha (AADSTS50076).',
+      ),
     );
     updates.NIO_FABRIC_USERNAME = (
       await input({
@@ -192,7 +197,7 @@ export async function verifyFabricCredentials(
   if (consulta.status === 'unauthorized') {
     return {
       ok: true,
-      detail: `credencial válida (${modo}), mas dataset restriciona acesso — o service principal pode listar workspaces e fazer outras operações`
+      detail: `credencial válida (${modo}), mas dataset restriciona acesso — o service principal pode listar workspaces e fazer outras operações`,
     };
   }
 
@@ -227,7 +232,7 @@ async function verifyCanQuery(
       : '';
   return {
     ok: false,
-    status: out.status,  // Permite distinguir 401 (unauthorized) de outros erros
-    detail: `autenticou, mas a consulta falhou: ${out.error ?? out.status}${dica}`
+    status: out.status, // Permite distinguir 401 (unauthorized) de outros erros
+    detail: `autenticou, mas a consulta falhou: ${out.error ?? out.status}${dica}`,
   };
 }

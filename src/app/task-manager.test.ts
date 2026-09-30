@@ -46,7 +46,11 @@ function fakeTask(id: string, status: TaskStatus = 'pending'): Task {
     lockedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    completedAt: null, awaitingKind: null, awaitingSubject: null, approvedTools: [], kind: 'agent',
+    completedAt: null,
+    awaitingKind: null,
+    awaitingSubject: null,
+    approvedTools: [],
+    kind: 'agent',
   };
 }
 
@@ -65,7 +69,11 @@ function fakeStep(stepNumber: number, name: string, status: StepStatus = 'pendin
     tokensOut: null,
     error: null,
     startedAt: null,
-    completedAt: null, awaitingKind: null, awaitingSubject: null, approvedTools: [], kind: 'agent',
+    completedAt: null,
+    awaitingKind: null,
+    awaitingSubject: null,
+    approvedTools: [],
+    kind: 'agent',
   };
 }
 

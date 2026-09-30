@@ -35,7 +35,10 @@ test('writeIdeAutostartTask: idempotente e preserva tasks existentes', () => {
   mkdirSync(join(dir, '.vscode'));
   writeFileSync(
     join(dir, '.vscode', 'tasks.json'),
-    JSON.stringify({ version: '2.0.0', tasks: [{ label: 'build', type: 'shell', command: 'make' }] }),
+    JSON.stringify({
+      version: '2.0.0',
+      tasks: [{ label: 'build', type: 'shell', command: 'make' }],
+    }),
   );
 
   const r1 = writeIdeAutostartTask(dir);

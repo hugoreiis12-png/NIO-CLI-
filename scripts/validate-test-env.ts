@@ -54,7 +54,7 @@ async function run(): Promise<void> {
   // Migrations applied
   await check('schema_migrations table exists', async () => {
     const res = await getPool().query(
-      "SELECT COUNT(*) FROM information_schema.tables WHERE table_name='schema_migrations'"
+      "SELECT COUNT(*) FROM information_schema.tables WHERE table_name='schema_migrations'",
     );
     return parseInt(res.rows[0]?.count || '0', 10) > 0;
   });
@@ -73,7 +73,7 @@ async function run(): Promise<void> {
     await check(`Migration ${migration.split('_')[0]} applied`, async () => {
       const res = await getPool().query(
         'SELECT COUNT(*) FROM schema_migrations WHERE filename = $1',
-        [migration]
+        [migration],
       );
       return parseInt(res.rows[0]?.count || '0', 10) > 0;
     });
@@ -81,9 +81,7 @@ async function run(): Promise<void> {
 
   // pgvector extension
   await check('pgvector extension installed', async () => {
-    const res = await getPool().query(
-      "SELECT COUNT(*) FROM pg_extension WHERE extname='vector'"
-    );
+    const res = await getPool().query("SELECT COUNT(*) FROM pg_extension WHERE extname='vector'");
     return parseInt(res.rows[0]?.count || '0', 10) > 0;
   });
 
@@ -101,8 +99,8 @@ async function run(): Promise<void> {
   for (const table of tables) {
     await check(`Table ${table} exists`, async () => {
       const res = await getPool().query(
-        "SELECT COUNT(*) FROM information_schema.tables WHERE table_name=$1",
-        [table]
+        'SELECT COUNT(*) FROM information_schema.tables WHERE table_name=$1',
+        [table],
       );
       return parseInt(res.rows[0]?.count || '0', 10) > 0;
     });
@@ -110,16 +108,12 @@ async function run(): Promise<void> {
 
   // Database roles
   await check('nio_cli_user role exists', async () => {
-    const res = await getPool().query(
-      "SELECT COUNT(*) FROM pg_roles WHERE rolname='nio_cli_user'"
-    );
+    const res = await getPool().query("SELECT COUNT(*) FROM pg_roles WHERE rolname='nio_cli_user'");
     return parseInt(res.rows[0]?.count || '0', 10) > 0;
   });
 
   await check('nio_gw_user role exists', async () => {
-    const res = await getPool().query(
-      "SELECT COUNT(*) FROM pg_roles WHERE rolname='nio_gw_user'"
-    );
+    const res = await getPool().query("SELECT COUNT(*) FROM pg_roles WHERE rolname='nio_gw_user'");
     return parseInt(res.rows[0]?.count || '0', 10) > 0;
   });
 
@@ -129,8 +123,7 @@ async function run(): Promise<void> {
   let failCount = 0;
 
   for (const result of results) {
-    const icon =
-      result.status === 'ok' ? '✓' : result.status === 'warn' ? '⚠' : '✗';
+    const icon = result.status === 'ok' ? '✓' : result.status === 'warn' ? '⚠' : '✗';
     const color =
       result.status === 'ok' ? '\x1b[32m' : result.status === 'warn' ? '\x1b[33m' : '\x1b[31m';
     const reset = '\x1b[0m';
@@ -141,16 +134,14 @@ async function run(): Promise<void> {
     else failCount++;
   }
 
-  console.log(
-    `\n${passCount} passed, ${failCount} failed out of ${results.length} checks\n`
-  );
+  console.log(`\n${passCount} passed, ${failCount} failed out of ${results.length} checks\n`);
 
   if (failCount > 0) {
     console.log(
       '🔧 To fix:\n' +
-      '  1. bun run db:migrate                    (apply all migrations)\n' +
-      '  2. bash scripts/seed-test-db.sh         (create test user)\n' +
-      '  3. Regenerate secrets in .env.test\n'
+        '  1. bun run db:migrate                    (apply all migrations)\n' +
+        '  2. bash scripts/seed-test-db.sh         (create test user)\n' +
+        '  3. Regenerate secrets in .env.test\n',
     );
     process.exit(1);
   }

@@ -19,6 +19,8 @@ test('syncLangRepos: cache presente e sem --force → cached (não toca a rede)'
   expect(results).toHaveLength(5);
   expect(results.every((r) => r.status === 'cached')).toBe(true);
   expect(results.map((r) => r.dir).sort()).toEqual(
-    Object.values(LANG_REPOS).map((r) => r.dir).sort(),
+    Object.values(LANG_REPOS)
+      .map((r) => r.dir)
+      .sort(),
   );
 });

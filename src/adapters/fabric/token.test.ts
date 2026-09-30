@@ -1,19 +1,39 @@
 import { test, expect } from 'bun:test';
 import {
-  createTokenProvider, readFabricAuthEnv, fabricGrant, describeAadFailure, retryAfterSeconds, sharedTokenProvider,
+  createTokenProvider,
+  readFabricAuthEnv,
+  fabricGrant,
+  describeAadFailure,
+  retryAfterSeconds,
+  sharedTokenProvider,
 } from './token.js';
 
 const SP = { tenantId: 't', clientId: 'c', clientSecret: 's' };
-const USER = { tenantId: 't', clientId: 'c', clientSecret: 's', username: 'u@x.com', password: 'pw' };
+const USER = {
+  tenantId: 't',
+  clientId: 'c',
+  clientSecret: 's',
+  username: 'u@x.com',
+  password: 'pw',
+};
 const jsonRes = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
 test('readFabricAuthEnv: lê AZURE_* + NIO_FABRIC_USERNAME/PASSWORD', () => {
   const env = {
-    AZURE_TENANT_ID: ' t ', AZURE_CLIENT_ID: 'c', AZURE_CLIENT_SECRET: 's',
-    NIO_FABRIC_USERNAME: ' u@x.com ', NIO_FABRIC_PASSWORD: 'pw',
+    AZURE_TENANT_ID: ' t ',
+    AZURE_CLIENT_ID: 'c',
+    AZURE_CLIENT_SECRET: 's',
+    NIO_FABRIC_USERNAME: ' u@x.com ',
+    NIO_FABRIC_PASSWORD: 'pw',
   } as NodeJS.ProcessEnv;
-  expect(readFabricAuthEnv(env)).toEqual({ tenantId: 't', clientId: 'c', clientSecret: 's', username: 'u@x.com', password: 'pw' });
+  expect(readFabricAuthEnv(env)).toEqual({
+    tenantId: 't',
+    clientId: 'c',
+    clientSecret: 's',
+    username: 'u@x.com',
+    password: 'pw',
+  });
 });
 
 test('fabricGrant: usuário vence SP; SP quando só há secret; null sem credencial', () => {
@@ -25,7 +45,10 @@ test('fabricGrant: usuário vence SP; SP quando só há secret; null sem credenc
 
 test('get: sem credencial → unconfigured, sem tocar a rede', async () => {
   let called = false;
-  const p = createTokenProvider({}, (async () => { called = true; return jsonRes({}); }) as unknown as typeof fetch);
+  const p = createTokenProvider({}, (async () => {
+    called = true;
+    return jsonRes({});
+  }) as unknown as typeof fetch);
   expect((await p.get()).status).toBe('unconfigured');
   expect(called).toBe(false);
 });
@@ -60,20 +83,28 @@ test('get (usuário/ROPC): grant password com username, respeita RLS', async () 
 });
 
 test('get: 401 → unauthorized', async () => {
-  const p = createTokenProvider(SP, (async () => jsonRes({ error: 'invalid_client' }, 401)) as unknown as typeof fetch);
+  const p = createTokenProvider(SP, (async () =>
+    jsonRes({ error: 'invalid_client' }, 401)) as unknown as typeof fetch);
   expect((await p.get()).status).toBe('unauthorized');
 });
 
 test('get: exceção de rede → unavailable', async () => {
-  const p = createTokenProvider(SP, (async () => { throw new Error('ECONNREFUSED'); }) as unknown as typeof fetch);
+  const p = createTokenProvider(SP, (async () => {
+    throw new Error('ECONNREFUSED');
+  }) as unknown as typeof fetch);
   const out = await p.get();
   expect(out.status).toBe('unavailable');
   expect(out.error).toContain('ECONNREFUSED');
 });
 
 test('get (ROPC): MFA/Conditional Access (AADSTS50076) → unauthorized com dica de usar SP', async () => {
-  const body = { error: 'invalid_grant', error_description: 'AADSTS50076: Due to a configuration change made by the admin, the user must use multi-factor authentication.' };
-  const out = await createTokenProvider(USER, (async () => jsonRes(body, 400)) as unknown as typeof fetch).get();
+  const body = {
+    error: 'invalid_grant',
+    error_description:
+      'AADSTS50076: Due to a configuration change made by the admin, the user must use multi-factor authentication.',
+  };
+  const out = await createTokenProvider(USER, (async () =>
+    jsonRes(body, 400)) as unknown as typeof fetch).get();
   expect(out.status).toBe('unauthorized');
   expect(out.error).toContain('AADSTS50076');
   expect(out.error).toContain('MFA');
@@ -81,8 +112,12 @@ test('get (ROPC): MFA/Conditional Access (AADSTS50076) → unauthorized com dica
 });
 
 test('get (SP): secret expirado (AADSTS7000222) → diz EXPIRADO, não "senha errada"', async () => {
-  const body = { error: 'invalid_client', error_description: 'AADSTS7000222: The provided client secret keys for app are expired.' };
-  const out = await createTokenProvider(SP, (async () => jsonRes(body, 401)) as unknown as typeof fetch).get();
+  const body = {
+    error: 'invalid_client',
+    error_description: 'AADSTS7000222: The provided client secret keys for app are expired.',
+  };
+  const out = await createTokenProvider(SP, (async () =>
+    jsonRes(body, 401)) as unknown as typeof fetch).get();
   expect(out.status).toBe('unauthorized');
   expect(out.error).toContain('EXPIRADO');
   expect(out.error).toContain('AZURE_CLIENT_SECRET');
@@ -111,7 +146,10 @@ test('retryAfterSeconds: número, data HTTP e ausente', () => {
 
 test('invalidate: descarta o cache e o próximo get vai à rede', async () => {
   let calls = 0;
-  const p = createTokenProvider(SP, (async () => { calls++; return jsonRes({ access_token: `t${calls}`, expires_in: 3600 }); }) as unknown as typeof fetch);
+  const p = createTokenProvider(SP, (async () => {
+    calls++;
+    return jsonRes({ access_token: `t${calls}`, expires_in: 3600 });
+  }) as unknown as typeof fetch);
   expect((await p.get()).token).toBe('t1');
   p.invalidate?.();
   expect((await p.get()).token).toBe('t2');

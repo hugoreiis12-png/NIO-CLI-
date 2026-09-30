@@ -81,7 +81,11 @@ export function parseVerdict(text: string): { needsSpec: boolean; reason: string
   return { needsSpec, reason };
 }
 
-async function apiValidate(prompt: string, project: string, echo: boolean): Promise<ValidateResult> {
+async function apiValidate(
+  prompt: string,
+  project: string,
+  echo: boolean,
+): Promise<ValidateResult> {
   try {
     const out = await qwenComplete(prompt);
     if (echo) process.stderr.write(out);

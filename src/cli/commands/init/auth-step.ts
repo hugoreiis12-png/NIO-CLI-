@@ -15,8 +15,7 @@ import { box, c, sym, cmd } from "../../../lib/colors.js";
  */
 export async function requireLocalSessionStep(): Promise<StoredSession> {
   const session = await loadSession();
-  if (!session)
-    return needAuthBox("Você ainda não está autenticado.", { suggestRegister: true });
+  if (!session) return needAuthBox("Você ainda não está autenticado.", { suggestRegister: true });
 
   if (Number.isFinite(Date.parse(session.expiresAt)) && new Date(session.expiresAt) <= new Date()) {
     return needAuthBox("Sua sessão local expirou.");
@@ -42,7 +41,9 @@ function needAuthBox(reason: string, opts: { suggestRegister?: boolean } = {}): 
   console.log(
     box(
       `${c.yellow(sym.warn)} ${c.bold(reason)}\n` +
-        (opts.suggestRegister ? `${c.dim("crie um usuário:")} ${cmd(`${brand.name} register`)}\n` : "") +
+        (opts.suggestRegister
+          ? `${c.dim("crie um usuário:")} ${cmd(`${brand.name} register`)}\n`
+          : "") +
         `${c.dim("entre de novo:")} ${cmd(`${brand.name} login`)}\n` +
         `${c.dim("ou seja conduzido:")} ${cmd(`${brand.name} start`)}`,
       { borderColor: "yellow", title: "Autenticação necessária" },

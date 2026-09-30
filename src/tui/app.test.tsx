@@ -7,25 +7,39 @@ import { buildProgram } from '../cli/program.js';
 import type { OpencodeHandle } from './opencode.js';
 
 /** Handle fake — session.create resolve, event stream não emite nada por padrão. */
-function fakeHandle(over: { onPrompt?: (body: unknown) => void; onAbort?: () => void; agents?: unknown[] } = {}): OpencodeHandle {
+function fakeHandle(
+  over: { onPrompt?: (body: unknown) => void; onAbort?: () => void; agents?: unknown[] } = {},
+): OpencodeHandle {
   const client = {
     session: {
       create: async () => ({ data: { id: 'ses_fake' } }),
-      abort: async () => { over.onAbort?.(); return {}; },
+      abort: async () => {
+        over.onAbort?.();
+        return {};
+      },
       prompt: async (opts: { body?: unknown }) => {
         over.onPrompt?.(opts.body);
         return {};
       },
     },
     app: {
-      agents: async () => ({ data: over.agents ?? [{ name: 'build', mode: 'primary' }, { name: 'plan', mode: 'primary' }] }),
+      agents: async () => ({
+        data: over.agents ?? [
+          { name: 'build', mode: 'primary' },
+          { name: 'plan', mode: 'primary' },
+        ],
+      }),
     },
     event: {
       subscribe: async () => ({ stream: (async function* () {})() }),
     },
     postSessionIdPermissionsPermissionId: async () => ({}),
   };
-  return { client: client as unknown as OpencodeHandle['client'], url: 'http://127.0.0.1:4096', close: () => {} };
+  return {
+    client: client as unknown as OpencodeHandle['client'],
+    url: 'http://127.0.0.1:4096',
+    close: () => {},
+  };
 }
 
 test('App: pula o splash → mostra o input e o rodapé (sem sidebar — Sprint 4)', async () => {
@@ -51,8 +65,14 @@ test('App: pula o splash → mostra o input e o rodapé (sem sidebar — Sprint 
 test('App: Tab cicla o modo do agente e o prompt vai com o `agent` escolhido — Sprint 5', async () => {
   let sentBody: Record<string, unknown> | undefined;
   const h = fakeHandle({
-    onPrompt: (b) => { sentBody = b as Record<string, unknown>; },
-    agents: [{ name: 'build', mode: 'primary' }, { name: 'plan', mode: 'primary' }, { name: 'reviewer', mode: 'subagent' }],
+    onPrompt: (b) => {
+      sentBody = b as Record<string, unknown>;
+    },
+    agents: [
+      { name: 'build', mode: 'primary' },
+      { name: 'plan', mode: 'primary' },
+      { name: 'reviewer', mode: 'subagent' },
+    ],
   });
   const { lastFrame, stdin, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
@@ -81,7 +101,13 @@ test('App: Tab cicla o modo do agente e o prompt vai com o `agent` escolhido —
 
 test('App: splash mostra o wordmark do operador', () => {
   const { lastFrame, unmount } = render(
-    <App handle={fakeHandle()} program={buildProgram()} cwd="/tmp/p" session={null} splashMs={5000} />,
+    <App
+      handle={fakeHandle()}
+      program={buildProgram()}
+      cwd="/tmp/p"
+      session={null}
+      splashMs={5000}
+    />,
   );
   expect(lastFrame() ?? '').toContain('operador NIO');
   unmount();
@@ -95,15 +121,19 @@ test('App: rascunho do input sobrevive a um overlay (permissão) — Sprint 6', 
     yield {
       type: 'permission.asked',
       properties: {
-        id: 'perm1', sessionID: 'ses_fake', permission: 'bash',
-        patterns: ['rm -rf build'], metadata: { command: 'rm -rf build' },
+        id: 'perm1',
+        sessionID: 'ses_fake',
+        permission: 'bash',
+        patterns: ['rm -rf build'],
+        metadata: { command: 'rm -rf build' },
       },
     };
     await new Promise((r) => setTimeout(r, 200));
   })();
   const h = fakeHandle();
-  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe =
-    async () => ({ stream });
+  (
+    h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }
+  ).event.subscribe = async () => ({ stream });
 
   const { lastFrame, stdin, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
@@ -130,12 +160,16 @@ test('App: Ctrl-R alterna o raciocínio colapsado ⇄ expandido — Sprint 3', a
   const stream = (async function* () {
     yield { type: 'session.status', properties: { status: { type: 'busy' } } };
     yield { type: 'message.updated', properties: { info: { id: 'm1', role: 'assistant' } } };
-    yield { type: 'message.part.updated', properties: { part: { type: 'reasoning', text: reason, messageID: 'm1', id: 'r1' } } };
+    yield {
+      type: 'message.part.updated',
+      properties: { part: { type: 'reasoning', text: reason, messageID: 'm1', id: 'r1' } },
+    };
     await new Promise((r) => setTimeout(r, 400));
   })();
   const h = fakeHandle();
-  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe =
-    async () => ({ stream });
+  (
+    h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }
+  ).event.subscribe = async () => ({ stream });
 
   const { lastFrame, stdin, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
@@ -143,11 +177,15 @@ test('App: Ctrl-R alterna o raciocínio colapsado ⇄ expandido — Sprint 3', a
   await new Promise((r) => setTimeout(r, 40));
 
   expect(lastFrame() ?? '').toContain('Ctrl-R'); // colapsado, com a dica
-  const collapsedLines = (lastFrame() ?? '').split('\n').filter((l) => l.includes('linha de raciocínio')).length;
+  const collapsedLines = (lastFrame() ?? '')
+    .split('\n')
+    .filter((l) => l.includes('linha de raciocínio')).length;
 
   stdin.write('\x12'); // Ctrl-R
   await new Promise((r) => setTimeout(r, 40));
-  const expandedLines = (lastFrame() ?? '').split('\n').filter((l) => l.includes('linha de raciocínio')).length;
+  const expandedLines = (lastFrame() ?? '')
+    .split('\n')
+    .filter((l) => l.includes('linha de raciocínio')).length;
   expect(expandedLines).toBeGreaterThan(collapsedLines);
   expect(lastFrame() ?? '').toContain('✻ raciocínio');
   unmount();
@@ -156,12 +194,20 @@ test('App: Ctrl-R alterna o raciocínio colapsado ⇄ expandido — Sprint 3', a
 test('Sprint — emenda de compactação (mode:compaction) sem prompt do usuário → aborta e fica idle', async () => {
   let aborted = 0;
   const stream = (async function* () {
-    yield { type: 'message.updated', properties: { info: { id: 'm_c', role: 'assistant', mode: 'compaction', summary: true } } };
+    yield {
+      type: 'message.updated',
+      properties: { info: { id: 'm_c', role: 'assistant', mode: 'compaction', summary: true } },
+    };
     await new Promise((r) => setTimeout(r, 200));
   })();
-  const h = fakeHandle({ onAbort: () => { aborted++; } });
-  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe =
-    async () => ({ stream });
+  const h = fakeHandle({
+    onAbort: () => {
+      aborted++;
+    },
+  });
+  (
+    h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }
+  ).event.subscribe = async () => ({ stream });
   const { lastFrame, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
   );
@@ -179,18 +225,35 @@ test('App: batch de 3 permissões → modal 1/3 → 2/3 → 3/3, cada resposta f
     for (const id of ['pA', 'pB', 'pC']) {
       yield {
         type: 'permission.asked',
-        properties: { id, sessionID: 'ses_fake', permission: 'bash', metadata: { command: `echo ${id}` } },
+        properties: {
+          id,
+          sessionID: 'ses_fake',
+          permission: 'bash',
+          metadata: { command: `echo ${id}` },
+        },
       };
     }
     await new Promise((r) => setTimeout(r, 400));
   })();
   const h = fakeHandle();
-  (h.client as unknown as {
-    event: { subscribe: () => Promise<{ stream: AsyncGenerator }> };
-    postSessionIdPermissionsPermissionId: (o: { path: { permissionID: string } }) => Promise<unknown>;
-  }).event.subscribe = async () => ({ stream });
-  (h.client as unknown as { postSessionIdPermissionsPermissionId: (o: { path: { permissionID: string } }) => Promise<unknown> }).postSessionIdPermissionsPermissionId =
-    async (o) => { posted.push(o.path.permissionID); return {}; };
+  (
+    h.client as unknown as {
+      event: { subscribe: () => Promise<{ stream: AsyncGenerator }> };
+      postSessionIdPermissionsPermissionId: (o: {
+        path: { permissionID: string };
+      }) => Promise<unknown>;
+    }
+  ).event.subscribe = async () => ({ stream });
+  (
+    h.client as unknown as {
+      postSessionIdPermissionsPermissionId: (o: {
+        path: { permissionID: string };
+      }) => Promise<unknown>;
+    }
+  ).postSessionIdPermissionsPermissionId = async (o) => {
+    posted.push(o.path.permissionID);
+    return {};
+  };
 
   const { lastFrame, stdin, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
@@ -217,9 +280,15 @@ test('App: batch de 3 permissões → modal 1/3 → 2/3 → 3/3, cada resposta f
 
 test('App: eventos tui.* — toast, prompt.append, command.execute (Sprint 7.2)', async () => {
   const gate = { resume: () => {} };
-  const wait = () => new Promise<void>((r) => { gate.resume = r; });
+  const wait = () =>
+    new Promise<void>((r) => {
+      gate.resume = r;
+    });
   const stream = (async function* () {
-    yield { type: 'tui.toast.show', properties: { message: 'skill carregada', variant: 'success', duration: 9999 } };
+    yield {
+      type: 'tui.toast.show',
+      properties: { message: 'skill carregada', variant: 'success', duration: 9999 },
+    };
     await wait();
     yield { type: 'tui.prompt.append', properties: { text: 'nio deps check' } };
     await wait();
@@ -229,10 +298,14 @@ test('App: eventos tui.* — toast, prompt.append, command.execute (Sprint 7.2)'
     await new Promise((r) => setTimeout(r, 500));
   })();
   const h = fakeHandle({
-    agents: [{ name: 'build', mode: 'primary' }, { name: 'plan', mode: 'primary' }],
+    agents: [
+      { name: 'build', mode: 'primary' },
+      { name: 'plan', mode: 'primary' },
+    ],
   });
-  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe =
-    async () => ({ stream });
+  (
+    h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }
+  ).event.subscribe = async () => ({ stream });
 
   const { lastFrame, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
@@ -255,13 +328,28 @@ test('App: pergunta com opções → menu navegável; ↓+Enter manda a opção 
   const stream = (async function* () {
     yield { type: 'session.status', properties: { status: { type: 'busy' } } };
     yield { type: 'message.updated', properties: { info: { id: 'm1', role: 'assistant' } } };
-    yield { type: 'message.part.updated', properties: { part: { type: 'text', text: 'Por onde começo?\n1. Pelo core\n2. Pelos adapters\n3. Pelos testes', messageID: 'm1', id: 't1' } } };
+    yield {
+      type: 'message.part.updated',
+      properties: {
+        part: {
+          type: 'text',
+          text: 'Por onde começo?\n1. Pelo core\n2. Pelos adapters\n3. Pelos testes',
+          messageID: 'm1',
+          id: 't1',
+        },
+      },
+    };
     yield { type: 'session.idle', properties: { sessionID: 'ses_fake' } };
     await new Promise((r) => setTimeout(r, 300));
   })();
-  const h = fakeHandle({ onPrompt: (b) => { sent = (b as { parts: { text: string }[] }).parts[0].text; } });
-  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe =
-    async () => ({ stream });
+  const h = fakeHandle({
+    onPrompt: (b) => {
+      sent = (b as { parts: { text: string }[] }).parts[0].text;
+    },
+  });
+  (
+    h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }
+  ).event.subscribe = async () => ({ stream });
 
   const { lastFrame, stdin, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
@@ -300,8 +388,9 @@ test('App: session.diff → resumo "✎ N arquivo(s)" (Sprint 7.8)', async () =>
     await new Promise((r) => setTimeout(r, 200));
   })();
   const h = fakeHandle();
-  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe =
-    async () => ({ stream });
+  (
+    h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }
+  ).event.subscribe = async () => ({ stream });
 
   const { lastFrame, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
@@ -318,14 +407,25 @@ test('App: nio termina com pergunta → cue "↳ o nio perguntou" acima do input
   const stream = (async function* () {
     yield { type: 'session.status', properties: { status: { type: 'busy' } } };
     yield { type: 'message.updated', properties: { info: { id: 'm1', role: 'assistant' } } };
-    yield { type: 'message.part.updated', properties: { part: { type: 'text', text: 'Analisei o projeto.\nQuer que eu comece pelo core ou pelos adapters?', messageID: 'm1', id: 't1' } } };
+    yield {
+      type: 'message.part.updated',
+      properties: {
+        part: {
+          type: 'text',
+          text: 'Analisei o projeto.\nQuer que eu comece pelo core ou pelos adapters?',
+          messageID: 'm1',
+          id: 't1',
+        },
+      },
+    };
     await new Promise((r) => setTimeout(r, 20));
     yield { type: 'session.idle', properties: { sessionID: 'ses_fake' } };
     await new Promise((r) => setTimeout(r, 200));
   })();
   const h = fakeHandle();
-  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe =
-    async () => ({ stream });
+  (
+    h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }
+  ).event.subscribe = async () => ({ stream });
 
   const { lastFrame, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
@@ -344,13 +444,16 @@ test('App: session.error → bloco vermelho, input segue vivo (Sprint 7.3)', asy
     await new Promise((r) => setTimeout(r, 30));
     yield {
       type: 'session.error',
-      properties: { error: { name: 'APIError', data: { message: '429 rate limited', isRetryable: true } } },
+      properties: {
+        error: { name: 'APIError', data: { message: '429 rate limited', isRetryable: true } },
+      },
     };
     await new Promise((r) => setTimeout(r, 200));
   })();
   const h = fakeHandle();
-  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe =
-    async () => ({ stream });
+  (
+    h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }
+  ).event.subscribe = async () => ({ stream });
 
   const { lastFrame, stdin, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
@@ -375,12 +478,17 @@ test('App: resposta gigante em andamento NÃO estoura o frame (Static + LiveMess
     let acc = '';
     for (let i = 0; i < 80; i++) {
       acc += `raciocínio linha ${i}\n`;
-      yield { type: 'message.part.updated', properties: { part: { type: 'text', text: acc, messageID: 'msg_a', id: 'prt_t' } } };
+      yield {
+        type: 'message.part.updated',
+        properties: { part: { type: 'text', text: acc, messageID: 'msg_a', id: 'prt_t' } },
+      };
     }
     await new Promise((r) => setTimeout(r, 200));
   })();
   const h = fakeHandle();
-  (h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }).event.subscribe = async () => ({ stream: bigStream });
+  (
+    h.client as unknown as { event: { subscribe: () => Promise<{ stream: AsyncGenerator }> } }
+  ).event.subscribe = async () => ({ stream: bigStream });
 
   const { lastFrame, unmount } = render(
     <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
@@ -398,9 +506,15 @@ function handleComStream(eventos: unknown[]) {
   const client = {
     session: {
       create: async () => ({ data: { id: 'ses_fake' } }),
-      abort: async () => { espiao.aborts += 1; return {}; },
+      abort: async () => {
+        espiao.aborts += 1;
+        return {};
+      },
       prompt: async () => ({}),
-      summarize: async () => { espiao.summarizes += 1; return {}; },
+      summarize: async () => {
+        espiao.summarizes += 1;
+        return {};
+      },
       status: async () => ({ data: {} }),
       messages: async () => ({ data: [] }),
       delete: async () => ({}),
@@ -410,14 +524,21 @@ function handleComStream(eventos: unknown[]) {
       subscribe: async () => ({
         stream: (async function* () {
           await new Promise((r) => setTimeout(r, 30));
-          for (const e of eventos) { yield e; await new Promise((r) => setTimeout(r, 10)); }
+          for (const e of eventos) {
+            yield e;
+            await new Promise((r) => setTimeout(r, 10));
+          }
           await new Promise((r) => setTimeout(r, 400));
         })(),
       }),
     },
     postSessionIdPermissionsPermissionId: async () => ({}),
   };
-  const handle = { client: client as unknown as OpencodeHandle['client'], url: 'http://127.0.0.1:4096', close: () => {} };
+  const handle = {
+    client: client as unknown as OpencodeHandle['client'],
+    url: 'http://127.0.0.1:4096',
+    close: () => {},
+  };
   return { handle, espiao };
 }
 

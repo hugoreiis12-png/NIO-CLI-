@@ -40,15 +40,18 @@ function pwshQuote(v: string): string {
 function renderSh(input: DotfilesInput): string {
   const lines: string[] = [];
   for (const [k, v] of Object.entries(input.envVars ?? {})) lines.push(`export ${k}=${shQuote(v)}`);
-  for (const [name, cmd] of Object.entries(input.aliases ?? {})) lines.push(`alias ${name}=${shQuote(cmd)}`);
+  for (const [name, cmd] of Object.entries(input.aliases ?? {}))
+    lines.push(`alias ${name}=${shQuote(cmd)}`);
   return lines.join('\n');
 }
 
 function renderPwsh(input: DotfilesInput): string {
   const lines: string[] = [];
-  for (const [k, v] of Object.entries(input.envVars ?? {})) lines.push(`$env:${k} = ${pwshQuote(v)}`);
+  for (const [k, v] of Object.entries(input.envVars ?? {}))
+    lines.push(`$env:${k} = ${pwshQuote(v)}`);
   // PowerShell não tem alias com args — vira função que repassa `@args`.
-  for (const [name, cmd] of Object.entries(input.aliases ?? {})) lines.push(`function ${name} { ${cmd} @args }`);
+  for (const [name, cmd] of Object.entries(input.aliases ?? {}))
+    lines.push(`function ${name} { ${cmd} @args }`);
   return lines.join('\n');
 }
 

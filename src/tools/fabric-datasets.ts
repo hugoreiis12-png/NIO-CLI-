@@ -16,7 +16,10 @@ export const definition: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      workspace_id: { type: 'string', description: 'GUID do workspace (groupId). Default: NIO_FABRIC_WORKSPACE.' },
+      workspace_id: {
+        type: 'string',
+        description: 'GUID do workspace (groupId). Default: NIO_FABRIC_WORKSPACE.',
+      },
     },
     additionalProperties: false,
   },

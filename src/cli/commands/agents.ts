@@ -19,7 +19,9 @@ export function runAgents(): void {
   }
 
   if (agents.length === 0) {
-    console.log(`Nenhum agente disponível. Rode ${c.cyan(`${brand.name} sync`)} pra atualizar o cache.`);
+    console.log(
+      `Nenhum agente disponível. Rode ${c.cyan(`${brand.name} sync`)} pra atualizar o cache.`,
+    );
     return;
   }
 

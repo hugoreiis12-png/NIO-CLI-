@@ -29,7 +29,10 @@ describe('register', () => {
 
   test('nome vazio → invalid_name', async () => {
     const { users } = fakeUsers();
-    expect(await register('   ', 'senha-forte-1', { users })).toEqual({ ok: false, reason: 'invalid_name' });
+    expect(await register('   ', 'senha-forte-1', { users })).toEqual({
+      ok: false,
+      reason: 'invalid_name',
+    });
   });
 
   test('nome > 64 chars → invalid_name', async () => {
@@ -42,13 +45,19 @@ describe('register', () => {
 
   test('senha curta → weak_password', async () => {
     const { users, created } = fakeUsers();
-    expect(await register('Ana', 'curta', { users })).toEqual({ ok: false, reason: 'weak_password' });
+    expect(await register('Ana', 'curta', { users })).toEqual({
+      ok: false,
+      reason: 'weak_password',
+    });
     expect(created).toEqual([]);
   });
 
   test('nome já em uso → name_taken', async () => {
     const { users } = fakeUsers(['Ana']);
-    expect(await register('Ana', 'senha-forte-1', { users })).toEqual({ ok: false, reason: 'name_taken' });
+    expect(await register('Ana', 'senha-forte-1', { users })).toEqual({
+      ok: false,
+      reason: 'name_taken',
+    });
   });
 
   test('senha comum (lista local) → cria com passwordWarning, não bloqueia', async () => {

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import "./lib/load-env.js";
-import { DEBUG } from "./lib/debug.js";
-import { animateMatrixLogo } from "./matrix-logo.js";
-import { notifyCliIfUpdate } from "./lib/version-check.js";
-import { buildProgramFor } from "./cli/program-lazy.js";
-import { closeDbIfOpen, shutdown } from "./lib/shutdown.js";
+import './lib/load-env.js';
+import { DEBUG } from './lib/debug.js';
+import { animateMatrixLogo } from './matrix-logo.js';
+import { notifyCliIfUpdate } from './lib/version-check.js';
+import { buildProgramFor } from './cli/program-lazy.js';
+import { closeDbIfOpen, shutdown } from './lib/shutdown.js';
 
 /** Banner de update: só em TTY (humano), DEPOIS do output — fora do caminho quente. */
 const maybeNotify = (): Promise<void> =>
@@ -17,9 +17,7 @@ const maybeNotify = (): Promise<void> =>
  * nem quebra o start.
  */
 const warmSkills = (): void => {
-  void import("./lib/skills/skills-cache.js")
-    .then((m) => m.ensureSkillsCache())
-    .catch(() => {});
+  void import('./lib/skills/skills-cache.js').then((m) => m.ensureSkillsCache()).catch(() => {});
 };
 
 /** `--help` toca a animação antes; se já rolou, o `beforeAll` não redesenha. */
@@ -27,22 +25,25 @@ let logoShown = false;
 
 const fail = async (err: unknown): Promise<void> => {
   if (DEBUG) console.error(err);
-  else console.error(`Erro: ${(err as Error).message}\n(rode com NIO_DEBUG=1 pro stack trace completo)`);
+  else
+    console.error(
+      `Erro: ${(err as Error).message}\n(rode com NIO_DEBUG=1 pro stack trace completo)`,
+    );
   await shutdown(1);
 };
 
 const args = process.argv.slice(2);
 const bare = args.length === 0;
 const topHelp =
-  bare || (args.length === 1 && (args[0] === "-h" || args[0] === "--help" || args[0] === "help"));
+  bare || (args.length === 1 && (args[0] === '-h' || args[0] === '--help' || args[0] === 'help'));
 
 if (bare && process.stdout.isTTY && process.stdin.isTTY) {
   // `nio` sozinho num terminal → a esteira guiada (não o help).
   warmSkills(); // background, paralelo à esteira — não bloqueia
   // Import aqui, não no topo: a esteira custa 45 ms e só este ramo a usa —
   // `nio --version` e `nio <comando>` não devem pagar por ela.
-  import("./cli/flows/onboarding.js")
-    .then((m) => m.continueChain({ from: "cold" }))
+  import('./cli/flows/onboarding.js')
+    .then((m) => m.continueChain({ from: 'cold' }))
     .then(closeDbIfOpen)
     .then(maybeNotify)
     .catch(fail);

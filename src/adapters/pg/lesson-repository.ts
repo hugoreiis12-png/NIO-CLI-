@@ -5,12 +5,7 @@
  * Fica no banco **compartilhado** de propósito — a lição de um colaborador vale para o
  * time. É a vantagem de ser ferramenta de equipe, e não agente pessoal de uma máquina.
  */
-import type {
-  LearningResult,
-  Lesson,
-  LessonStore,
-  ScoredLesson,
-} from '../../core/learning.js';
+import type { LearningResult, Lesson, LessonStore, ScoredLesson } from '../../core/learning.js';
 import { EMBEDDING_DIMS } from '../../core/rag.js';
 import { query } from './client.js';
 

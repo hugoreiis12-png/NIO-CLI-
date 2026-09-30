@@ -94,7 +94,10 @@ test('ACEITE: reserva de tabelas garante COLUNAS no contexto, mesmo com o top-k 
   const medidas = Array.from({ length: 5 }, (_, i) =>
     chunk(`medida/M${i}`, `Medida: ${2020 + i}_QTDE | Tabela: VISAO_COMERCIAL`),
   );
-  const tabela = chunk('tabela/VISAO_COMERCIAL', 'Tabela: VISAO_COMERCIAL | Colunas: data_lancamento (Date)');
+  const tabela = chunk(
+    'tabela/VISAO_COMERCIAL',
+    'Tabela: VISAO_COMERCIAL | Colunas: data_lancamento (Date)',
+  );
 
   const search = createSchemaSearch(
     {
@@ -177,7 +180,9 @@ test('chunk gigante é truncado (tabela larga não sequestra o prompt)', async (
 });
 
 test('orçamento total corta os excedentes, mas o inventário sempre entra', async () => {
-  const hits = Array.from({ length: 10 }, (_, i) => chunk(`medida/M${i}`, 'Medida: ' + 'Y'.repeat(300)));
+  const hits = Array.from({ length: 10 }, (_, i) =>
+    chunk(`medida/M${i}`, 'Medida: ' + 'Y'.repeat(300)),
+  );
   const search = createSchemaSearch(
     {
       index: makeIndex(hits),

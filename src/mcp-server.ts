@@ -38,7 +38,9 @@ function loadConfigStep(): ProjectConfig | null {
   try {
     return loadProjectConfig();
   } catch (err) {
-    console.error(`[${brand.mcpBinName}] ${brand.projectConfigFile} inválido: ${(err as Error).message}`);
+    console.error(
+      `[${brand.mcpBinName}] ${brand.projectConfigFile} inválido: ${(err as Error).message}`,
+    );
     return null;
   }
 }
@@ -81,18 +83,24 @@ async function authenticateSession(): Promise<UserCli | null> {
   try {
     const result = await authenticate(`Bearer ${stored.token}`);
     if (!result.ok) {
-      console.error(`[${brand.mcpBinName}] aviso: sessão inválida (${result.reason}). Rode \`${brand.name} login\` de novo.`);
+      console.error(
+        `[${brand.mcpBinName}] aviso: sessão inválida (${result.reason}). Rode \`${brand.name} login\` de novo.`,
+      );
       return null;
     }
     const user = await createUserRepository().findById(result.userId);
     if (!user) {
-      console.error(`[${brand.mcpBinName}] aviso: usuário da sessão não existe mais. Rode \`${brand.name} login\` de novo.`);
+      console.error(
+        `[${brand.mcpBinName}] aviso: usuário da sessão não existe mais. Rode \`${brand.name} login\` de novo.`,
+      );
       return null;
     }
     console.error(`[${brand.mcpBinName}] autenticado como ${user.name}`);
     return user;
   } catch (err) {
-    console.error(`[${brand.mcpBinName}] aviso: banco indisponível p/ validar sessão: ${(err as Error).message}`);
+    console.error(
+      `[${brand.mcpBinName}] aviso: banco indisponível p/ validar sessão: ${(err as Error).message}`,
+    );
     return null;
   }
 }
@@ -166,7 +174,9 @@ function registerPromptHandlers(server: Server, surface: string | null): void {
       const { docs } = loadSkills();
       return { prompts: skillPromptDescriptors(filterSkillsForSurface(docs, surface)) };
     } catch (err) {
-      console.error(`[${brand.mcpBinName}] aviso: prompts indisponíveis: ${(err as Error).message}`);
+      console.error(
+        `[${brand.mcpBinName}] aviso: prompts indisponíveis: ${(err as Error).message}`,
+      );
       return { prompts: [] };
     }
   });

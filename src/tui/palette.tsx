@@ -9,13 +9,21 @@ import { theme, sym } from './theme.js';
 import { permGroupLabel, type PermissionReq, type QuestionReq } from './state.js';
 import type { PaletteItem } from './palette-source.js';
 
-export function InfoPanel({ item, onClose }: { item: PaletteItem; onClose: () => void }): React.ReactElement {
+export function InfoPanel({
+  item,
+  onClose,
+}: {
+  item: PaletteItem;
+  onClose: () => void;
+}): React.ReactElement {
   useInput((_i, key) => {
     if (key.escape || key.return) onClose();
   });
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={theme.accent} paddingX={1}>
-      <Text bold color={theme.accentBright}>{item.name}</Text>
+      <Text bold color={theme.accentBright}>
+        {item.name}
+      </Text>
       <Text>{item.desc}</Text>
       {item.kind === 'command' && (
         <Box marginTop={1}>
@@ -23,7 +31,11 @@ export function InfoPanel({ item, onClose }: { item: PaletteItem; onClose: () =>
           <Text color={theme.accent}>{item.line}</Text>
         </Box>
       )}
-      {item.kind === 'help' && <Box marginTop={1}><Text>{item.body}</Text></Box>}
+      {item.kind === 'help' && (
+        <Box marginTop={1}>
+          <Text>{item.body}</Text>
+        </Box>
+      )}
       <Text color={theme.dim}>Esc fecha</Text>
     </Box>
   );
@@ -49,7 +61,10 @@ export function CommandRunner({
     child.stdout?.on('data', (d) => setOut((o) => (o + d).slice(-4000)));
     child.stderr?.on('data', (d) => setOut((o) => (o + d).slice(-4000)));
     child.on('exit', (code) => setDone(code ?? 1));
-    child.on('error', (e) => { setOut((o) => o + '\n' + e.message); setDone(127); });
+    child.on('error', (e) => {
+      setOut((o) => o + '\n' + e.message);
+      setDone(127);
+    });
     return () => {
       child.kill();
     };
@@ -67,7 +82,9 @@ export function CommandRunner({
   if (!confirmed) {
     return (
       <Box borderStyle="round" borderColor={theme.warn} paddingX={1}>
-        <Text color={theme.warn}>{sym.warn} `{item.line}` pode alterar/apagar coisas. Rodar? [s/N]</Text>
+        <Text color={theme.warn}>
+          {sym.warn} `{item.line}` pode alterar/apagar coisas. Rodar? [s/N]
+        </Text>
       </Box>
     );
   }

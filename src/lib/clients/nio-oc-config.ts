@@ -188,7 +188,9 @@ export function buildNioOpencodeConfig(
     ) as { provider: unknown }
   ).provider;
   // A instrução do NIO entra por ÚLTIMO — última palavra do sistema (pt-BR vence o herdado).
-  const inheritedInstr = Array.isArray(global.instructions) ? (global.instructions as string[]) : [];
+  const inheritedInstr = Array.isArray(global.instructions)
+    ? (global.instructions as string[])
+    : [];
   // Caminho que não existe é instrução que NÃO chega ao modelo — e some em silêncio.
   // Medido em prod: o global apontava um ARCHITECT.md de um checkout antigo, então o
   // grounding de BI que se acreditava ativo nunca foi carregado.

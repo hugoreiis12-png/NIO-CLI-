@@ -21,7 +21,11 @@ function randomCode(): string {
 }
 
 /** 10 códigos novos + a string de hashes pronta pro banco + o pepper usado. */
-export async function generateBackupCodes(): Promise<{ codes: string[]; hashes: string; pepperId: number }> {
+export async function generateBackupCodes(): Promise<{
+  codes: string[];
+  hashes: string;
+  pepperId: number;
+}> {
   const codes = Array.from({ length: COUNT }, randomCode);
   const hashed = await Promise.all(codes.map((c) => hashPassword(c)));
   return { codes, hashes: hashed.map((h) => h.phc).join('|'), pepperId: hashed[0]!.pepperId };

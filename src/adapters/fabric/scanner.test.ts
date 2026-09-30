@@ -11,7 +11,9 @@ test('scanDataset: toda chamada HTTP leva timeout (AbortSignal) — nada fica pe
   const fetchImpl = (async (url: string, init: RequestInit) => {
     signals.push(init.signal);
     if (url.includes('getInfo')) return jsonRes({ id: 'job1', status: 'Succeeded' });
-    return jsonRes({ workspaces: [{ datasets: [{ id: 'ds', name: 'D', tables: [{ name: 'T' }] }] }] });
+    return jsonRes({
+      workspaces: [{ datasets: [{ id: 'ds', name: 'D', tables: [{ name: 'T' }] }] }],
+    });
   }) as unknown as typeof fetch;
   const out = await createFabricScanner(okToken, fetchImpl).scanDataset('ws', 'ds');
   expect(out.status).toBe('ok');
@@ -20,7 +22,8 @@ test('scanDataset: toda chamada HTTP leva timeout (AbortSignal) — nada fica pe
 });
 
 test('scanDataset: 429 no getInfo → throttled com Retry-After', async () => {
-  const fetchImpl = (async () => new Response('', { status: 429, headers: { 'Retry-After': '9' } })) as unknown as typeof fetch;
+  const fetchImpl = (async () =>
+    new Response('', { status: 429, headers: { 'Retry-After': '9' } })) as unknown as typeof fetch;
   const out = await createFabricScanner(okToken, fetchImpl).scanDataset('ws', 'ds');
   expect(out.status).toBe('throttled');
   expect(out.error).toContain('aguarde 9s');
@@ -36,7 +39,9 @@ test('scanDataset: 401 no getInfo → unauthorized citando o tenant setting da A
 test('scanDataset: DisabledByAdmin no dataRetrievalState → disabled', async () => {
   const fetchImpl = (async (url: string) => {
     if (url.includes('getInfo')) return jsonRes({ id: 'job1', status: 'Succeeded' });
-    return jsonRes({ workspaces: [{ dataRetrievalState: 'DatasetSchemaDisabledByAdmin', datasets: [] }] });
+    return jsonRes({
+      workspaces: [{ dataRetrievalState: 'DatasetSchemaDisabledByAdmin', datasets: [] }],
+    });
   }) as unknown as typeof fetch;
   const out = await createFabricScanner(okToken, fetchImpl).scanDataset('ws', 'ds');
   expect(out.status).toBe('disabled');

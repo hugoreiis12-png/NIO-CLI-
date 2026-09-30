@@ -27,10 +27,14 @@ export interface ConfigProblem {
 }
 
 type SslMode = 'off' | 'verify' | 'insecure';
-const TLS_CERT_HINT = 'TLS rejeitou o certificado (self-signed?). Escolha "Sem TLS" na LAN, ou informe uma CA em NIO_DATABASE_CA.';
-const TLS_EXPIRED_HINT = 'Certificado do Postgres vencido — renove no servidor (scripts/db-tls-setup.sh server <host>) e rode de novo.';
-const TLS_SERVER_OFF_HINT = 'Servidor sem TLS e cliente forçando TLS — escolha "Sem TLS" (NIO_DATABASE_SSL=false).';
-const TLS_REQUIRED_HINT = 'Servidor exige TLS (hostssl) — "Sem TLS" não conecta aqui. Use "TLS com verificação + CA" ou "insecure" temporário.';
+const TLS_CERT_HINT =
+  'TLS rejeitou o certificado (self-signed?). Escolha "Sem TLS" na LAN, ou informe uma CA em NIO_DATABASE_CA.';
+const TLS_EXPIRED_HINT =
+  'Certificado do Postgres vencido — renove no servidor (scripts/db-tls-setup.sh server <host>) e rode de novo.';
+const TLS_SERVER_OFF_HINT =
+  'Servidor sem TLS e cliente forçando TLS — escolha "Sem TLS" (NIO_DATABASE_SSL=false).';
+const TLS_REQUIRED_HINT =
+  'Servidor exige TLS (hostssl) — "Sem TLS" não conecta aqui. Use "TLS com verificação + CA" ou "insecure" temporário.';
 const CONN_HINT = 'Confira o endereço/credencial e a rede/VPN, e rode de novo.';
 
 export interface PingFailureHelp {
@@ -113,15 +117,27 @@ export function validateConfigShape(env: NodeJS.ProcessEnv): ConfigProblem[] {
   const jwt = env.JWT_SECRET?.trim();
 
   if (!url) {
-    problems.push({ key: 'NIO_DATABASE_URL', issue: 'missing', hint: 'endereço do Postgres da equipe' });
+    problems.push({
+      key: 'NIO_DATABASE_URL',
+      issue: 'missing',
+      hint: 'endereço do Postgres da equipe',
+    });
   } else if (!PG_URL.test(url)) {
-    problems.push({ key: 'NIO_DATABASE_URL', issue: 'invalid', hint: 'precisa começar com postgres://' });
+    problems.push({
+      key: 'NIO_DATABASE_URL',
+      issue: 'invalid',
+      hint: 'precisa começar com postgres://',
+    });
   }
   // `JWT_SECRETS` (rotação por kid, ADR 0011) supre o `JWT_SECRET` — o gateway
   // lança no boot se a lista estiver malformada, então aqui só checamos presença.
   const hasJwtSecrets = Boolean(env.JWT_SECRETS?.trim());
   if (!jwt && !hasJwtSecrets) {
-    problems.push({ key: 'JWT_SECRET', issue: 'missing', hint: 'segredo compartilhado do time (assina o login) — ou use JWT_SECRETS' });
+    problems.push({
+      key: 'JWT_SECRET',
+      issue: 'missing',
+      hint: 'segredo compartilhado do time (assina o login) — ou use JWT_SECRETS',
+    });
   } else if (jwt) {
     const weak = jwtSecretWeakness(jwt);
     if (weak) problems.push({ key: 'JWT_SECRET', issue: 'invalid', hint: weak });
@@ -136,9 +152,18 @@ function maskUrl(url: string): string {
 
 /** Checa a config já carregada em `process.env`, incluindo um `SELECT 1`. `[]` = ok. */
 export async function checkConfig(): Promise<ConfigProblem[]> {
-  dlog('config: NIO_DATABASE_URL =', process.env.NIO_DATABASE_URL ? maskUrl(process.env.NIO_DATABASE_URL) : '(vazio)');
-  dlog('config: JWT_SECRET =', process.env.JWT_SECRET ? `(${process.env.JWT_SECRET.length} chars)` : '(vazio)');
-  dlog('config: NIO_GATEWAY_URL =', process.env.NIO_GATEWAY_URL ?? '(default :3000 = nio-gateway direto)');
+  dlog(
+    'config: NIO_DATABASE_URL =',
+    process.env.NIO_DATABASE_URL ? maskUrl(process.env.NIO_DATABASE_URL) : '(vazio)',
+  );
+  dlog(
+    'config: JWT_SECRET =',
+    process.env.JWT_SECRET ? `(${process.env.JWT_SECRET.length} chars)` : '(vazio)',
+  );
+  dlog(
+    'config: NIO_GATEWAY_URL =',
+    process.env.NIO_GATEWAY_URL ?? '(default :3000 = nio-gateway direto)',
+  );
   const problems = validateConfigShape(process.env);
   if (!problems.some((p) => p.key === 'NIO_DATABASE_URL')) {
     await closePool();
@@ -180,7 +205,9 @@ export async function probeAiBackend(
     const res = await fetch(`${base}/models`, { signal: controller.signal });
     if (!res.ok) return { ok: false, models: [], detail: `HTTP ${res.status}` };
     const data = (await res.json()) as { data?: Array<{ id?: unknown }> };
-    const models = (data.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string');
+    const models = (data.data ?? [])
+      .map((m) => m.id)
+      .filter((id): id is string => typeof id === 'string');
     if (!models.includes(NIO_AI_MODEL_ID)) {
       return {
         ok: false,
@@ -238,7 +265,8 @@ async function promptWizard(): Promise<WizardValues> {
 async function promptJwtSecret(current: string | undefined): Promise<string> {
   if (!current || jwtSecretWeakness(current)) {
     const gen = await confirm({
-      message: 'Gerar um JWT_SECRET novo? (só se o time ainda não tem um — invalida sessões atuais)',
+      message:
+        'Gerar um JWT_SECRET novo? (só se o time ainda não tem um — invalida sessões atuais)',
       default: !current,
     });
     if (gen) {
@@ -327,7 +355,10 @@ function problemsBox(problems: ConfigProblem[]): string {
   return box(
     `${c.yellow(sym.warn)} ${c.bold('Config incompleta ou inválida.')}\n\n` +
       problems
-        .map((p) => `${c.red(sym.err)} ${c.bold(p.key)} ${c.dim('— ' + label[p.issue])}\n   ${c.dim(p.hint)}`)
+        .map(
+          (p) =>
+            `${c.red(sym.err)} ${c.bold(p.key)} ${c.dim('— ' + label[p.issue])}\n   ${c.dim(p.hint)}`,
+        )
         .join('\n') +
       `\n\n${c.dim('Rode')} ${cmd(`${brand.name} config setup`)} ${c.dim('ou crie')} ${cmd(CONFIG_FILE)} ${c.dim('com:')}\n` +
       `   ${c.dim('NIO_DATABASE_URL=postgres://user:senha@host:5432/nio_cli')}\n` +

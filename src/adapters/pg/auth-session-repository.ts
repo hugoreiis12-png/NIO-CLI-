@@ -53,7 +53,9 @@ export function createAuthSessionRepository(): AuthSessionRepository {
 
     async findById(id) {
       if (!isUuid(id)) return null;
-      const res = await query<AuthSessionRow>(`SELECT ${COLS} FROM auth_sessions WHERE id = $1`, [id]);
+      const res = await query<AuthSessionRow>(`SELECT ${COLS} FROM auth_sessions WHERE id = $1`, [
+        id,
+      ]);
       const row = res.rows[0];
       return row ? mapAuthSessionRow(row) : null;
     },

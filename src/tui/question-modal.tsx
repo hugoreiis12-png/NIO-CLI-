@@ -24,7 +24,9 @@ function hints(multi: boolean, custom: boolean, digitando: boolean, semSaida: bo
   if (semSaida) return 'esta pergunta veio sem opções — Esc para cancelar';
   if (digitando) return '↵ enviar o texto · ⌫ apagar · Esc cancelar';
   const base = multi ? '↑↓ mover · Espaço marcar · ↵ enviar' : '↑↓ escolher · ↵ responder';
-  return custom ? `${base} · digite para responder livremente · Esc cancelar` : `${base} · Esc cancelar`;
+  return custom
+    ? `${base} · digite para responder livremente · Esc cancelar`
+    : `${base} · Esc cancelar`;
 }
 
 export function QuestionModal({
@@ -55,7 +57,8 @@ export function QuestionModal({
   /** O que esta pergunta devolve: o texto livre vence as opções. */
   const currentAnswer = (): string[] => {
     if (digitando) return [draft.trim()];
-    if (multi && marks.size > 0) return [...marks].sort((a, b) => a - b).map((i) => opts[i]?.label ?? '');
+    if (multi && marks.size > 0)
+      return [...marks].sort((a, b) => a - b).map((i) => opts[i]?.label ?? '');
     return [opts[sel]?.label ?? ''];
   };
 
@@ -105,7 +108,9 @@ export function QuestionModal({
         {queued > 1 ? <Text color={theme.dim}>{`  (+${queued - 1} na fila)`}</Text> : null}
       </Text>
       {q?.header ? <Text color={theme.dim}>{clip(q.header, 78)}</Text> : null}
-      <Text color={theme.text} wrap="truncate-end">{clip(q?.question ?? '', 78)}</Text>
+      <Text color={theme.text} wrap="truncate-end">
+        {clip(q?.question ?? '', 78)}
+      </Text>
       {opts.map((o, i) => (
         <Text
           key={o.label || i}

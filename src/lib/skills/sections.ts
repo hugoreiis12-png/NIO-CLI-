@@ -109,7 +109,8 @@ export function flattenSelection<T extends { relPath: string }>(docs: T[]): T[] 
     if (kind === 'skills') {
       // `core` tem um nível a menos (não tem role/área/stack) — usar o slice dos
       // outros ramos comeria o nome da skill e colapsaria tudo em `skills/SKILL.md`.
-      const rest = parts[1] === CORE ? parts.slice(2) : parts[2] === GENERAL ? parts.slice(3) : parts.slice(4);
+      const rest =
+        parts[1] === CORE ? parts.slice(2) : parts[2] === GENERAL ? parts.slice(3) : parts.slice(4);
       return { ...d, relPath: `skills/${rest.join('/')}` };
     }
     return d;

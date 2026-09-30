@@ -22,42 +22,100 @@ type Register = (program: Command) => void;
  * cria quatro comandos e `exec` cria dois, o que um grep não mostraria.
  */
 const MODULES: ReadonlyArray<{ names: readonly string[]; load: () => Promise<Register> }> = [
-  { names: ["register", "login", "logout", "whoami"], load: async () => (await import("./commands/auth.js")).registerAuthCommands },
-  { names: ["init"], load: async () => (await import("./commands/init/register.js")).registerInitCommand },
+  {
+    names: ["register", "login", "logout", "whoami"],
+    load: async () => (await import("./commands/auth.js")).registerAuthCommands,
+  },
+  {
+    names: ["init"],
+    load: async () => (await import("./commands/init/register.js")).registerInitCommand,
+  },
   { names: ["sync"], load: async () => (await import("./commands/sync.js")).registerSyncCommand },
-  { names: ["skills"], load: async () => (await import("./commands/skills.js")).registerSkillsCommands },
-  { names: ["exec", "exec-status"], load: async () => (await import("./commands/exec.js")).registerExecCommand },
+  {
+    names: ["skills"],
+    load: async () => (await import("./commands/skills.js")).registerSkillsCommands,
+  },
+  {
+    names: ["exec", "exec-status"],
+    load: async () => (await import("./commands/exec.js")).registerExecCommand,
+  },
   { names: ["plan"], load: async () => (await import("./commands/plan.js")).registerPlanCommand },
-  { names: ["validate-plan"], load: async () => (await import("./commands/validate-plan.js")).registerValidatePlanCommand },
-  { names: ["completion"], load: async () => (await import("./commands/completion.js")).registerCompletionCommand },
+  {
+    names: ["validate-plan"],
+    load: async () => (await import("./commands/validate-plan.js")).registerValidatePlanCommand,
+  },
+  {
+    names: ["completion"],
+    load: async () => (await import("./commands/completion.js")).registerCompletionCommand,
+  },
   { names: ["lang"], load: async () => (await import("./commands/lang.js")).registerLangCommand },
-  { names: ["sessions"], load: async () => (await import("./commands/sessions.js")).registerSessionsCommand },
-  { names: ["command"], load: async () => (await import("./commands/command.js")).registerCommandCommand },
+  {
+    names: ["sessions"],
+    load: async () => (await import("./commands/sessions.js")).registerSessionsCommand,
+  },
+  {
+    names: ["command"],
+    load: async () => (await import("./commands/command.js")).registerCommandCommand,
+  },
   { names: ["deps"], load: async () => (await import("./commands/deps.js")).registerDepsCommand },
-  { names: ["docker"], load: async () => (await import("./commands/docker.js")).registerDockerCommand },
-  { names: ["security"], load: async () => (await import("./commands/security.js")).registerSecurityCommands },
+  {
+    names: ["docker"],
+    load: async () => (await import("./commands/docker.js")).registerDockerCommand,
+  },
+  {
+    names: ["security"],
+    load: async () => (await import("./commands/security.js")).registerSecurityCommands,
+  },
   { names: ["docs"], load: async () => (await import("./commands/docs.js")).registerDocsCommand },
-  { names: ["config"], load: async () => (await import("./commands/config.js")).registerConfigCommand },
-  { names: ["fabric"], load: async () => (await import("./commands/fabric.js")).registerFabricCommand },
-  { names: ["start"], load: async () => (await import("./commands/start.js")).registerStartCommand },
+  {
+    names: ["config"],
+    load: async () => (await import("./commands/config.js")).registerConfigCommand,
+  },
+  {
+    names: ["fabric"],
+    load: async () => (await import("./commands/fabric.js")).registerFabricCommand,
+  },
+  {
+    names: ["start"],
+    load: async () => (await import("./commands/start.js")).registerStartCommand,
+  },
   { names: ["ai"], load: async () => (await import("./commands/ai.js")).registerAiCommand },
   { names: ["task"], load: async () => (await import("./commands/task.js")).registerTaskCommand },
 ];
 
 /** Comandos-folha: nome e descrição aqui, módulo só quando executa. */
-const LEAVES: ReadonlyArray<{ name: string; description: string; load: () => Promise<() => void | Promise<void>> }> = [
-  { name: "debug", description: "Diagnostica o ambiente e aponta onde está o problema", load: async () => (await import("./commands/debug.js")).runDebug },
-  { name: "agents", description: "Lista os agentes disponíveis", load: async () => (await import("./commands/agents.js")).runAgents },
-  { name: "open", description: "Abre a IDE da sessão ativa na pasta do projeto", load: async () => (await import("./commands/open.js")).runOpen },
+const LEAVES: ReadonlyArray<{
+  name: string;
+  description: string;
+  load: () => Promise<() => void | Promise<void>>;
+}> = [
+  {
+    name: "debug",
+    description: "Diagnostica o ambiente e aponta onde está o problema",
+    load: async () => (await import("./commands/debug.js")).runDebug,
+  },
+  {
+    name: "agents",
+    description: "Lista os agentes disponíveis",
+    load: async () => (await import("./commands/agents.js")).runAgents,
+  },
+  {
+    name: "open",
+    description: "Abre a IDE da sessão ativa na pasta do projeto",
+    load: async () => (await import("./commands/open.js")).runOpen,
+  },
 ];
 
 /** Síncrono de propósito: só registra: o import mora dentro da `action`. */
 export function registerLeaves(program: Command, only?: string): void {
   for (const leaf of LEAVES) {
     if (only && leaf.name !== only) continue;
-    program.command(leaf.name).description(leaf.description).action(async () => {
-      await (await leaf.load())();
-    });
+    program
+      .command(leaf.name)
+      .description(leaf.description)
+      .action(async () => {
+        await (await leaf.load())();
+      });
   }
 }
 

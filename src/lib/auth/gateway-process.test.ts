@@ -2,7 +2,14 @@ import { test, expect, afterEach } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gatewayHealth, resolveGatewayCommand, releaseDrift, classifyGatewayVersion, checkGatewayVersion, isLocalGatewayUrl } from './gateway-process.js';
+import {
+  gatewayHealth,
+  resolveGatewayCommand,
+  releaseDrift,
+  classifyGatewayVersion,
+  checkGatewayVersion,
+  isLocalGatewayUrl,
+} from './gateway-process.js';
 import { isBinaryInstalled } from '../clients/client-install.js';
 
 const gwBinOnPath = isBinaryInstalled('nio-gateway');
@@ -31,28 +38,29 @@ test('gatewayHealth: fetch rejeita (gateway fora) → false, não lança', async
   expect(await gatewayHealth()).toBe(false);
 });
 
-test.skipIf(gwBinOnPath)('resolveGatewayCommand: acha o gateway/index.js irmão do entrypoint', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'nio-gw-'));
-  try {
-    mkdirSync(join(dir, 'gateway'), { recursive: true });
-    writeFileSync(join(dir, 'gateway', 'index.js'), '');
-    process.argv[1] = join(dir, 'cli.js');
-    expect(resolveGatewayCommand()).toEqual({
-      cmd: process.execPath,
-      args: [join(dir, 'gateway', 'index.js')],
-    });
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+test.skipIf(gwBinOnPath)(
+  'resolveGatewayCommand: acha o gateway/index.js irmão do entrypoint',
+  () => {
+    const dir = mkdtempSync(join(tmpdir(), 'nio-gw-'));
+    try {
+      mkdirSync(join(dir, 'gateway'), { recursive: true });
+      writeFileSync(join(dir, 'gateway', 'index.js'), '');
+      process.argv[1] = join(dir, 'cli.js');
+      expect(resolveGatewayCommand()).toEqual({
+        cmd: process.execPath,
+        args: [join(dir, 'gateway', 'index.js')],
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
 
 test('resolveGatewayCommand: bin no PATH → usa ele; senão sem irmão → null', () => {
   const dir = mkdtempSync(join(tmpdir(), 'nio-gw-'));
   try {
     process.argv[1] = join(dir, 'cli.js');
-    expect(resolveGatewayCommand()).toEqual(
-      gwBinOnPath ? { cmd: 'nio-gateway', args: [] } : null,
-    );
+    expect(resolveGatewayCommand()).toEqual(gwBinOnPath ? { cmd: 'nio-gateway', args: [] } : null);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -67,7 +75,9 @@ test('releaseDrift: same/patch/minor/major ignorando sufixo', () => {
 });
 
 test('classifyGatewayVersion: igual→ok; patch→warn; CLI>gateway minor→block; gateway>CLI→warn; sem versão→warn', () => {
-  expect(classifyGatewayVersion('0.10.1', { ok: true, version: '0.10.1' })).toEqual({ status: 'ok' });
+  expect(classifyGatewayVersion('0.10.1', { ok: true, version: '0.10.1' })).toEqual({
+    status: 'ok',
+  });
   expect(classifyGatewayVersion('0.10.2', { ok: true, version: '0.10.1' }).status).toBe('warn');
   const block = classifyGatewayVersion('0.11.0', { ok: true, version: '0.10.1' });
   expect(block.status).toBe('block');
@@ -77,7 +87,8 @@ test('classifyGatewayVersion: igual→ok; patch→warn; CLI>gateway minor→bloc
 });
 
 test('checkGatewayVersion: lê /health via fetch e classifica; rede fora → warn sem lançar', async () => {
-  globalThis.fetch = (async () => new Response('{"ok":true,"version":"0.9.0"}', { status: 200 })) as typeof fetch;
+  globalThis.fetch = (async () =>
+    new Response('{"ok":true,"version":"0.9.0"}', { status: 200 })) as typeof fetch;
   expect(await checkGatewayVersion('http://x')).toEqual({
     status: 'block',
     detail: expect.stringMatching(/atualize o gateway/i),

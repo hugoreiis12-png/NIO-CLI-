@@ -20,7 +20,9 @@ function campo(linhas: readonly string[], rotulo: string): string | undefined {
   if (i < 0) return undefined;
   // A fórmula pode ter várias linhas: tudo até o próximo rótulo conhecido pertence a ela.
   const resto = linhas.slice(i + 1);
-  const fim = resto.findIndex((l) => /^(Medida|Tabela|Tipo|Pasta|Descrição|Expressão DAX):/.test(l));
+  const fim = resto.findIndex((l) =>
+    /^(Medida|Tabela|Tipo|Pasta|Descrição|Expressão DAX):/.test(l),
+  );
   const extra = (fim < 0 ? resto : resto.slice(0, fim)).join('\n').trim();
   const primeira = linhas[i]!.slice(rotulo.length + 1).trim();
   return extra ? `${primeira}\n${extra}`.trim() : primeira || undefined;

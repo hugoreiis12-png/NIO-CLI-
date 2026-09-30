@@ -82,7 +82,9 @@ if (best) {
   if (PARALLELISM !== 1) console.log(`  NIO_ARGON2_PARALLELISM=${PARALLELISM}`);
   console.log(`  (~${best.ms.toFixed(0)} ms/hash)`);
 } else {
-  console.log(`Nenhum combo ficou ≤ ${TARGET_MS} ms — máquina lenta. Fique no default (19 MiB / t=2)`);
+  console.log(
+    `Nenhum combo ficou ≤ ${TARGET_MS} ms — máquina lenta. Fique no default (19 MiB / t=2)`,
+  );
   console.log('ou suba o TARGET_MS se o time aceitar login mais lento.');
 }
 

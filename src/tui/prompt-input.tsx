@@ -17,7 +17,8 @@ export function layoutRows(value: string, width: number): { text: string; start:
     if (seg.length === 0) {
       rows.push({ text: '', start: offset });
     } else {
-      for (let j = 0; j < seg.length; j += w) rows.push({ text: seg.slice(j, j + w), start: offset + j });
+      for (let j = 0; j < seg.length; j += w)
+        rows.push({ text: seg.slice(j, j + w), start: offset + j });
     }
     offset += seg.length + 1; // +1 pelo '\n'
   }
@@ -137,69 +138,74 @@ export function PromptInput({
   const insert = (text: string): void =>
     edit(value.slice(0, cursor) + text + value.slice(cursor), cursor + text.length);
 
-  useInput((input, key) => {
-    // ── paleta aberta: navegação vai pro pai; edição segue normal ──
-    if (navCapture) {
-      if (key.upArrow) return onNav?.('up');
-      if (key.downArrow) return onNav?.('down');
-      if (key.return) return onNav?.('submit');
-      if (key.escape) return onNav?.('cancel');
-    }
-
-    // ── movimento ──
-    if (key.leftArrow) {
-      return setCursor((c) => (key.meta || key.ctrl ? wordLeft(value, c) : Math.max(0, c - 1)));
-    }
-    if (key.rightArrow) {
-      return setCursor((c) => (key.meta || key.ctrl ? wordRight(value, c) : Math.min(value.length, c + 1)));
-    }
-    if (key.upArrow) {
-      const n = moveVertical(value, cursor, wrapW, 'up');
-      return n === null ? onNav?.('up') : setCursor(n);
-    }
-    if (key.downArrow) {
-      const n = moveVertical(value, cursor, wrapW, 'down');
-      return n === null ? undefined : setCursor(n);
-    }
-
-    // ── atalhos de edição ──
-    if (key.ctrl && input === 'a') return setCursor(lineStart(value, cursor));
-    if (key.ctrl && input === 'e') return setCursor(lineEnd(value, cursor));
-    if (key.ctrl && input === 'w') {
-      const r = deleteWordBefore(value, cursor);
-      return edit(r.value, r.cursor);
-    }
-    if (key.ctrl && input === 'u') {
-      const s = lineStart(value, cursor);
-      return edit(value.slice(0, s) + value.slice(cursor), s);
-    }
-    if (key.ctrl && input === 'k') {
-      const e = lineEnd(value, cursor);
-      return edit(value.slice(0, cursor) + value.slice(e), cursor);
-    }
-    if (key.ctrl && input === 'j') return insert('\n');
-
-    if (key.backspace || key.delete) {
-      if (cursor === 0) return;
-      return edit(value.slice(0, cursor - 1) + value.slice(cursor), cursor - 1);
-    }
-
-    if (key.return) {
-      // `\` no fim → nova linha (convenção do opencode), senão envia.
-      if (value.slice(0, cursor).endsWith('\\')) {
-        return edit(value.slice(0, cursor - 1) + '\n' + value.slice(cursor), cursor);
+  useInput(
+    (input, key) => {
+      // ── paleta aberta: navegação vai pro pai; edição segue normal ──
+      if (navCapture) {
+        if (key.upArrow) return onNav?.('up');
+        if (key.downArrow) return onNav?.('down');
+        if (key.return) return onNav?.('submit');
+        if (key.escape) return onNav?.('cancel');
       }
-      if (disabled) return; // deixa o texto pronto; envia quando desbloquear
-      return onSubmit(value.trim());
-    }
 
-    if (key.escape) return; // fora da paleta o Esc é do App (abortar)
-    if (key.tab) return onTab?.(key.shift ?? false); // Sprint 5: cicla o modo
-    if (key.ctrl || key.meta) return;
+      // ── movimento ──
+      if (key.leftArrow) {
+        return setCursor((c) => (key.meta || key.ctrl ? wordLeft(value, c) : Math.max(0, c - 1)));
+      }
+      if (key.rightArrow) {
+        return setCursor((c) =>
+          key.meta || key.ctrl ? wordRight(value, c) : Math.min(value.length, c + 1),
+        );
+      }
+      if (key.upArrow) {
+        const n = moveVertical(value, cursor, wrapW, 'up');
+        return n === null ? onNav?.('up') : setCursor(n);
+      }
+      if (key.downArrow) {
+        const n = moveVertical(value, cursor, wrapW, 'down');
+        return n === null ? undefined : setCursor(n);
+      }
 
-    const text = sanitizePaste(input);
-    if (text) insert(text);
-  }, { isActive: active });
+      // ── atalhos de edição ──
+      if (key.ctrl && input === 'a') return setCursor(lineStart(value, cursor));
+      if (key.ctrl && input === 'e') return setCursor(lineEnd(value, cursor));
+      if (key.ctrl && input === 'w') {
+        const r = deleteWordBefore(value, cursor);
+        return edit(r.value, r.cursor);
+      }
+      if (key.ctrl && input === 'u') {
+        const s = lineStart(value, cursor);
+        return edit(value.slice(0, s) + value.slice(cursor), s);
+      }
+      if (key.ctrl && input === 'k') {
+        const e = lineEnd(value, cursor);
+        return edit(value.slice(0, cursor) + value.slice(e), cursor);
+      }
+      if (key.ctrl && input === 'j') return insert('\n');
+
+      if (key.backspace || key.delete) {
+        if (cursor === 0) return;
+        return edit(value.slice(0, cursor - 1) + value.slice(cursor), cursor - 1);
+      }
+
+      if (key.return) {
+        // `\` no fim → nova linha (convenção do opencode), senão envia.
+        if (value.slice(0, cursor).endsWith('\\')) {
+          return edit(value.slice(0, cursor - 1) + '\n' + value.slice(cursor), cursor);
+        }
+        if (disabled) return; // deixa o texto pronto; envia quando desbloquear
+        return onSubmit(value.trim());
+      }
+
+      if (key.escape) return; // fora da paleta o Esc é do App (abortar)
+      if (key.tab) return onTab?.(key.shift ?? false); // Sprint 5: cicla o modo
+      if (key.ctrl || key.meta) return;
+
+      const text = sanitizePaste(input);
+      if (text) insert(text);
+    },
+    { isActive: active },
+  );
 
   // ── render ──
   const rows = layoutRows(value, wrapW);
@@ -207,7 +213,8 @@ export function PromptInput({
   const { row: curRow, col: curCol } = cursorRowCol(rows, Math.min(cursor, value.length));
 
   let first = 0;
-  if (rows.length > maxRows) first = Math.max(0, Math.min(curRow - maxRows + 1, rows.length - maxRows));
+  if (rows.length > maxRows)
+    first = Math.max(0, Math.min(curRow - maxRows + 1, rows.length - maxRows));
   const visible = rows.slice(first, first + maxRows);
 
   const gutterColor = disabled || !active ? theme.dim : theme.accent;

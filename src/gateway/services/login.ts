@@ -142,17 +142,13 @@ export async function issueSession(user: UserCli): Promise<SessionPayload> {
   // `expiresIn` como number (segundos) — `@types/jsonwebtoken` tipa a forma string
   // via `StringValue`, que não aceita `string` genérico de env var.
   const { kid, secret } = jwtSigningKey();
-  const token = jwt.sign(
-    { sub: String(user.id), jti: session.id },
-    secret,
-    {
-      algorithm: 'HS256',
-      expiresIn: Math.floor(ms / 1000),
-      issuer: JWT_ISSUER,
-      audience: JWT_AUDIENCE,
-      ...(kid ? { keyid: kid } : {}),
-    },
-  );
+  const token = jwt.sign({ sub: String(user.id), jti: session.id }, secret, {
+    algorithm: 'HS256',
+    expiresIn: Math.floor(ms / 1000),
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
+    ...(kid ? { keyid: kid } : {}),
+  });
   return { token, userId: user.id, name: user.name, sessionId: session.id, expiresAt };
 }
 
@@ -176,7 +172,11 @@ export async function login(
   // M-4: cap de OTP por usuário/número — mesmo com a senha certa, não dá pra
   // torrar mensagens repetindo o login.
   if (!smsAllowed(user.id, user.phone)) {
-    return { ok: false, reason: 'server_error', error: 'muitos códigos solicitados — aguarde alguns minutos.' };
+    return {
+      ok: false,
+      reason: 'server_error',
+      error: 'muitos códigos solicitados — aguarde alguns minutos.',
+    };
   }
 
   const challenges = deps.challenges ?? createLoginChallengeRepository();
@@ -193,11 +193,19 @@ export async function login(
   const sent = await sms.sendOtp(user.phone, code);
   if (sent.status === 'skipped') {
     await challenges.consume(challenge.id).catch(() => {});
-    return { ok: false, reason: 'server_error', error: '2FA não configurado no servidor (WHATSAPP_*).' };
+    return {
+      ok: false,
+      reason: 'server_error',
+      error: '2FA não configurado no servidor (WHATSAPP_*).',
+    };
   }
   if (sent.status === 'failed') {
     await challenges.consume(challenge.id).catch(() => {});
-    return { ok: false, reason: 'server_error', error: `falha ao enviar o WhatsApp: ${sent.error ?? ''}`.trim() };
+    return {
+      ok: false,
+      reason: 'server_error',
+      error: `falha ao enviar o WhatsApp: ${sent.error ?? ''}`.trim(),
+    };
   }
 
   const mode = smsMode();
@@ -242,8 +250,14 @@ export async function verifyLogin(
       // O contador `attempts` é compartilhado com a fase OTP (que já pode ter
       // gastado 3), então o teto aqui é o absoluto do desafio, não o do OTP.
       const attempts = await challenges.incrementAttempts(ch.id);
-      if (attempts >= CHALLENGE_MAX_ATTEMPTS) return { ok: false, reason: 'attempts_exhausted', userId: ch.userId };
-      return { ok: false, reason: 'invalid', remaining: CHALLENGE_MAX_ATTEMPTS - attempts, userId: ch.userId };
+      if (attempts >= CHALLENGE_MAX_ATTEMPTS)
+        return { ok: false, reason: 'attempts_exhausted', userId: ch.userId };
+      return {
+        ok: false,
+        reason: 'invalid',
+        remaining: CHALLENGE_MAX_ATTEMPTS - attempts,
+        userId: ch.userId,
+      };
     }
     const used = markUsed(stored.codes!, idx);
     await users.updateBackupCodes(ch.userId, used, stored.pepperId);
@@ -270,7 +284,12 @@ export async function verifyLogin(
   if (attempts >= OTP_MAX_ATTEMPTS) {
     return { ok: false, reason: 'attempts_exhausted', requiresBackupCode: true, userId: ch.userId };
   }
-  return { ok: false, reason: 'invalid', remaining: OTP_MAX_ATTEMPTS - attempts, userId: ch.userId };
+  return {
+    ok: false,
+    reason: 'invalid',
+    remaining: OTP_MAX_ATTEMPTS - attempts,
+    userId: ch.userId,
+  };
 }
 
 /** Revoga a auth_session (logout). Idempotente. */

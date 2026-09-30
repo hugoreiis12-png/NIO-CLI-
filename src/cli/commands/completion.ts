@@ -96,9 +96,7 @@ function fishScript(root: CmdNode): string {
   lines.push(`complete -c ${bin} -n '__fish_use_subcommand' -a '${top}'`);
   for (const s of root.subs) {
     const cands = [...s.subs.map((x) => x.name), ...s.opts].join(" ");
-    lines.push(
-      `complete -c ${bin} -n '__fish_seen_subcommand_from ${s.name}' -a '${cands}'`,
-    );
+    lines.push(`complete -c ${bin} -n '__fish_seen_subcommand_from ${s.name}' -a '${cands}'`);
   }
   return lines.join("\n");
 }
@@ -129,11 +127,7 @@ export function registerCompletionCommand(program: Command): void {
       }
       const root = walk(program);
       const script =
-        shell === "bash"
-          ? bashScript(root)
-          : shell === "zsh"
-            ? zshScript(root)
-            : fishScript(root);
+        shell === "bash" ? bashScript(root) : shell === "zsh" ? zshScript(root) : fishScript(root);
       // Dica no stderr (o `eval "$(...)"` captura só o stdout, então não polui).
       console.error(
         `${c.dim("# adicione ao seu rc:")} ${cmd(`eval "$(${bin} completion ${shell})"`)}`,

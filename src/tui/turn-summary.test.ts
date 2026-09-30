@@ -22,7 +22,12 @@ test('junta o texto e as tools da última resposta', () => {
       parts: [
         { id: 'p1', kind: 'text', text: 'achei ' },
         { id: 'p2', kind: 'text', text: '12 arquivos' },
-        { id: 'p3', kind: 'tool', text: 'grep', tool: { name: 'grep', status: 'completed', output: '' } },
+        {
+          id: 'p3',
+          kind: 'tool',
+          text: 'grep',
+          tool: { name: 'grep', status: 'completed', output: '' },
+        },
         { id: 'p4', kind: 'step', text: '', step: { tokensIn: 90, tokensOut: 8, cost: 0 } },
       ],
     }),
@@ -35,7 +40,11 @@ test('junta o texto e as tools da última resposta', () => {
 test('pula a mensagem de compactação e pega a resposta real', () => {
   const r = summarizeTurn([
     msg({ id: 'a', parts: [{ id: 'p1', kind: 'text', text: 'a resposta' }] }),
-    msg({ id: 'c', mode: 'compaction', parts: [{ id: 'p2', kind: 'text', text: 'resumo interno' }] }),
+    msg({
+      id: 'c',
+      mode: 'compaction',
+      parts: [{ id: 'p2', kind: 'text', text: 'resumo interno' }],
+    }),
   ]);
   // Sem o filtro, a trilha guardaria o resumo ofuscado do motor.
   expect(r.text).toBe('a resposta');
@@ -50,7 +59,9 @@ test('pula mensagem marcada como summary', () => {
 });
 
 test('ignora mensagem do usuário', () => {
-  const r = summarizeTurn([msg({ id: 'u', role: 'user', parts: [{ id: 'p', kind: 'text', text: 'oi' }] })]);
+  const r = summarizeTurn([
+    msg({ id: 'u', role: 'user', parts: [{ id: 'p', kind: 'text', text: 'oi' }] }),
+  ]);
   expect(r.text).toBe('');
 });
 

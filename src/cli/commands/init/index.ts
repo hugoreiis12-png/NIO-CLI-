@@ -18,7 +18,10 @@ import { SyncReport, renderReport, browseReport, resolveReportMode } from "../..
 import { flushTelemetry } from "../../../lib/telemetry.js";
 import { writeManagedDotfiles } from "../../../lib/dotfiles.js";
 import { confirm } from "../../../lib/prompts.js";
-import { LanguageConfigurator, type LanguageSelection } from "../../../app/language-configurator.js";
+import {
+  LanguageConfigurator,
+  type LanguageSelection,
+} from "../../../app/language-configurator.js";
 import { createLanguageCatalog } from "../../../adapters/lang/language-catalog.js";
 import { n8nMcp } from "../../../profiles/mcps.js";
 import type { LanguageId } from "../../../core/lang.js";
@@ -160,7 +163,10 @@ async function resolveSessionSetup(
 
     // envVars/aliases → ~/.nio/profile.{sh,ps1} (best-effort; não aborta a sessão).
     try {
-      const dot = writeManagedDotfiles({ envVars: built.config.envVars, aliases: built.config.aliases });
+      const dot = writeManagedDotfiles({
+        envVars: built.config.envVars,
+        aliases: built.config.aliases,
+      });
       if (dot.some((d) => d.status === "written")) {
         for (const d of dot) console.log(`  ${c.dim(`+ ${d.path}`)}`);
         console.log(
@@ -168,7 +174,9 @@ async function resolveSessionSetup(
         );
       }
     } catch (e) {
-      console.warn(`${c.yellow(sym.warn)} dotfiles do perfil não escritos: ${(e as Error).message}`);
+      console.warn(
+        `${c.yellow(sym.warn)} dotfiles do perfil não escritos: ${(e as Error).message}`,
+      );
     }
   }
 
@@ -218,10 +226,9 @@ async function installAndProvisionClients(
 /** Ofertas finais: libs externas da seleção, skills recomendadas, autocomplete do shell. */
 async function offerFollowUps(config: ProjectConfig): Promise<void> {
   await offerDependencyInstall(readDependencies(config.selection), { interactive: true });
-  await offerRuleSkills(
-    collectRuleSkills(config.selection ?? { roles: [], stacks: {} }),
-    { interactive: true },
-  );
+  await offerRuleSkills(collectRuleSkills(config.selection ?? { roles: [], stacks: {} }), {
+    interactive: true,
+  });
   await offerShellCompletion({ interactive: true, announceConfigured: true });
   await flushTelemetry();
 }
@@ -247,11 +254,15 @@ export async function handoffToSession(session: Session): Promise<void> {
           `o NIO sobe num terminal integrado lá dentro.`,
       );
       console.log(
-        c.dim(`  Se a IDE perguntar, permita "tarefas automáticas". Senão, rode a task "NIO" ou \`${brand.name} ai\`.`),
+        c.dim(
+          `  Se a IDE perguntar, permita "tarefas automáticas". Senão, rode a task "NIO" ou \`${brand.name} ai\`.`,
+        ),
       );
       return;
     }
-    console.log(`  ${c.yellow(sym.warn)} ${r.error ?? "IDE não abriu"} — subindo o NIO aqui no terminal.`);
+    console.log(
+      `  ${c.yellow(sym.warn)} ${r.error ?? "IDE não abriu"} — subindo o NIO aqui no terminal.`,
+    );
   }
   await handoffToOperator(session.projectPath);
 }

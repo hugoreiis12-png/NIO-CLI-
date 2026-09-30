@@ -38,7 +38,10 @@ export const definition: Tool = {
     properties: {
       name: { type: 'string', description: 'Nome da medida, inteiro ou parte dele.' },
       dataset_id: { type: 'string', description: 'GUID do dataset. Default: NIO_FABRIC_DATASET.' },
-      limit: { type: 'number', description: `Máximo de medidas a devolver (padrão ${LIMITE_PADRAO}).` },
+      limit: {
+        type: 'number',
+        description: `Máximo de medidas a devolver (padrão ${LIMITE_PADRAO}).`,
+      },
     },
     required: ['name'],
     additionalProperties: false,

@@ -27,8 +27,14 @@ export const definition: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      session: { type: 'string', description: 'Id da sessão (prefixo do UUID basta). Omita para a ativa.' },
-      install: { type: 'boolean', description: 'Instalar o que faltar (ação destrutiva). Default: false.' },
+      session: {
+        type: 'string',
+        description: 'Id da sessão (prefixo do UUID basta). Omita para a ativa.',
+      },
+      install: {
+        type: 'boolean',
+        description: 'Instalar o que faltar (ação destrutiva). Default: false.',
+      },
     },
     required: [],
     additionalProperties: false,
@@ -55,7 +61,11 @@ export async function runEnvDetectDeps(
       session_id: session.id,
       scanned: result.scanned,
       missing: result.missing.map((d) => ({ name: d.name, type: d.type, file: d.filePath })),
-      recorded: result.recorded.map((e) => ({ name: e.dependencyName, type: e.dependencyType, file: e.filePath })),
+      recorded: result.recorded.map((e) => ({
+        name: e.dependencyName,
+        type: e.dependencyType,
+        file: e.filePath,
+      })),
       installed: result.installed,
     });
   } catch (err) {

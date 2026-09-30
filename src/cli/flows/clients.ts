@@ -22,9 +22,7 @@ export async function ensureClientInstalled(
   opts: { interactive: boolean; assumeYes?: boolean },
 ): Promise<void> {
   if (info.binary && isBinaryInstalled(info.binary)) {
-    console.log(
-      `  ${c.green(sym.ok)} ${c.bold(info.label)} ${c.dim("detectado no PATH.")}`,
-    );
+    console.log(`  ${c.green(sym.ok)} ${c.bold(info.label)} ${c.dim("detectado no PATH.")}`);
     return;
   }
 
@@ -33,7 +31,7 @@ export async function ensureClientInstalled(
     console.log(
       box(
         `${c.yellow(sym.warn)} ${c.bold(info.label)} ${c.dim("não encontrado.")}\n` +
-          `${c.dim("instalar:")}  ${cmd(installCmd)}\n` + 
+          `${c.dim("instalar:")}  ${cmd(installCmd)}\n` +
           `${c.dim("docs:")}     ${link(info.url)}`,
         { borderColor: "yellow", title: info.label },
       ),

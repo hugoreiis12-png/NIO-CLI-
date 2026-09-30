@@ -37,7 +37,10 @@ import { getOrCreateGatewayToken } from '../lib/auth/gateway-token.js';
 const LOGIN_IP_RETENTION_DAYS = 90;
 /** Retenção da trilha de auth (ADR 0012 / LGPD) — janela maior, é forense.
  * Clamp em >= 1: um valor negativo faria o `DELETE` apagar a tabela inteira (TP-5). */
-const AUTH_EVENTS_RETENTION_DAYS = Math.max(1, Number(process.env.NIO_AUTH_EVENTS_RETENTION_DAYS) || 180);
+const AUTH_EVENTS_RETENTION_DAYS = Math.max(
+  1,
+  Number(process.env.NIO_AUTH_EVENTS_RETENTION_DAYS) || 180,
+);
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -63,7 +66,13 @@ async function requireAuth(req: IncomingMessage, res: ServerResponse): Promise<n
   return auth.userId;
 }
 
-function sessionJson(s: { token: string; userId: number; name: string; sessionId: string; expiresAt: Date }) {
+function sessionJson(s: {
+  token: string;
+  userId: number;
+  name: string;
+  sessionId: string;
+  expiresAt: Date;
+}) {
   return {
     token: s.token,
     userId: s.userId,
@@ -110,7 +119,11 @@ function auditAuth(
     );
 }
 
-async function handleRegister(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
+async function handleRegister(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RequestContext,
+): Promise<void> {
   const body = await readJsonBody<{ name?: string; password?: string }>(req);
   if (!body.name || !body.password) {
     sendJson(res, 400, { error: 'name e password são obrigatórios' });
@@ -134,7 +147,11 @@ async function handleRegister(req: IncomingMessage, res: ServerResponse, ctx: Re
   });
 }
 
-async function handleLogin(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
+async function handleLogin(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RequestContext,
+): Promise<void> {
   const body = await readJsonBody<{ name?: string; password?: string }>(req);
   if (!body.name || !body.password) {
     sendJson(res, 400, { error: 'name e password são obrigatórios' });
@@ -175,13 +192,23 @@ async function handleLogin(req: IncomingMessage, res: ServerResponse, ctx: Reque
   });
 }
 
-async function handleVerify2fa(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
-  const body = await readJsonBody<{ challengeId?: string; code?: string; type?: 'otp' | 'backup' }>(req);
+async function handleVerify2fa(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RequestContext,
+): Promise<void> {
+  const body = await readJsonBody<{ challengeId?: string; code?: string; type?: 'otp' | 'backup' }>(
+    req,
+  );
   if (!body.challengeId || !body.code) {
     sendJson(res, 400, { error: 'challengeId e code são obrigatórios' });
     return;
   }
-  const out = await verifyLogin(body.challengeId, body.code, body.type === 'backup' ? 'backup' : 'otp');
+  const out = await verifyLogin(
+    body.challengeId,
+    body.code,
+    body.type === 'backup' ? 'backup' : 'otp',
+  );
   if (!out.ok) {
     auditAuth(req, ctx, out.reason === 'expired' ? '2fa_expired' : '2fa_fail', {
       reason: out.reason,
@@ -198,10 +225,18 @@ async function handleVerify2fa(req: IncomingMessage, res: ServerResponse, ctx: R
   }
   auditAuth(req, ctx, '2fa_ok', { userId: out.session.userId });
   void recordLoginIp(req, out.session.userId);
-  sendJson(res, 200, { step: 'done', ...sessionJson(out.session), backupCodesRemaining: out.backupCodesRemaining });
+  sendJson(res, 200, {
+    step: 'done',
+    ...sessionJson(out.session),
+    backupCodesRemaining: out.backupCodesRemaining,
+  });
 }
 
-async function handleLogout(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
+async function handleLogout(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RequestContext,
+): Promise<void> {
   // Só revoga a sessão do próprio Bearer — sem isto, qualquer um com o token do
   // gateway revogava sessão alheia por `sessionId` (auditoria L-5).
   const auth = await authenticate(req.headers.authorization);
@@ -216,7 +251,11 @@ async function handleLogout(req: IncomingMessage, res: ServerResponse, ctx: Requ
   sendJson(res, 200, { ok: true });
 }
 
-async function handleLogoutAll(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
+async function handleLogoutAll(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RequestContext,
+): Promise<void> {
   const auth = await authenticate(req.headers.authorization);
   if (!auth.ok) {
     sendJson(res, 200, { ok: true }); // nada ativo pra revogar; cliente limpa local
@@ -268,7 +307,11 @@ async function handleSecurity(
     if (!body.phone) return sendJson(res, 400, { error: 'phone é obrigatório' });
     const r = await security.startSecurityChallenge(userId, body.phone);
     if (!r.ok) return sendJson(res, 400, { error: r.error });
-    return sendJson(res, 200, { challengeId: r.challengeId, smsMode: r.smsMode, devCode: r.devCode });
+    return sendJson(res, 200, {
+      challengeId: r.challengeId,
+      smsMode: r.smsMode,
+      devCode: r.devCode,
+    });
   }
 
   if (path === '/security/challenge') {
@@ -277,7 +320,11 @@ async function handleSecurity(
     if (!user?.phone) return sendJson(res, 400, { error: '2FA não está ativo' });
     const r = await security.startSecurityChallenge(userId, user.phone);
     if (!r.ok) return sendJson(res, 400, { error: r.error });
-    return sendJson(res, 200, { challengeId: r.challengeId, smsMode: r.smsMode, devCode: r.devCode });
+    return sendJson(res, 200, {
+      challengeId: r.challengeId,
+      smsMode: r.smsMode,
+      devCode: r.devCode,
+    });
   }
 
   if (!body.challengeId || !body.code) {
@@ -287,17 +334,31 @@ async function handleSecurity(
   if (path === '/security/confirm-2fa') {
     if (!body.phone) return sendJson(res, 400, { error: 'phone é obrigatório' });
     const r = await security.confirmEnable2fa(userId, body.challengeId, body.code, body.phone);
-    auditAuth(req, ctx, r.ok ? '2fa_enabled' : '2fa_fail', { userId, reason: r.ok ? undefined : r.error });
-    return sendJson(res, r.ok ? 200 : 401, r.ok ? { backupCodes: r.backupCodes } : { error: r.error });
+    auditAuth(req, ctx, r.ok ? '2fa_enabled' : '2fa_fail', {
+      userId,
+      reason: r.ok ? undefined : r.error,
+    });
+    return sendJson(
+      res,
+      r.ok ? 200 : 401,
+      r.ok ? { backupCodes: r.backupCodes } : { error: r.error },
+    );
   }
   if (path === '/security/disable-2fa') {
     const r = await security.disable2fa(userId, body.challengeId, body.code, type);
-    auditAuth(req, ctx, r.ok ? '2fa_disabled' : '2fa_fail', { userId, reason: r.ok ? undefined : r.error });
+    auditAuth(req, ctx, r.ok ? '2fa_disabled' : '2fa_fail', {
+      userId,
+      reason: r.ok ? undefined : r.error,
+    });
     return sendJson(res, r.ok ? 200 : 401, r.ok ? { ok: true } : { error: r.error });
   }
   if (path === '/security/regenerate-backup-codes') {
     const r = await security.regenerateBackupCodes(userId, body.challengeId, body.code, type);
-    return sendJson(res, r.ok ? 200 : 401, r.ok ? { backupCodes: r.backupCodes } : { error: r.error });
+    return sendJson(
+      res,
+      r.ok ? 200 : 401,
+      r.ok ? { backupCodes: r.backupCodes } : { error: r.error },
+    );
   }
   sendJson(res, 404, { error: 'rota desconhecida' });
 }
@@ -331,13 +392,18 @@ async function main(): Promise<void> {
 
     void (async () => {
       try {
-        if (ctx.method === 'POST' && ctx.path === '/register') return await handleRegister(req, res, ctx);
+        if (ctx.method === 'POST' && ctx.path === '/register')
+          return await handleRegister(req, res, ctx);
         if (ctx.method === 'POST' && ctx.path === '/login') return await handleLogin(req, res, ctx);
-        if (ctx.method === 'POST' && ctx.path === '/verify-2fa') return await handleVerify2fa(req, res, ctx);
-        if (ctx.method === 'POST' && ctx.path === '/logout') return await handleLogout(req, res, ctx);
-        if (ctx.method === 'POST' && ctx.path === '/logout-all') return await handleLogoutAll(req, res, ctx);
+        if (ctx.method === 'POST' && ctx.path === '/verify-2fa')
+          return await handleVerify2fa(req, res, ctx);
+        if (ctx.method === 'POST' && ctx.path === '/logout')
+          return await handleLogout(req, res, ctx);
+        if (ctx.method === 'POST' && ctx.path === '/logout-all')
+          return await handleLogoutAll(req, res, ctx);
         if (ctx.path.startsWith('/security/')) return await handleSecurity(req, res, ctx, ctx.path);
-        if (ctx.method === 'GET' && ctx.path === '/health') return sendJson(res, 200, { ok: true, version: VERSION });
+        if (ctx.method === 'GET' && ctx.path === '/health')
+          return sendJson(res, 200, { ok: true, version: VERSION });
         sendJson(res, 404, { error: 'rota desconhecida' });
       } catch (err) {
         logRequest(ctx, { error: (err as Error).message, stack: (err as Error).stack }, 'error');
@@ -346,7 +412,10 @@ async function main(): Promise<void> {
         } else {
           // Não vaza mensagem interna (erro de DB, stack) pro cliente — só o
           // traceId pra correlacionar com o log (auditoria L-3).
-          sendJson(res, 500, { error: 'erro interno ao processar a request', traceId: ctx.traceId });
+          sendJson(res, 500, {
+            error: 'erro interno ao processar a request',
+            traceId: ctx.traceId,
+          });
         }
       }
     })();
@@ -374,7 +443,12 @@ async function main(): Promise<void> {
     if (err.code === 'EADDRINUSE') {
       logEvent(
         'listen_failed',
-        { reason: 'port_in_use', host: GATEWAY_HOST, port: GATEWAY_PORT, hint: 'outro gateway rodando (container?)' },
+        {
+          reason: 'port_in_use',
+          host: GATEWAY_HOST,
+          port: GATEWAY_PORT,
+          hint: 'outro gateway rodando (container?)',
+        },
         'error',
       );
     } else {

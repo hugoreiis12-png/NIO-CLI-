@@ -90,10 +90,7 @@ function extractContent(data: ChatCompletion): string {
 }
 
 /** Roda `prompt` no vLLM e devolve o texto de `choices[0].message.content`. */
-export async function qwenComplete(
-  prompt: string,
-  opts: QwenRequestOpts = {},
-): Promise<string> {
+export async function qwenComplete(prompt: string, opts: QwenRequestOpts = {}): Promise<string> {
   guardInputSize(opts.system, prompt);
   const url = `${NIO_AI_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
   const controller = new AbortController();

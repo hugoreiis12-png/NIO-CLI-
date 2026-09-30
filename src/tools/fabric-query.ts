@@ -33,7 +33,10 @@ export const definition: Tool = {
     type: 'object',
     properties: {
       dax: { type: 'string', description: 'Consulta DAX (DEFINE/EVALUATE) a executar.' },
-      workspace_id: { type: 'string', description: 'GUID do workspace (groupId). Default: NIO_FABRIC_WORKSPACE.' },
+      workspace_id: {
+        type: 'string',
+        description: 'GUID do workspace (groupId). Default: NIO_FABRIC_WORKSPACE.',
+      },
       dataset_id: { type: 'string', description: 'GUID do dataset. Default: NIO_FABRIC_DATASET.' },
     },
     required: ['dax'],
@@ -78,7 +81,13 @@ export async function handler(args: unknown, _ctx: ToolContext): Promise<CallToo
   if (!workspaceId) return errorResult('workspace_id ausente e NIO_FABRIC_WORKSPACE não definido.');
   if (!datasetId) return errorResult('dataset_id ausente e NIO_FABRIC_DATASET não definido.');
 
-  return runFabricQuery(fabricGateway(), workspaceId, datasetId, parsed.data.dax, inventoryFromIndex);
+  return runFabricQuery(
+    fabricGateway(),
+    workspaceId,
+    datasetId,
+    parsed.data.dax,
+    inventoryFromIndex,
+  );
 }
 
 /** Inventário do acervo vetorial. Qualquer falha vira `[]` — a validação é opcional. */

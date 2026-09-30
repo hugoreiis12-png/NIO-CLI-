@@ -1,13 +1,14 @@
 import { test, expect, afterEach } from 'bun:test';
-import {
-  hashPassword,
-  verifyPassword,
-  needsRehash,
-  currentArgon2Options,
-} from './password.js';
+import { hashPassword, verifyPassword, needsRehash, currentArgon2Options } from './password.js';
 import { __resetPeppers } from './secrets.js';
 
-const ARGON_KEYS = ['NIO_ARGON2_MEMORY_MIB', 'NIO_ARGON2_TIME', 'NIO_ARGON2_PARALLELISM', 'NIO_PEPPERS', 'NIO_PEPPER'];
+const ARGON_KEYS = [
+  'NIO_ARGON2_MEMORY_MIB',
+  'NIO_ARGON2_TIME',
+  'NIO_ARGON2_PARALLELISM',
+  'NIO_PEPPERS',
+  'NIO_PEPPER',
+];
 const orig = Object.fromEntries(ARGON_KEYS.map((k) => [k, process.env[k]]));
 afterEach(() => {
   for (const k of ARGON_KEYS) {
@@ -57,7 +58,11 @@ test('hashPassword rejeita senha vazia', async () => {
 
 test('currentArgon2Options: default OWASP, override por env', () => {
   for (const k of ARGON_KEYS) delete process.env[k];
-  expect(currentArgon2Options()).toMatchObject({ memoryCost: 19 * 1024, timeCost: 2, parallelism: 1 });
+  expect(currentArgon2Options()).toMatchObject({
+    memoryCost: 19 * 1024,
+    timeCost: 2,
+    parallelism: 1,
+  });
   process.env.NIO_ARGON2_MEMORY_MIB = '64';
   process.env.NIO_ARGON2_TIME = '3';
   expect(currentArgon2Options()).toMatchObject({ memoryCost: 64 * 1024, timeCost: 3 });

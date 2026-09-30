@@ -26,7 +26,13 @@ const ADMIN_AUTH_HINT =
   '(separado do de APIs públicas), o SP no grupo de segurança dele, e o app SEM permissões ' +
   'admin-consent do Power BI.';
 
-export type ScanStatus = 'ok' | 'unconfigured' | 'unauthorized' | 'unavailable' | 'throttled' | 'disabled';
+export type ScanStatus =
+  | 'ok'
+  | 'unconfigured'
+  | 'unauthorized'
+  | 'unavailable'
+  | 'throttled'
+  | 'disabled';
 
 export interface ScanResult<T> {
   status: ScanStatus;
@@ -84,13 +90,17 @@ function blockedReason(workspace: Record<string, unknown>): string | null {
 async function httpFailure(step: string, res: Response): Promise<ScanResult<never>> {
   if (res.status === 429) {
     const s = retryAfterSeconds(res);
-    return { status: 'throttled', error: `${step} limitou (429)${s !== null ? ` — aguarde ${s}s` : ''}` };
+    return {
+      status: 'throttled',
+      error: `${step} limitou (429)${s !== null ? ` — aguarde ${s}s` : ''}`,
+    };
   }
   const detalhe = (await res.text().catch(() => '')).slice(0, 200);
   const unauthorized = res.status === 401 || res.status === 403;
   return {
     status: unauthorized ? 'unauthorized' : 'unavailable',
-    error: `${step} respondeu ${res.status} ${detalhe}${unauthorized ? ADMIN_AUTH_HINT : ''}`.trim(),
+    error:
+      `${step} respondeu ${res.status} ${detalhe}${unauthorized ? ADMIN_AUTH_HINT : ''}`.trim(),
   };
 }
 
@@ -112,7 +122,10 @@ export function createFabricScanner(
   async function headers(): Promise<ScanResult<Record<string, string>>> {
     const tok = await tokens.get();
     if (tok.status !== 'ok' || !tok.token) {
-      return { status: tok.status === 'unconfigured' ? 'unconfigured' : 'unauthorized', error: tok.error };
+      return {
+        status: tok.status === 'unconfigured' ? 'unconfigured' : 'unauthorized',
+        error: tok.error,
+      };
     }
     return {
       status: 'ok',
@@ -120,16 +133,24 @@ export function createFabricScanner(
     };
   }
 
-  async function pollUntilDone(id: string, h: Record<string, string>): Promise<ScanResult<never> | null> {
+  async function pollUntilDone(
+    id: string,
+    h: Record<string, string>,
+  ): Promise<ScanResult<never> | null> {
     let estado = '';
     for (let i = 0; i < POLL_MAX && estado !== 'Succeeded'; i++) {
       await sleep(POLL_MS);
-      const s = await fetchImpl(`${ADMIN}/scanStatus/${id}`, { headers: h, signal: AbortSignal.timeout(CALL_TIMEOUT_MS) });
+      const s = await fetchImpl(`${ADMIN}/scanStatus/${id}`, {
+        headers: h,
+        signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      });
       if (!s.ok) return httpFailure('scanStatus', s);
       estado = ((await s.json()) as { status?: string }).status ?? '';
       if (estado === 'Failed') return { status: 'unavailable', error: 'scan falhou no servidor' };
     }
-    return estado === 'Succeeded' ? null : { status: 'unavailable', error: `scan não concluiu (${estado})` };
+    return estado === 'Succeeded'
+      ? null
+      : { status: 'unavailable', error: `scan não concluiu (${estado})` };
   }
 
   return {
@@ -140,7 +161,12 @@ export function createFabricScanner(
       try {
         const start = await fetchImpl(
           `${ADMIN}/getInfo?datasetSchema=True&datasetExpressions=True&lineage=True`,
-          { method: 'POST', headers: h.data, body: JSON.stringify({ workspaces: [workspaceId] }), signal: AbortSignal.timeout(CALL_TIMEOUT_MS) },
+          {
+            method: 'POST',
+            headers: h.data,
+            body: JSON.stringify({ workspaces: [workspaceId] }),
+            signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+          },
         );
         if (!start.ok) return httpFailure('getInfo', start);
         const job = (await start.json()) as { id?: string; status?: string };
@@ -151,7 +177,10 @@ export function createFabricScanner(
           if (pending) return pending;
         }
 
-        const res = await fetchImpl(`${ADMIN}/scanResult/${job.id}`, { headers: h.data, signal: AbortSignal.timeout(RESULT_TIMEOUT_MS) });
+        const res = await fetchImpl(`${ADMIN}/scanResult/${job.id}`, {
+          headers: h.data,
+          signal: AbortSignal.timeout(RESULT_TIMEOUT_MS),
+        });
         if (!res.ok) return httpFailure('scanResult', res);
         const body = (await res.json()) as { workspaces?: Array<Record<string, unknown>> };
         const ws = body.workspaces?.[0];
@@ -164,7 +193,10 @@ export function createFabricScanner(
         const alvo = datasets.find((d) => d.id === datasetId);
         if (!alvo) return { status: 'unavailable', error: `dataset ${datasetId} não veio no scan` };
         if (!Array.isArray(alvo.tables) || alvo.tables.length === 0) {
-          return { status: 'disabled', error: 'scan voltou sem tabelas — metadados detalhados desligados' };
+          return {
+            status: 'disabled',
+            error: 'scan voltou sem tabelas — metadados detalhados desligados',
+          };
         }
         return { status: 'ok', data: alvo };
       } catch (err) {

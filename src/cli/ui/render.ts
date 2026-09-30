@@ -1,12 +1,4 @@
-import {
-  c,
-  sym,
-  cmd,
-  link,
-  badge,
-  section,
-  highlightInlineCode,
-} from "../../lib/colors.js";
+import { c, sym, cmd, link, badge, section, highlightInlineCode } from "../../lib/colors.js";
 import { brand } from "../../brand.js";
 import { type InstallResult } from "../../lib/clients/client-configs.js";
 import { type ProvisionResult } from "../../lib/provision/provision.js";
@@ -17,16 +9,13 @@ export function printInstallResult(label: string, result: InstallResult): void {
   const at = (p: string) => c.dim(p);
   switch (result.status) {
     case "created":
-      console.log(
-        `  ${c.green(sym.ok)} ${c.bold(label)} ${c.dim("criado")} ${at(result.path)}`,
-      );
+      console.log(`  ${c.green(sym.ok)} ${c.bold(label)} ${c.dim("criado")} ${at(result.path)}`);
       break;
     case "updated":
       console.log(
         `  ${c.green(sym.ok)} ${c.bold(label)} ${c.dim("atualizado")} ${at(result.path)}`,
       );
-      if (result.backup)
-        console.log(`    ${c.dim("backup:")} ${at(result.backup)}`);
+      if (result.backup) console.log(`    ${c.dim("backup:")} ${at(result.backup)}`);
       break;
     case "already_configured":
       console.log(
@@ -100,8 +89,7 @@ export function printProvisionResult(result: ProvisionResult): void {
   }
   if (keys.length > 0) console.log("");
 
-  const count = (a: string) =>
-    result.files.filter((f) => f.action === a).length;
+  const count = (a: string) => result.files.filter((f) => f.action === a).length;
   const part = (n: number, label: string, color: (s: string) => string) =>
     n > 0 ? color(`${n} ${label}`) : c.dim(`${n} ${label}`);
   const parts = [
@@ -109,22 +97,14 @@ export function printProvisionResult(result: ProvisionResult): void {
     part(count("update"), "atualizados", c.cyan),
     c.dim(`${count("unchanged")} iguais`),
   ];
-  if (count("skip-conflict"))
-    parts.push(c.yellow(`${count("skip-conflict")} em conflito`));
+  if (count("skip-conflict")) parts.push(c.yellow(`${count("skip-conflict")} em conflito`));
   if (count("prune")) parts.push(c.red(`${count("prune")} removidos`));
-  if (count("prune-kept"))
-    parts.push(c.yellow(`${count("prune-kept")} preservados`));
-  if (count("write-error"))
-    parts.push(c.red(`${count("write-error")} com erro`));
+  if (count("prune-kept")) parts.push(c.yellow(`${count("prune-kept")} preservados`));
+  if (count("write-error")) parts.push(c.red(`${count("write-error")} com erro`));
 
   const prefix = result.dryRun ? c.dim("[dry-run] ") : "";
-  const summary =
-    result.files.length === 0
-      ? c.dim("bundle vazio")
-      : parts.join(c.dim(" · "));
-  console.log(
-    `    ${prefix}${summary} ${c.dim(sym.arrow)} ${c.dim(result.targetDir)}`,
-  );
+  const summary = result.files.length === 0 ? c.dim("bundle vazio") : parts.join(c.dim(" · "));
+  console.log(`    ${prefix}${summary} ${c.dim(sym.arrow)} ${c.dim(result.targetDir)}`);
 
   if (count("skip-conflict") > 0) {
     console.log(
@@ -136,13 +116,8 @@ export function printProvisionResult(result: ProvisionResult): void {
       `    ${c.red(sym.err)} ${c.dim("alguns arquivos falharam (symlink de dotfiles quebrado?) — veja o caminho do link.")}`,
     );
   }
-  if (
-    !result.dryRun &&
-    result.files.some((f) => f.action === "create" || f.action === "update")
-  ) {
-    console.log(
-      `    ${c.dim("reinicie o cliente pra carregar os skills/commands novos.")}`,
-    );
+  if (!result.dryRun && result.files.some((f) => f.action === "create" || f.action === "update")) {
+    console.log(`    ${c.dim("reinicie o cliente pra carregar os skills/commands novos.")}`);
   }
 }
 
@@ -160,9 +135,7 @@ export function printHarnessResult(result: {
           ? c.dim("·")
           : c.dim("=");
   const changed =
-    result.rules !== "unchanged" ||
-    result.agents !== "unchanged" ||
-    result.claude !== "unchanged";
+    result.rules !== "unchanged" || result.agents !== "unchanged" || result.claude !== "unchanged";
   if (!changed) return;
   console.log("");
   console.log(`  ${c.magenta(sym.dot)} ${c.bold("Harness (repo)")}`);
@@ -188,13 +161,10 @@ export function printDepHeader(
       : status === "available"
         ? ` ${badge("a instalar", "yellow")}`
         : "";
-  console.log(
-    `  ${c.magenta(sym.dot)} ${c.bold(dep.title)}${state} ${depBadge(dep)}`,
-  );
+  console.log(`  ${c.magenta(sym.dot)} ${c.bold(dep.title)}${state} ${depBadge(dep)}`);
   // Instalada → o header já basta; repo/descrição só poluem.
   if (status === "installed") return;
-  if (dep.repo)
-    console.log(`    ${link(dep.repo, dep.repo.replace(/^https?:\/\//, ""))}`);
+  if (dep.repo) console.log(`    ${link(dep.repo, dep.repo.replace(/^https?:\/\//, ""))}`);
   if (dep.description) console.log(`    ${c.dim(dep.description)}`);
 }
 
@@ -207,8 +177,7 @@ export function printManualSteps(manual: string): void {
     const line = raw.trim();
     if (!line) continue;
     const m = /^([^:`]{1,24}):\s*(.*)$/.exec(line);
-    if (m)
-      console.log(`    ${bar}   ${c.bold(m[1])}  ${highlightInlineCode(m[2])}`);
+    if (m) console.log(`    ${bar}   ${c.bold(m[1])}  ${highlightInlineCode(m[2])}`);
     else console.log(`    ${bar}   ${highlightInlineCode(line)}`);
   }
 }

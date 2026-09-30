@@ -4,10 +4,7 @@
  * em transação: apaga desafios ativos anteriores e expirados, depois insere.
  */
 import type { LoginChallenge, ChallengePurpose } from '../../core/types.js';
-import type {
-  LoginChallengeRepository,
-  NewLoginChallengeInput,
-} from '../../core/repositories.js';
+import type { LoginChallengeRepository, NewLoginChallengeInput } from '../../core/repositories.js';
 import { query, withTransaction, isUuid } from './client.js';
 
 /** Linha crua de `login_challenges` (snake_case). */
@@ -50,10 +47,9 @@ export function createLoginChallengeRepository(): LoginChallengeRepository {
     async create(input: NewLoginChallengeInput) {
       return withTransaction(async (tx) => {
         await tx.query('DELETE FROM login_challenges WHERE expires_at < NOW()');
-        await tx.query(
-          'DELETE FROM login_challenges WHERE user_id = $1 AND consumed_at IS NULL',
-          [input.userId],
-        );
+        await tx.query('DELETE FROM login_challenges WHERE user_id = $1 AND consumed_at IS NULL', [
+          input.userId,
+        ]);
         const res = await tx.query<LoginChallengeRow>(
           `INSERT INTO login_challenges (user_id, purpose, code_hash, channel, expires_at)
            VALUES ($1, $2, $3, $4, $5)

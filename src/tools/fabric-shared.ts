@@ -11,14 +11,18 @@ export function fabricGateway(): FabricGateway {
 }
 
 const FABRIC_ERROR_LABEL: Record<Exclude<FabricStatus, 'ok'>, string> = {
-  unauthorized: 'Sem acesso ao Fabric (tenant setting, papel no workspace/Build, RLS/SSO no dataset, ou credencial inválida)',
+  unauthorized:
+    'Sem acesso ao Fabric (tenant setting, papel no workspace/Build, RLS/SSO no dataset, ou credencial inválida)',
   unavailable: 'Fabric indisponível (rede/timeout)',
   throttled: 'Fabric limitou as chamadas — NÃO repita agora; espere o tempo indicado',
   failed: 'Falha na consulta ao Fabric',
 };
 
 /** Traduz um `FabricResult` de falha num `errorResult` pt-BR. */
-export function fabricErrorResult(status: Exclude<FabricStatus, 'ok'>, error?: string): CallToolResult {
+export function fabricErrorResult(
+  status: Exclude<FabricStatus, 'ok'>,
+  error?: string,
+): CallToolResult {
   return errorResult(`${FABRIC_ERROR_LABEL[status]}: ${error ?? 'sem detalhe'}`);
 }
 
@@ -32,7 +36,9 @@ export function fabricErrorResult(status: Exclude<FabricStatus, 'ok'>, error?: s
  *
  * De quebra, faz o runtime honrar os tipos declarados em `core/fabric.ts`.
  */
-export function leanList(items: readonly { id: string; name: string }[]): { id: string; name: string }[] {
+export function leanList(
+  items: readonly { id: string; name: string }[],
+): { id: string; name: string }[] {
   return items.map(({ id, name }) => ({ id, name }));
 }
 
@@ -66,6 +72,9 @@ export function capRows(rows: FabricRow[]): {
 }
 
 /** Resolve id do arg ou do env default (workspace/dataset). */
-export function orEnvDefault(fromArg: string | undefined, envKey: 'NIO_FABRIC_WORKSPACE' | 'NIO_FABRIC_DATASET'): string | undefined {
+export function orEnvDefault(
+  fromArg: string | undefined,
+  envKey: 'NIO_FABRIC_WORKSPACE' | 'NIO_FABRIC_DATASET',
+): string | undefined {
   return fromArg ?? process.env[envKey]?.trim() ?? undefined;
 }

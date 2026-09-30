@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 
 /**
  * Coleta os arquivos sincronizáveis do pacote `@nio-cli/skills` (commands/skills/
@@ -8,10 +8,10 @@ import { join, relative, sep } from "node:path";
  */
 
 /** Subpastas do pacote `@nio-cli/skills` espelhadas em `~/.claude`. */
-const SYNCED_SUBDIRS = ["commands", "skills", "agents"] as const;
+const SYNCED_SUBDIRS = ['commands', 'skills', 'agents'] as const;
 
 /** Basenames que nunca são copiados pro destino (READMEs são só do repo). */
-const IGNORED_BASENAMES = new Set([".gitkeep", ".DS_Store", "README.md"]);
+const IGNORED_BASENAMES = new Set(['.gitkeep', '.DS_Store', 'README.md']);
 
 export interface SkillFile {
   relPath: string;
@@ -23,11 +23,10 @@ function listFilesRecursive(dir: string): string[] {
   const out: string[] = [];
   const walk = (abs: string): void => {
     for (const entry of readdirSync(abs, { withFileTypes: true })) {
-      if (entry.name === ".DS_Store") continue;
+      if (entry.name === '.DS_Store') continue;
       const childAbs = join(abs, entry.name);
       if (entry.isDirectory()) walk(childAbs);
-      else if (entry.isFile())
-        out.push(relative(dir, childAbs).split(sep).join("/"));
+      else if (entry.isFile()) out.push(relative(dir, childAbs).split(sep).join('/'));
     }
   };
   walk(dir);
@@ -41,7 +40,7 @@ export function collectSkillFiles(dir: string): SkillFile[] {
     const subDir = join(dir, sub);
     if (!existsSync(subDir)) continue;
     for (const rel of listFilesRecursive(subDir)) {
-      const base = rel.split("/").pop() ?? rel;
+      const base = rel.split('/').pop() ?? rel;
       if (IGNORED_BASENAMES.has(base)) continue;
       const abs = join(subDir, rel);
       const content = readFileSync(abs);

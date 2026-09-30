@@ -19,7 +19,10 @@ export const definition: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      session: { type: 'string', description: 'Id da sessão (prefixo do UUID basta). Omita para a sessão ativa.' },
+      session: {
+        type: 'string',
+        description: 'Id da sessão (prefixo do UUID basta). Omita para a sessão ativa.',
+      },
     },
     required: [],
     additionalProperties: false,

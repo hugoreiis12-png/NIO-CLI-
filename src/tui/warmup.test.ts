@@ -49,7 +49,12 @@ test('ACEITE: o id da sessão é avisado ANTES da resposta (a TUI filtra os even
   // Sem isto os eventos do aquecimento cairiam no chat: `applyEvent` não filtra sessão.
   const { client } = fakeClient();
   const vistos: string[] = [];
-  await warmPrefixCache({ client, model: MODEL, agent: 'build', onSession: (id) => vistos.push(id) });
+  await warmPrefixCache({
+    client,
+    model: MODEL,
+    agent: 'build',
+    onSession: (id) => vistos.push(id),
+  });
   expect(vistos).toEqual(['ses_warm']);
 });
 

@@ -1,6 +1,11 @@
 import { test, expect } from 'bun:test';
 import { LanguageConfigurator } from './language-configurator.js';
-import type { LanguageCatalog, LanguageRecipe, ScaffoldGateway, ScaffoldPlan } from '../core/lang.js';
+import type {
+  LanguageCatalog,
+  LanguageRecipe,
+  ScaffoldGateway,
+  ScaffoldPlan,
+} from '../core/lang.js';
 
 const recipe: LanguageRecipe = {
   language: 'typescript',
@@ -39,9 +44,16 @@ function fakeScaffold() {
 
 test('não confirmado → NÃO aplica de verdade (só dry-run), applied:false', async () => {
   const scaffold = fakeScaffold();
-  const cfg = new LanguageConfigurator({ catalog: fakeCatalog(), scaffold: scaffold as ScaffoldGateway });
+  const cfg = new LanguageConfigurator({
+    catalog: fakeCatalog(),
+    scaffold: scaffold as ScaffoldGateway,
+  });
 
-  const res = await cfg.configure([{ language: 'typescript', choices: {} }], '/tmp/x', async () => false);
+  const res = await cfg.configure(
+    [{ language: 'typescript', choices: {} }],
+    '/tmp/x',
+    async () => false,
+  );
 
   expect(res[0]?.applied).toBe(false);
   expect(res[0]?.steps).toEqual([]);
@@ -50,9 +62,16 @@ test('não confirmado → NÃO aplica de verdade (só dry-run), applied:false', 
 
 test('confirmado → aplica de verdade e devolve steps done', async () => {
   const scaffold = fakeScaffold();
-  const cfg = new LanguageConfigurator({ catalog: fakeCatalog(), scaffold: scaffold as ScaffoldGateway });
+  const cfg = new LanguageConfigurator({
+    catalog: fakeCatalog(),
+    scaffold: scaffold as ScaffoldGateway,
+  });
 
-  const res = await cfg.configure([{ language: 'typescript', choices: {} }], '/tmp/x', async () => true);
+  const res = await cfg.configure(
+    [{ language: 'typescript', choices: {} }],
+    '/tmp/x',
+    async () => true,
+  );
 
   expect(res[0]?.applied).toBe(true);
   expect(scaffold.realCalls).toBe(1);
@@ -61,7 +80,10 @@ test('confirmado → aplica de verdade e devolve steps done', async () => {
 
 test('preview passado ao confirm é o dry-run (descrição dos passos)', async () => {
   const scaffold = fakeScaffold();
-  const cfg = new LanguageConfigurator({ catalog: fakeCatalog(), scaffold: scaffold as ScaffoldGateway });
+  const cfg = new LanguageConfigurator({
+    catalog: fakeCatalog(),
+    scaffold: scaffold as ScaffoldGateway,
+  });
   let seen: string[] = [];
 
   await cfg.configure([{ language: 'typescript', choices: {} }], '/tmp/x', async (_l, preview) => {

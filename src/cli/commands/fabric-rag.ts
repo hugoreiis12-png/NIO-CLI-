@@ -16,7 +16,7 @@ import {
 } from "../../adapters/pg/doc-index-repository.js";
 import { ingestSchema } from "../../app/schema-ingest.js";
 import { schemaRepo } from "../../app/schema-chunker.js";
-import { createFabricScanner } from '../../adapters/fabric/scanner.js';
+import { createFabricScanner } from "../../adapters/fabric/scanner.js";
 
 /** Ids do modelo a sincronizar — do env, como as tools `nio_fabric_*`. */
 function target(): { workspaceId?: string; datasetId?: string } {
@@ -44,7 +44,12 @@ async function runSchemaSync(opts: { force?: boolean; prune?: boolean }): Promis
 
   console.log(c.dim("  lendo o schema do modelo (scanner admin, com queda pro INFO.VIEW)…"));
   const out = await ingestSchema(
-    { fabric: createFabricGateway(), embedder: createLocalEmbedder(), index: createDocIndexRepository(), scanner: createFabricScanner() },
+    {
+      fabric: createFabricGateway(),
+      embedder: createLocalEmbedder(),
+      index: createDocIndexRepository(),
+      scanner: createFabricScanner(),
+    },
     { ...ids, force: opts.force },
   );
 
@@ -72,7 +77,8 @@ async function runSchemaSync(opts: { force?: boolean; prune?: boolean }): Promis
   // antigas convivendo — antes o `return` do "inalterado" engolia o `--prune`.
   if (opts.prune) {
     const gone = await pruneOldRefs(schemaRepo(ids.datasetId), r.ref);
-    if (gone.status === "ok") console.log(c.dim(`  versões antigas removidas: ${gone.data ?? 0} chunks`));
+    if (gone.status === "ok")
+      console.log(c.dim(`  versões antigas removidas: ${gone.data ?? 0} chunks`));
   }
 }
 
@@ -130,13 +136,19 @@ async function reportMeasureExpressions(repo: string): Promise<void> {
   }
   console.log(`${c.yellow(sym.warn)} fórmulas DAX: ${c.cyan("0")} de ${total} medidas`);
   console.log(c.dim("  o modelo chama as medidas, mas não lê a definição delas."));
-  console.log(c.dim("  habilite no portal admin do Power BI → Configurações do locatário → API de administrador:"));
+  console.log(
+    c.dim(
+      "  habilite no portal admin do Power BI → Configurações do locatário → API de administrador:",
+    ),
+  );
   console.log(c.dim("    · Metadados detalhados do conjunto de dados"));
   console.log(c.dim("    · Expressões DAX e mashup do conjunto de dados"));
 }
 
 export function registerFabricRagCommands(fabric: Command): void {
-  const schema = fabric.command("schema").description("Schema do modelo semântico no índice vetorial");
+  const schema = fabric
+    .command("schema")
+    .description("Schema do modelo semântico no índice vetorial");
   schema
     .command("sync")
     .description("Lê o schema via INFO.VIEW.* e indexa (pula se nada mudou)")

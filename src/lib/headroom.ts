@@ -13,8 +13,7 @@ import { dlog } from './debug.js';
 export const HEADROOM_PORT = Number(env('HEADROOM_PORT')?.trim()) || 8787;
 
 /** baseURL que o provider do OpenCode usa (no host). Override total via `NIO_HEADROOM_URL`. */
-export const HEADROOM_URL =
-  env('HEADROOM_URL')?.trim() || `http://127.0.0.1:${HEADROOM_PORT}/v1`;
+export const HEADROOM_URL = env('HEADROOM_URL')?.trim() || `http://127.0.0.1:${HEADROOM_PORT}/v1`;
 
 /** Mesma coisa, mas alcançável de dentro de um container (Fase C, futuro). */
 export const HEADROOM_URL_CONTAINER = `http://host.docker.internal:${HEADROOM_PORT}/v1`;
@@ -59,18 +58,24 @@ export async function ensureHeadroomRunning(): Promise<HeadroomEnsureResult> {
 
   // Stack unificado (docker/docker-compose.yml): sobe só o serviço `headroom`.
   dlog('subindo o Headroom (stack unificado):', infraComposePath());
-  const res = spawnSync(
-    'docker',
-    ['compose', '-f', infraComposePath(), 'up', '-d', 'headroom'],
-    { stdio: 'ignore' },
-  );
+  const res = spawnSync('docker', ['compose', '-f', infraComposePath(), 'up', '-d', 'headroom'], {
+    stdio: 'ignore',
+  });
   if (res.status !== 0) {
-    return { ok: false, started: false, error: '`docker compose -f docker/... up -d headroom` saiu != 0.' };
+    return {
+      ok: false,
+      started: false,
+      error: '`docker compose -f docker/... up -d headroom` saiu != 0.',
+    };
   }
 
   for (let i = 0; i < 60; i++) {
     await sleep(500);
     if (await headroomHealthy()) return { ok: true, started: true };
   }
-  return { ok: false, started: false, error: 'o container subiu mas o Headroom não respondeu em ~30s.' };
+  return {
+    ok: false,
+    started: false,
+    error: 'o container subiu mas o Headroom não respondeu em ~30s.',
+  };
 }

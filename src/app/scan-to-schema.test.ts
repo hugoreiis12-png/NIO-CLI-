@@ -63,5 +63,9 @@ test('countWithExpression reporta o número que o rag status mostra', () => {
 });
 
 test('scan sem tabelas devolve tudo vazio, sem quebrar', () => {
-  expect(scanToSchemaRows({ id: 'x', name: 'y' })).toEqual({ tables: [], measures: [], columns: [] });
+  expect(scanToSchemaRows({ id: 'x', name: 'y' })).toEqual({
+    tables: [],
+    measures: [],
+    columns: [],
+  });
 });

@@ -70,7 +70,9 @@ async function withManager(fn: (m: TaskManager, userId: number) => Promise<void>
 
 /** Perfil válido do catálogo — fonte única, sem lista solta no comando. */
 function parseProfile(valor: string): Profile {
-  const validos = createProfileCatalog().list().map((d) => d.profile);
+  const validos = createProfileCatalog()
+    .list()
+    .map((d) => d.profile);
   const achado = validos.find((p) => p === valor);
   if (!achado) {
     console.error(
@@ -128,10 +130,15 @@ function printStep(s: TaskStep): void {
   const style = STEP_STYLE[s.status] ?? c.dim;
   const tentativa = s.attempt > 1 ? c.dim(` (tentativa ${s.attempt})`) : "";
   const erro = s.error ? `\n      ${c.red(s.error)}` : "";
-  console.log(`  ${c.dim(String(s.stepNumber).padStart(3))}  ${style(s.status.padEnd(8))} ${s.name}${tentativa}${erro}`);
+  console.log(
+    `  ${c.dim(String(s.stepNumber).padStart(3))}  ${style(s.status.padEnd(8))} ${s.name}${tentativa}${erro}`,
+  );
 }
 
-async function run(goalParts: string[], opts: { profile?: string; maxSteps?: string }): Promise<void> {
+async function run(
+  goalParts: string[],
+  opts: { profile?: string; maxSteps?: string },
+): Promise<void> {
   const goal = goalParts.join(" ").trim();
   if (!goal) {
     console.error(`${c.red(sym.err)} Descreva o objetivo da task.`);
@@ -152,12 +159,14 @@ async function run(goalParts: string[], opts: { profile?: string; maxSteps?: str
     // Sobe o worker se não houver um vivo. A task já está persistida, então
     // mesmo que isto falhe ela não se perde — o próximo worker a encontra.
     const worker = ensureWorkerRunning();
-    if (worker.status === 'iniciado') {
-      console.log(`  ${c.dim(`worker iniciado (pid ${worker.pid}) — pare com \`kill ${worker.pid}\``)}`);
-    } else if (worker.status === 'falhou') {
+    if (worker.status === "iniciado") {
+      console.log(
+        `  ${c.dim(`worker iniciado (pid ${worker.pid}) — pare com \`kill ${worker.pid}\``)}`,
+      );
+    } else if (worker.status === "falhou") {
       console.log(
         `  ${c.yellow(sym.warn)} não consegui subir o worker (${worker.error}). ` +
-          `A task fica na fila; rode ${c.cyan('nio-worker')} à mão.`,
+          `A task fica na fila; rode ${c.cyan("nio-worker")} à mão.`,
       );
     }
     console.log(`  ${c.dim(`acompanhe com ${brand.name} task show ${task.id.slice(0, 8)}`)}`);
@@ -172,7 +181,9 @@ async function list(opts: { limit?: string; all?: boolean }): Promise<void> {
       ...(opts.all ? { kinds: ["agent", "chat"] } : {}),
     });
     if (tasks.length === 0) {
-      console.log(`Nenhuma task ainda. Crie uma com ${c.cyan(`${brand.name} task run "<objetivo>"`)}.`);
+      console.log(
+        `Nenhuma task ainda. Crie uma com ${c.cyan(`${brand.name} task run "<objetivo>"`)}.`,
+      );
       return;
     }
     section("Tasks", `${tasks.length} do usuário (id abreviado · objetivo · perfil · status)`);

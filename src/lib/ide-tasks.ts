@@ -30,7 +30,10 @@ function nioTask(): VscodeTask {
 }
 
 /** Merge não-destrutivo de `{ key: value }` num JSON de config. Retorna se criou o arquivo. */
-function mergeJson(path: string, patch: (cur: Record<string, unknown>) => Record<string, unknown>): boolean {
+function mergeJson(
+  path: string,
+  patch: (cur: Record<string, unknown>) => Record<string, unknown>,
+): boolean {
   const created = !existsSync(path);
   const cur = created ? {} : ((readJson(path) as Record<string, unknown> | null) ?? {});
   if (!created) backupFile(path);

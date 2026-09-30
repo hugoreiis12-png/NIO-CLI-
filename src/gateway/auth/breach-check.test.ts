@@ -34,14 +34,18 @@ describe('checkPasswordBreach — camada HIBP (mock)', () => {
   test('sufixo presente na resposta → breached/pwned', async () => {
     // SHA-1("hunter2") = F3BBB D66A63D4BF1747940578EC3D0103530E21D (prefixo + sufixo)
     globalThis.fetch = (async () =>
-      new Response('0000000000000000000000000000000000000:0\nD66A63D4BF1747940578EC3D0103530E21D:42\n', {
-        status: 200,
-      })) as typeof fetch;
+      new Response(
+        '0000000000000000000000000000000000000:0\nD66A63D4BF1747940578EC3D0103530E21D:42\n',
+        {
+          status: 200,
+        },
+      )) as typeof fetch;
     expect(await checkPasswordBreach('hunter2')).toEqual({ breached: true, source: 'pwned' });
   });
 
   test('sufixo ausente → breached:false', async () => {
-    globalThis.fetch = (async () => new Response('0000000000000000000000000000000000000:1\n', { status: 200 })) as typeof fetch;
+    globalThis.fetch = (async () =>
+      new Response('0000000000000000000000000000000000000:1\n', { status: 200 })) as typeof fetch;
     expect(await checkPasswordBreach('uma-senha-que-nao-vazou-123')).toEqual({ breached: false });
   });
 

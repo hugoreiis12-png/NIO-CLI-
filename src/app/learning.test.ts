@@ -6,14 +6,21 @@ import type { EmbeddingProvider } from '../core/rag.js';
 const VETOR = Array.from({ length: 768 }, () => 0.1);
 
 const embedder = (ok = true): EmbeddingProvider => ({
-  embedQuery: async () => (ok ? { status: 'ok', data: VETOR } : { status: 'unconfigured', error: 'sem modelo' }),
-  embedPassages: async (t) => (ok ? { status: 'ok', data: t.map(() => VETOR) } : { status: 'unconfigured', error: 'sem modelo' }),
+  embedQuery: async () =>
+    ok ? { status: 'ok', data: VETOR } : { status: 'unconfigured', error: 'sem modelo' },
+  embedPassages: async (t) =>
+    ok
+      ? { status: 'ok', data: t.map(() => VETOR) }
+      : { status: 'unconfigured', error: 'sem modelo' },
 });
 
 function fakeStore(achadas: ScoredLesson[] = []) {
   const gravadas: unknown[] = [];
   const store: LessonStore = {
-    save: async (l) => { gravadas.push(l); return { status: 'ok', data: gravadas.length }; },
+    save: async (l) => {
+      gravadas.push(l);
+      return { status: 'ok', data: gravadas.length };
+    },
     recall: async () => ({ status: 'ok', data: achadas }),
     registerOutcome: async () => ({ status: 'ok' }),
   };
@@ -31,7 +38,13 @@ const licao = (score: number): ScoredLesson => ({
 });
 
 const par: ToolAttempt[] = [
-  { tool: 'nio_fabric_query', status: 'error', output: "Cannot find table 'VENDAS'", input: { dax: 'a' }, reasoning: 'supus VENDAS' },
+  {
+    tool: 'nio_fabric_query',
+    status: 'error',
+    output: "Cannot find table 'VENDAS'",
+    input: { dax: 'a' },
+    reasoning: 'supus VENDAS',
+  },
   { tool: 'nio_fabric_query', status: 'completed', output: 'ok', input: { dax: 'b' } },
 ];
 
@@ -68,7 +81,11 @@ test('ACEITE: lição abaixo do piso de score é descartada', async () => {
 
 test('bloco do prompt sai consultivo, nunca imperativo', async () => {
   const { store } = fakeStore([licao(0.95)]);
-  const { text: bloco, injected } = await lessonsBlock({ embedder: embedder(), store }, 'nio_fabric_query', 'erro x');
+  const { text: bloco, injected } = await lessonsBlock(
+    { embedder: embedder(), store },
+    'nio_fabric_query',
+    'erro x',
+  );
   expect(bloco).toContain('pista, não como regra');
   expect(bloco).toContain('VISAO_COMERCIAL');
   expect(injected).toEqual([{ tool: 'nio_fabric_query', sintomaHash: 'h1' }]); // pra creditar depois

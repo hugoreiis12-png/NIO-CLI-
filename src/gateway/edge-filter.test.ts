@@ -80,20 +80,28 @@ describe('clientIp (ADR 0011 §F)', () => {
     if (orig === undefined) delete process.env.NIO_TRUST_PROXY;
     else process.env.NIO_TRUST_PROXY = orig;
   });
-  const withSocket = (o: Partial<FilterableRequest> & { socket?: { remoteAddress?: string } } = {}) => ({
+  const withSocket = (
+    o: Partial<FilterableRequest> & { socket?: { remoteAddress?: string } } = {},
+  ) => ({
     headers: {},
     ...o,
   });
 
   test('sem NIO_TRUST_PROXY: usa o remoteAddress do socket, ignora XFF', () => {
     delete process.env.NIO_TRUST_PROXY;
-    const r = withSocket({ headers: { 'x-forwarded-for': '1.2.3.4' }, socket: { remoteAddress: '10.0.0.5' } });
+    const r = withSocket({
+      headers: { 'x-forwarded-for': '1.2.3.4' },
+      socket: { remoteAddress: '10.0.0.5' },
+    });
     expect(clientIp(r)).toBe('10.0.0.5');
   });
 
   test('com NIO_TRUST_PROXY=1: pega o 1º IP do X-Forwarded-For', () => {
     process.env.NIO_TRUST_PROXY = '1';
-    const r = withSocket({ headers: { 'x-forwarded-for': '203.0.113.7, 10.0.0.1' }, socket: { remoteAddress: '10.0.0.1' } });
+    const r = withSocket({
+      headers: { 'x-forwarded-for': '203.0.113.7, 10.0.0.1' },
+      socket: { remoteAddress: '10.0.0.1' },
+    });
     expect(clientIp(r)).toBe('203.0.113.7');
   });
 
@@ -104,7 +112,9 @@ describe('clientIp (ADR 0011 §F)', () => {
 
   test('normaliza IPv4-mapeado (::ffff:)', () => {
     delete process.env.NIO_TRUST_PROXY;
-    expect(clientIp(withSocket({ socket: { remoteAddress: '::ffff:192.168.1.20' } }))).toBe('192.168.1.20');
+    expect(clientIp(withSocket({ socket: { remoteAddress: '::ffff:192.168.1.20' } }))).toBe(
+      '192.168.1.20',
+    );
   });
 
   test('sem socket nem XFF → null', () => {

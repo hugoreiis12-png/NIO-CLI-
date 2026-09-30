@@ -70,9 +70,16 @@ export function skillsInstallPlan(slug: string): DependencyPlan | null {
 type PlanOrReason = { plan: DependencyPlan; reason?: undefined } | { plan: null; reason: string };
 
 function resolveNpmPlan(npm: string): PlanOrReason {
-  if (!NPM_NAME_RE.test(npm)) return { plan: null, reason: `nome de pacote npm inválido: "${npm}"` };
+  if (!NPM_NAME_RE.test(npm))
+    return { plan: null, reason: `nome de pacote npm inválido: "${npm}"` };
   return {
-    plan: { kind: 'npm', pkg: npm, program: 'npm', args: ['install', '-g', npm], command: `npm install -g ${npm}` },
+    plan: {
+      kind: 'npm',
+      pkg: npm,
+      program: 'npm',
+      args: ['install', '-g', npm],
+      command: `npm install -g ${npm}`,
+    },
   };
 }
 
@@ -88,7 +95,9 @@ function resolveSkillsPlan(skills: string): PlanOrReason {
   const args = skillName
     ? ['--yes', 'skills', 'add', repoSlug, '--skill', skillName]
     : ['--yes', 'skills', 'add', repoSlug];
-  return { plan: { kind: 'skills', repo: skills, program: 'npx', args, command: `npx ${args.join(' ')}` } };
+  return {
+    plan: { kind: 'skills', repo: skills, program: 'npx', args, command: `npx ${args.join(' ')}` },
+  };
 }
 
 function resolveGitPlan(git: string, id: string): PlanOrReason {
@@ -143,7 +152,10 @@ export function resolveDependency(node: SkillDoc): ResolvedDependency {
   const manual = fm.manual?.trim();
   if (manual) return { ...base, manual, reason: 'instalação manual' };
 
-  return { ...base, reason: 'sem instalador estruturado (npm:/skills:/git:/manual:) — instale manualmente' };
+  return {
+    ...base,
+    reason: 'sem instalador estruturado (npm:/skills:/git:/manual:) — instale manualmente',
+  };
 }
 
 /** `detect:` cru → lista de globs (separados por vírgula/quebra de linha). */

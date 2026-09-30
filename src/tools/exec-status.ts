@@ -16,7 +16,10 @@ export const definition: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      job_id: { type: 'string', description: `Id devolvido por \`${brand.cliToolPrefix}delegate_exec\`.` },
+      job_id: {
+        type: 'string',
+        description: `Id devolvido por \`${brand.cliToolPrefix}delegate_exec\`.`,
+      },
     },
     required: ['job_id'],
     additionalProperties: false,

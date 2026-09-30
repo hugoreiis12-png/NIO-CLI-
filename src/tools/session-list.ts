@@ -18,7 +18,10 @@ export const definition: Tool = {
 };
 
 /** Núcleo testável — recebe o manager e o id do usuário já resolvidos. */
-export async function runSessionList(manager: SessionManager, userId: number): Promise<CallToolResult> {
+export async function runSessionList(
+  manager: SessionManager,
+  userId: number,
+): Promise<CallToolResult> {
   try {
     const sessions = await manager.list(userId);
     return jsonResult({ count: sessions.length, sessions: sessions.map(sessionView) });

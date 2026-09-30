@@ -14,7 +14,7 @@ if (!password) {
 
 try {
   const hashed = await hash(password, {
-    memoryCost: 19456,  // 19 MiB (OWASP minimum)
+    memoryCost: 19456, // 19 MiB (OWASP minimum)
     timeCost: 2,
     parallelism: 1,
     version: 19,

@@ -28,7 +28,16 @@ function montar(r: QuestionReq) {
   let answered: string[][] | null = null;
   let rejected = false;
   const ui = render(
-    <QuestionModal req={r} queued={1} onAnswer={(a) => { answered = a; }} onReject={() => { rejected = true; }} />,
+    <QuestionModal
+      req={r}
+      queued={1}
+      onAnswer={(a) => {
+        answered = a;
+      }}
+      onReject={() => {
+        rejected = true;
+      }}
+    />,
   );
   const press = async (...keys: string[]): Promise<void> => {
     // O Ink só assina o stdin depois da 1ª pintura — sem esta espera a PRIMEIRA

@@ -97,7 +97,9 @@ export function createKnowledgeStore(baseDir: string = homePath('lang')): Knowle
       if (!readme) {
         return { language, found: false, content: `Sem referência legível em ${repoDir}.` };
       }
-      const note = wanted ? `> (nenhum doc casou "${wanted}" — devolvendo o README de ${repoDir})\n\n` : '';
+      const note = wanted
+        ? `> (nenhum doc casou "${wanted}" — devolvendo o README de ${repoDir})\n\n`
+        : '';
       return {
         language,
         found: true,

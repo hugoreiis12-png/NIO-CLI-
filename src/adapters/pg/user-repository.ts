@@ -16,7 +16,12 @@
 import { randomBytes } from 'node:crypto';
 import type { UserCli } from '../../core/types.js';
 import type { NewUserInput, UserRepository } from '../../core/repositories.js';
-import { hashPassword, needsRehash, verifyPassword, MIN_PASSWORD_LENGTH } from '../../gateway/auth/password.js';
+import {
+  hashPassword,
+  needsRehash,
+  verifyPassword,
+  MIN_PASSWORD_LENGTH,
+} from '../../gateway/auth/password.js';
 import { query } from './client.js';
 
 /**
@@ -26,7 +31,9 @@ import { query } from './client.js';
  */
 let decoyHashPromise: Promise<string> | null = null;
 function decoyHash(): Promise<string> {
-  return (decoyHashPromise ??= hashPassword(`decoy-${randomBytes(16).toString('hex')}`).then((h) => h.phc));
+  return (decoyHashPromise ??= hashPassword(`decoy-${randomBytes(16).toString('hex')}`).then(
+    (h) => h.phc,
+  ));
 }
 
 /** Colunas de `user_cli` visíveis pro role `nio_cli` — **sem** os hashes. */
@@ -84,7 +91,9 @@ const FULL_COLS = `${PUBLIC_COLS}, password, backup_codes`;
 export function createUserRepository(): UserRepository {
   return {
     async findByName(name) {
-      const res = await query<UserRow>(`SELECT ${PUBLIC_COLS} FROM user_cli WHERE name = $1`, [name]);
+      const res = await query<UserRow>(`SELECT ${PUBLIC_COLS} FROM user_cli WHERE name = $1`, [
+        name,
+      ]);
       const row = res.rows[0];
       return row ? mapUserRow(row) : null;
     },
@@ -109,7 +118,9 @@ export function createUserRepository(): UserRepository {
     },
 
     async verifyCredentials(name, password) {
-      const res = await query<FullUserRow>(`SELECT ${FULL_COLS} FROM user_cli WHERE name = $1`, [name]);
+      const res = await query<FullUserRow>(`SELECT ${FULL_COLS} FROM user_cli WHERE name = $1`, [
+        name,
+      ]);
       const row = res.rows[0];
       if (!row) {
         await verifyPassword(await decoyHash(), password, 0); // queima o tempo do argon2

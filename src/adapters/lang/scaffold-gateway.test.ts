@@ -14,14 +14,20 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 const ts = () => createLanguageCatalog().recipe('typescript');
 const runArgs = (steps: ScaffoldStep[]) =>
-  steps.filter((s) => s.kind === 'run').map((s) => (s.kind === 'run' ? `${s.program} ${s.args.join(' ')}` : ''));
+  steps
+    .filter((s) => s.kind === 'run')
+    .map((s) => (s.kind === 'run' ? `${s.program} ${s.args.join(' ')}` : ''));
 const marker = (steps: ScaffoldStep[]) => {
   const w = steps.find((s) => s.kind === 'write');
   return w && w.kind === 'write' ? (JSON.parse(w.content) as Record<string, unknown>) : {};
 };
 
 test('greenfield: init + tipagens + instala framework/ORM mapeados + marker', () => {
-  const plan = createScaffoldGateway().plan(ts(), { packageManager: 'npm', framework: 'Next.js', orm: 'Prisma' }, dir);
+  const plan = createScaffoldGateway().plan(
+    ts(),
+    { packageManager: 'npm', framework: 'Next.js', orm: 'Prisma' },
+    dir,
+  );
   const cmds = runArgs(plan.steps);
   expect(cmds[0]).toBe('npm init -y');
   expect(cmds[1]).toBe('npm install -D typescript @types/node');
@@ -33,7 +39,11 @@ test('greenfield: init + tipagens + instala framework/ORM mapeados + marker', ()
 
 test('brownfield compatível (package.json existe): NÃO re-inicializa, só adiciona a dep', () => {
   writeFileSync(join(dir, 'package.json'), '{}');
-  const plan = createScaffoldGateway().plan(ts(), { packageManager: 'npm', framework: 'Fastify' }, dir);
+  const plan = createScaffoldGateway().plan(
+    ts(),
+    { packageManager: 'npm', framework: 'Fastify' },
+    dir,
+  );
   const cmds = runArgs(plan.steps);
   expect(cmds.some((c) => c.startsWith('npm init'))).toBe(false); // não sobrescreve
   expect(cmds).toContain('npm install fastify');
@@ -43,7 +53,11 @@ test('brownfield compatível (package.json existe): NÃO re-inicializa, só adic
 test('incompatível (framework Python num projeto Node): NÃO instala, vai pro skipped', () => {
   writeFileSync(join(dir, 'package.json'), '{}'); // projeto node
   const py = createLanguageCatalog().recipe('python');
-  const plan = createScaffoldGateway().plan(py, { packageManager: 'pip', framework: 'FastAPI' }, dir);
+  const plan = createScaffoldGateway().plan(
+    py,
+    { packageManager: 'pip', framework: 'FastAPI' },
+    dir,
+  );
   expect(runArgs(plan.steps).some((c) => c.includes('fastapi'))).toBe(false);
   expect(marker(plan.steps).ecosystemFits).toBe(false);
   expect(marker(plan.steps).skipped).toContain('FastAPI');

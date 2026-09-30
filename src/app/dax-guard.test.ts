@@ -81,7 +81,8 @@ test('ACEITE: tabela declarada no DEFINE não é acusada (falso positivo visto e
   // O agente escrevia `DEFINE C = SELECTCOLUMNS(...)` e depois `C[Table]`. O guard via
   // `C[` e bloqueava, mandando "corrigir o nome" de algo correto — travando TODA
   // consulta com DEFINE antes de sair da máquina.
-  const dax = 'DEFINE C = SELECTCOLUMNS(INFO.VIEW.COLUMNS(), "t", [Table]) EVALUATE FILTER(C, C[Table] = "X")';
+  const dax =
+    'DEFINE C = SELECTCOLUMNS(INFO.VIEW.COLUMNS(), "t", [Table]) EVALUATE FILTER(C, C[Table] = "X")';
   expect(checkDaxTables(dax, INVENTARIO).unknown).toEqual([]);
 });
 

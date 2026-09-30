@@ -18,8 +18,7 @@ export const DOCKER_MCP_URL =
 export const PORTAINER_PORT = Number(env('PORTAINER_PORT')?.trim()) || 9443;
 
 /** URL do Portainer. Override total via `NIO_PORTAINER_URL`. */
-export const PORTAINER_URL =
-  env('PORTAINER_URL')?.trim() || `https://127.0.0.1:${PORTAINER_PORT}`;
+export const PORTAINER_URL = env('PORTAINER_URL')?.trim() || `https://127.0.0.1:${PORTAINER_PORT}`;
 
 /** Nome da stack do `nio docker cluster` (Swarm). */
 export const CLUSTER_STACK = 'nio-cluster';

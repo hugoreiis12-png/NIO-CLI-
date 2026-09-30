@@ -1,6 +1,6 @@
 /**
  * Raiz da interface NIO (Ink). Histórico → `<Static>` (scrollback, não re-renderiza);
- * 
+ *
  * área dinâmica = mensagem em andamento (altura limitada) + input. Evita o estouro
  * de altura que corrompe o Ink.
  */
@@ -52,7 +52,11 @@ import {
   fetchPendingQuestions,
   type OpencodeHandle,
 } from './opencode.js';
-import { NIO_AI_CONTEXT, NIO_AI_WARMUP, compactionReserved } from '../lib/clients/client-configs.js';
+import {
+  NIO_AI_CONTEXT,
+  NIO_AI_WARMUP,
+  compactionReserved,
+} from '../lib/clients/client-configs.js';
 import { compactInput } from '../lib/exec/map-reduce.js';
 import { buildAttachedInput, detectPaths } from './attachments.js';
 import { buildHandoffDigest } from './context-recovery.js';
@@ -92,7 +96,14 @@ function useTerminalSize(): { rows: number; columns: number } {
   return size;
 }
 
-export function App({ handle, program, cwd, session, splashMs = 1200, model }: AppProps): React.ReactElement {
+export function App({
+  handle,
+  program,
+  cwd,
+  session,
+  splashMs = 1200,
+  model,
+}: AppProps): React.ReactElement {
   const { rows, columns } = useTerminalSize();
   // Rótulos do modelo (só exibição) — refletem o modelo REAL passado pela TUI;
   // fallback só quando nenhum `model` foi injetado (testes/probe).
@@ -185,11 +196,13 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     const ac = abortRef.current;
     (async () => {
       try {
-        const created = await handle.client.session.create({ body: { title: cwd.split('/').pop() ?? 'nio' } });
+        const created = await handle.client.session.create({
+          body: { title: cwd.split('/').pop() ?? 'nio' },
+        });
         sessionId.current = (created as { data?: { id?: string } }).data?.id ?? '';
         const agents = await listPrimaryAgents(handle.client);
         setModes(agents);
-        setMode((cur) => (agents.includes(cur) ? cur : agents[0] ?? 'build'));
+        setMode((cur) => (agents.includes(cur) ? cur : (agents[0] ?? 'build')));
       } catch (err) {
         tlog('falha ao criar sessão', (err as Error).message);
       }
@@ -201,7 +214,9 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
           client: handle.client,
           model,
           agent: mode,
-          onSession: (id) => { warmupSessionId.current = id; },
+          onSession: (id) => {
+            warmupSessionId.current = id;
+          },
         }).then((ok) => tlog('aquecimento', ok ? 'ok' : 'falhou'));
       }
       for await (const evt of subscribeEvents(handle.client, ac.signal)) {
@@ -245,7 +260,8 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
             workInFlight: inFlightChars.current > 0,
           })
         ) {
-          if (sessionId.current) handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
+          if (sessionId.current)
+            handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
           setChat((prev) => ({ ...prev, busy: false }));
           continue;
         }
@@ -298,7 +314,10 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
         setChat((prev) => ({ ...prev, busy: false }));
       }
     },
-    { isActive: overlay.kind === 'none' && chat.permissions.length === 0 && chat.questions.length === 0 },
+    {
+      isActive:
+        overlay.kind === 'none' && chat.permissions.length === 0 && chat.questions.length === 0,
+    },
   );
 
   useEffect(() => () => handle.close(), [handle]);
@@ -326,7 +345,8 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
       attemptsAtSend.current = toolAttempts(chat.messages).length;
       const pista = await remindLessons(failedTools(chat.messages), text);
       injectedLessons.current = pista.injected;
-      if (pista.text) enriched = `${pista.text}
+      if (pista.text)
+        enriched = `${pista.text}
 
 ${enriched}`;
     } catch (err) {
@@ -345,9 +365,14 @@ ${enriched}`;
     // suprimível via config do opencode (ver client-configs) — a Camada B não o mostra no output.
     inFlightChars.current = payload.length; // em voo até a resposta (ou o erro) voltar
     handle.client.session
-      .prompt({ path: { id: sessionId.current }, body: { model, agent: mode, parts: [...fileParts, { type: 'text', text: payload }] } })
+      .prompt({
+        path: { id: sessionId.current },
+        body: { model, agent: mode, parts: [...fileParts, { type: 'text', text: payload }] },
+      })
       .catch((err) => tlog('prompt falhou', (err as Error).message))
-      .finally(() => { inFlightChars.current = 0; }); // voltou (ou falhou): nada pendente
+      .finally(() => {
+        inFlightChars.current = 0;
+      }); // voltou (ou falhou): nada pendente
   };
 
   /**
@@ -360,7 +385,9 @@ ${enriched}`;
   const recoverFromOverflow = async () => {
     const digest = buildHandoffDigest(chat.messages);
     try {
-      const created = await handle.client.session.create({ body: { title: `${cwd.split('/').pop() ?? 'nio'} (cont.)` } });
+      const created = await handle.client.session.create({
+        body: { title: `${cwd.split('/').pop() ?? 'nio'} (cont.)` },
+      });
       const novaId = (created as { data?: { id?: string } }).data?.id ?? '';
       if (!novaId) throw new Error('sessão nova sem id');
       sessionId.current = novaId;
@@ -421,11 +448,9 @@ ${enriched}`;
     }
     if (compactingRef.current) return; // já disparou; aguardando o motor compactar
     compactingRef.current = true;
-    handle.client.session
-      .summarize({ path: { id: sessionId.current } })
-      .catch(() => {
-        compactingRef.current = false; // falhou → re-arma pra tentar de novo
-      });
+    handle.client.session.summarize({ path: { id: sessionId.current } }).catch(() => {
+      compactingRef.current = false; // falhou → re-arma pra tentar de novo
+    });
     toast('compactando o contexto proativamente…');
   }, [chat.busy, chat.messages, handle]);
 
@@ -444,9 +469,9 @@ ${enriched}`;
       case 'session.compact':
         if (sessionId.current) {
           compactingRef.current = true; // fomos nós: o guard abaixo não pode matar
-          handle.client.session
-            .summarize({ path: { id: sessionId.current } })
-            .catch(() => { compactingRef.current = false; });
+          handle.client.session.summarize({ path: { id: sessionId.current } }).catch(() => {
+            compactingRef.current = false;
+          });
         }
         return toast('compactando o contexto…');
       default:
@@ -477,7 +502,10 @@ ${enriched}`;
       tlog('permission respond', motivo, detalhe);
     };
     handle.client
-      .postSessionIdPermissionsPermissionId({ path: { id: perm.sessionId, permissionID: perm.id }, body: { response: r } })
+      .postSessionIdPermissionsPermissionId({
+        path: { id: perm.sessionId, permissionID: perm.id },
+        body: { response: r },
+      })
       .then((res) => {
         // O client do opencode só lança em erro de rede — um 4xx chega aqui numa
         // promessa cumprida, como `{ error }`. Sem esta checagem o tombstone
@@ -510,7 +538,11 @@ ${enriched}`;
       .then(async (res) => {
         // `fetch` só rejeita em erro de rede — um 4xx chegaria aqui como sucesso,
         // a pergunta voltaria no resync e não haveria uma linha sobre o motivo.
-        if (replyFailed(res)) desfazer(`recusado ${(res as Response).status}`, (await res.text().catch(() => '')).slice(0, 200));
+        if (replyFailed(res))
+          desfazer(
+            `recusado ${(res as Response).status}`,
+            (await res.text().catch(() => '')).slice(0, 200),
+          );
       })
       .catch((err) => desfazer('falhou', (err as Error).message))
       .finally(() => void resync());
@@ -530,7 +562,9 @@ ${enriched}`;
   const phase = useMemo(() => {
     if (chat.retry) return `tentando de novo (${chat.retry.attempt})`;
     const parts = live?.parts ?? [];
-    const tool = parts.find((p) => p.kind === 'tool' && (p.tool?.status === 'running' || p.tool?.status === 'pending'));
+    const tool = parts.find(
+      (p) => p.kind === 'tool' && (p.tool?.status === 'running' || p.tool?.status === 'pending'),
+    );
     if (tool) return `executando ${tool.tool?.name ?? tool.text}`;
     const hasText = parts.some((p) => p.kind === 'text' && p.text.trim());
     const hasReasoning = parts.some((p) => p.kind === 'reasoning' && p.text.trim());
@@ -539,7 +573,9 @@ ${enriched}`;
     return 'pensando';
   }, [live, chat.retry]);
   // tempo decorrido (o frame do spinner força o re-render ~11×/s enquanto busy)
-  const elapsed = chat.busy ? Math.max(0, Math.floor((Date.now() - busyStartedAt.current) / 1000)) : 0;
+  const elapsed = chat.busy
+    ? Math.max(0, Math.floor((Date.now() - busyStartedAt.current) / 1000))
+    : 0;
   // Sprint 7.4/7.6 — o nio terminou com uma pergunta (e às vezes opções)
   const question = useMemo(() => pendingQuestion(chat), [chat]);
   const options = useMemo(() => questionOptions(chat), [chat]);
@@ -599,7 +635,9 @@ ${enriched}`;
         <Box paddingX={1}>
           <Text color={theme.accentBright} wrap="truncate-end">
             {'↳ o nio perguntou: '}
-            <Text color={theme.text}>{question.length > columns - 24 ? question.slice(0, columns - 27) + '…' : question}</Text>
+            <Text color={theme.text}>
+              {question.length > columns - 24 ? question.slice(0, columns - 27) + '…' : question}
+            </Text>
           </Text>
         </Box>
       )}
@@ -624,7 +662,11 @@ ${enriched}`;
 
       {/* camada por cima do input — não substitui, só sobrepõe. */}
       {pendingPerm ? (
-        <PermissionModal req={pendingPerm} queued={chat.permissions.length} onRespond={respondPermission} />
+        <PermissionModal
+          req={pendingPerm}
+          queued={chat.permissions.length}
+          onRespond={respondPermission}
+        />
       ) : pendingQ ? (
         <QuestionModal
           key={pendingQ.id}

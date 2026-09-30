@@ -1,8 +1,22 @@
 import { test, expect } from 'bun:test';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  existsSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { applyProvision, uninstallProvision, ensureDir, provision, MANIFEST_NAME } from './provision.js';
+import {
+  applyProvision,
+  uninstallProvision,
+  ensureDir,
+  provision,
+  MANIFEST_NAME,
+} from './provision.js';
 
 // Caracterização do plano de arquivos gerado por applyProvision/provision ANTES do
 // split em provision-collect.ts (coleta) + provision-apply.ts (motor/manifesto) —
@@ -59,8 +73,12 @@ test('unchanged: mesmo conteúdo na 2ª rodada não reescreve', () => {
 test('update: conteúdo mudou e o usuário não tocou → atualiza sem detail', () => {
   const target = fresh();
   try {
-    applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], { targetDir: target });
-    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v2') }], { targetDir: target });
+    applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], {
+      targetDir: target,
+    });
+    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v2') }], {
+      targetDir: target,
+    });
     expect(res.files).toEqual([{ relPath: 'commands/foo.md', action: 'update' }]);
     expect(readFileSync(join(target, 'commands/foo.md'), 'utf8')).toBe('v2');
   } finally {
@@ -71,9 +89,13 @@ test('update: conteúdo mudou e o usuário não tocou → atualiza sem detail', 
 test('skip-conflict: usuário editou localmente → não sobrescreve (sem --force)', () => {
   const target = fresh();
   try {
-    applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], { targetDir: target });
+    applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], {
+      targetDir: target,
+    });
     writeFileSync(join(target, 'commands/foo.md'), 'user-edited');
-    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v2') }], { targetDir: target });
+    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v2') }], {
+      targetDir: target,
+    });
     expect(res.files).toEqual([
       { relPath: 'commands/foo.md', action: 'skip-conflict', detail: 'editado localmente' },
     ]);
@@ -88,7 +110,9 @@ test('skip-conflict: arquivo de terceiros (nunca provisionado por nós)', () => 
   try {
     mkdirSync(join(target, 'commands'), { recursive: true });
     writeFileSync(join(target, 'commands/foo.md'), 'third party');
-    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v2') }], { targetDir: target });
+    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v2') }], {
+      targetDir: target,
+    });
     expect(res.files).toEqual([
       { relPath: 'commands/foo.md', action: 'skip-conflict', detail: 'arquivo de terceiros' },
     ]);
@@ -100,7 +124,9 @@ test('skip-conflict: arquivo de terceiros (nunca provisionado por nós)', () => 
 test('force: sobrescreve arquivo divergente com detail explicando', () => {
   const target = fresh();
   try {
-    applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], { targetDir: target });
+    applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], {
+      targetDir: target,
+    });
     writeFileSync(join(target, 'commands/foo.md'), 'user-edited');
     const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v2') }], {
       targetDir: target,
@@ -125,7 +151,9 @@ test('prune: arquivo que saiu da fonte e está intacto é removido', () => {
       ],
       { targetDir: target },
     );
-    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], { targetDir: target });
+    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], {
+      targetDir: target,
+    });
     const bar = res.files.find((f) => f.relPath === 'commands/bar.md');
     expect(bar).toEqual({ relPath: 'commands/bar.md', action: 'prune' });
     expect(existsSync(join(target, 'commands/bar.md'))).toBe(false);
@@ -145,7 +173,9 @@ test('prune-kept: arquivo que saiu da fonte mas foi editado localmente é preser
       { targetDir: target },
     );
     writeFileSync(join(target, 'commands/bar.md'), 'user edited bar');
-    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], { targetDir: target });
+    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], {
+      targetDir: target,
+    });
     const bar = res.files.find((f) => f.relPath === 'commands/bar.md');
     expect(bar).toEqual({
       relPath: 'commands/bar.md',
@@ -161,7 +191,9 @@ test('prune-kept: arquivo que saiu da fonte mas foi editado localmente é preser
 test('prune:false → nada é removido, mesmo saindo da fonte', () => {
   const target = fresh();
   try {
-    applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], { targetDir: target });
+    applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], {
+      targetDir: target,
+    });
     const res = applyProvision([], { targetDir: target, prune: false });
     expect(res.files).toEqual([]);
     expect(existsSync(join(target, 'commands/foo.md'))).toBe(true);
@@ -174,7 +206,9 @@ test('write-error: path de destino colide com um diretório existente → não a
   const target = fresh();
   try {
     mkdirSync(join(target, 'commands', 'foo.md'), { recursive: true }); // dir, não arquivo
-    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v2') }], { targetDir: target });
+    const res = applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v2') }], {
+      targetDir: target,
+    });
     expect(res.files).toHaveLength(1);
     expect(res.files[0].relPath).toBe('commands/foo.md');
     expect(res.files[0].action).toBe('write-error');
@@ -227,7 +261,9 @@ test('uninstallProvision: remove o que é nosso e intacto, preserva o editado lo
 test('uninstallProvision dryRun: calcula o plano sem remover nada', () => {
   const target = fresh();
   try {
-    applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], { targetDir: target });
+    applyProvision([{ relPath: 'commands/foo.md', content: Buffer.from('v1') }], {
+      targetDir: target,
+    });
     const res = uninstallProvision({ targetDir: target, dryRun: true });
     expect(res.removed).toEqual(['commands/foo.md']);
     expect(existsSync(join(target, 'commands/foo.md'))).toBe(true);

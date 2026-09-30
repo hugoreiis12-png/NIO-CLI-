@@ -77,7 +77,9 @@ test('skills: owner/repo (sem/com skill específico) e slug inválido', () => {
 });
 
 test('git: URL github válida → dest em ~/.nio/deps/<id>; URL não-github → motivo', () => {
-  const dep = resolveDependency(makeDoc({ git: 'https://github.com/owner/repo' }, { id: 'my-dep' }));
+  const dep = resolveDependency(
+    makeDoc({ git: 'https://github.com/owner/repo' }, { id: 'my-dep' }),
+  );
   const expectedDest = join(homedir(), '.nio', 'deps', 'my-dep');
   expect(dep.plan).toEqual({
     kind: 'git',
@@ -90,7 +92,9 @@ test('git: URL github válida → dest em ~/.nio/deps/<id>; URL não-github → 
 
   const invalid = resolveDependency(makeDoc({ git: 'http://example.com/x' }));
   expect(invalid.plan).toBeNull();
-  expect(invalid.reason).toBe('URL git não permitida (só https://github.com/…): "http://example.com/x"');
+  expect(invalid.reason).toBe(
+    'URL git não permitida (só https://github.com/…): "http://example.com/x"',
+  );
 });
 
 test('manual: sem instalador automatizável, mas com manual: → manual + motivo fixo', () => {
@@ -103,11 +107,15 @@ test('manual: sem instalador automatizável, mas com manual: → manual + motivo
 test('nada: sem npm/skills/git/manual → motivo genérico', () => {
   const dep = resolveDependency(makeDoc({}));
   expect(dep.plan).toBeNull();
-  expect(dep.reason).toBe('sem instalador estruturado (npm:/skills:/git:/manual:) — instale manualmente');
+  expect(dep.reason).toBe(
+    'sem instalador estruturado (npm:/skills:/git:/manual:) — instale manualmente',
+  );
 });
 
 test('precedência npm > skills > git; detect vira lista trimada; repo/displayInstall/description', () => {
-  const prec = resolveDependency(makeDoc({ npm: 'pkgname', skills: 'owner/repo', git: 'https://github.com/o/r' }));
+  const prec = resolveDependency(
+    makeDoc({ npm: 'pkgname', skills: 'owner/repo', git: 'https://github.com/o/r' }),
+  );
   expect(prec.plan?.kind).toBe('npm');
 
   const detect = resolveDependency(makeDoc({ detect: '~/foo, ~/bar\n~/baz' }));
@@ -117,9 +125,13 @@ test('precedência npm > skills > git; detect vira lista trimada; repo/displayIn
   expect(fallback.repo).toBe('https://y');
   expect(fallback.displayInstall).toBe('brew install x');
 
-  const nodeDescWins = resolveDependency(makeDoc({ description: 'fm desc' }, { description: 'node desc' }));
+  const nodeDescWins = resolveDependency(
+    makeDoc({ description: 'fm desc' }, { description: 'node desc' }),
+  );
   expect(nodeDescWins.description).toBe('node desc');
-  const fmDescFallback = resolveDependency(makeDoc({ description: 'fm desc' }, { description: '' }));
+  const fmDescFallback = resolveDependency(
+    makeDoc({ description: 'fm desc' }, { description: '' }),
+  );
   expect(fmDescFallback.description).toBe('fm desc');
 });
 
@@ -158,9 +170,18 @@ test('detect: exato/wildcard/** casam; ausente e symlink pendurado não casam', 
 
 test('git: instalado se plan.dest existe no disco', () => {
   mkdirSync(join(dir, 'a'), { recursive: true });
-  const plan: DependencyPlan = { kind: 'git', url: 'https://github.com/o/r', dest: join(dir, 'a'), program: 'git', args: [], command: '' };
+  const plan: DependencyPlan = {
+    kind: 'git',
+    url: 'https://github.com/o/r',
+    dest: join(dir, 'a'),
+    program: 'git',
+    args: [],
+    command: '',
+  };
   expect(isDependencyInstalled(baseDep({ plan }))).toBe(true);
-  expect(isDependencyInstalled(baseDep({ plan: { ...plan, dest: join(dir, 'nope2') } }))).toBe(false);
+  expect(isDependencyInstalled(baseDep({ plan: { ...plan, dest: join(dir, 'nope2') } }))).toBe(
+    false,
+  );
 });
 
 test('npm: pacote definitivamente não instalado → false (via npm ls -g real)', () => {
@@ -176,13 +197,32 @@ test('npm: pacote definitivamente não instalado → false (via npm ls -g real)'
 
 test('runDependencyInstall — git cria dirname(dest); exit!=0 preserva code; program inexistente → error', () => {
   const dest = join(dir, 'newclone', 'nested');
-  const okPlan: DependencyPlan = { kind: 'git', url: 'https://github.com/o/r', dest, program: 'node', args: ['-e', 'process.exit(0)'], command: '' };
+  const okPlan: DependencyPlan = {
+    kind: 'git',
+    url: 'https://github.com/o/r',
+    dest,
+    program: 'node',
+    args: ['-e', 'process.exit(0)'],
+    command: '',
+  };
   expect(runDependencyInstall(okPlan)).toEqual({ ok: true, code: 0 });
 
-  const failPlan: DependencyPlan = { kind: 'npm', pkg: 'x', program: 'node', args: ['-e', 'process.exit(1)'], command: '' };
+  const failPlan: DependencyPlan = {
+    kind: 'npm',
+    pkg: 'x',
+    program: 'node',
+    args: ['-e', 'process.exit(1)'],
+    command: '',
+  };
   expect(runDependencyInstall(failPlan)).toEqual({ ok: false, code: 1 });
 
-  const errPlan: DependencyPlan = { kind: 'npm', pkg: 'x', program: 'this-binary-does-not-exist-xyz', args: [], command: '' };
+  const errPlan: DependencyPlan = {
+    kind: 'npm',
+    pkg: 'x',
+    program: 'this-binary-does-not-exist-xyz',
+    args: [],
+    command: '',
+  };
   const res = runDependencyInstall(errPlan);
   expect(res.ok).toBe(false);
   // Binário ausente: no POSIX vira ENOENT (spawn error → code null). No Windows o

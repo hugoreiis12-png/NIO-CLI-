@@ -11,7 +11,12 @@ import type {
   FabricDataset,
   FabricRow,
 } from '../../core/fabric.js';
-import { retryAfterSeconds, sharedTokenProvider, type TokenProvider, type TokenResult } from './token.js';
+import {
+  retryAfterSeconds,
+  sharedTokenProvider,
+  type TokenProvider,
+  type TokenResult,
+} from './token.js';
 import { classifyOutcome, recordQuery, type QueryMetric } from './query-metrics.js';
 
 const API_BASE = 'https://api.powerbi.com/v1.0/myorg';
@@ -96,24 +101,38 @@ function mapTokenFailure(t: TokenResult): FabricResult<never> {
 function mapHttpFailure(res: Response, detail: string, authHint = ''): FabricResult<never> {
   if (res.status === 429) {
     const s = retryAfterSeconds(res);
-    return { status: 'throttled', error: `Power BI limitou as chamadas (429)${s !== null ? ` — aguarde ${s}s` : ''}` };
+    return {
+      status: 'throttled',
+      error: `Power BI limitou as chamadas (429)${s !== null ? ` — aguarde ${s}s` : ''}`,
+    };
   }
   const msg = `Power BI respondeu ${res.status} ${detail}`.trim();
-  if (res.status === 401 || res.status === 403) return { status: 'unauthorized', error: `${msg}${authHint}` };
+  if (res.status === 401 || res.status === 403)
+    return { status: 'unauthorized', error: `${msg}${authHint}` };
   return { status: 'failed', error: msg };
 }
 
-type Attempt = { res: Response; failure?: undefined } | { res?: undefined; failure: FabricResult<never> };
+type Attempt =
+  | { res: Response; failure?: undefined }
+  | { res?: undefined; failure: FabricResult<never> };
 
 export function createFabricGateway(deps: FabricClientDeps = {}): FabricGateway {
   const token = deps.token ?? sharedTokenProvider();
   const doFetch = deps.fetchImpl ?? fetch;
 
   /** fetch com Bearer; em 401/403 descarta o token em cache e repete UMA vez (token expirado). */
-  async function authedFetch(url: string, init: RequestInit, timeoutMs: number, retried = false): Promise<Attempt> {
+  async function authedFetch(
+    url: string,
+    init: RequestInit,
+    timeoutMs: number,
+    retried = false,
+  ): Promise<Attempt> {
     const t = await token.get();
     if (t.status !== 'ok' || !t.token) return { failure: mapTokenFailure(t) };
-    const headers = { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${t.token}` };
+    const headers = {
+      ...(init.headers as Record<string, string> | undefined),
+      Authorization: `Bearer ${t.token}`,
+    };
     const res = await doFetch(url, { ...init, headers, signal: AbortSignal.timeout(timeoutMs) });
     if ((res.status === 401 || res.status === 403) && !retried && token.invalidate) {
       token.invalidate();
@@ -148,7 +167,10 @@ export function createFabricGateway(deps: FabricClientDeps = {}): FabricGateway 
     const url =
       `${API_BASE}/groups/${encodeURIComponent(workspaceId)}` +
       `/datasets/${encodeURIComponent(datasetId)}/executeQueries`;
-    const body = JSON.stringify({ queries: [{ query: dax }], serializerSettings: { includeNulls: true } });
+    const body = JSON.stringify({
+      queries: [{ query: dax }],
+      serializerSettings: { includeNulls: true },
+    });
     try {
       const { res, failure } = await authedFetch(
         url,
@@ -161,7 +183,10 @@ export function createFabricGateway(deps: FabricClientDeps = {}): FabricGateway 
         if (res.status === 401 || res.status === 403 || res.status === 429) {
           return mapHttpFailure(res, detail.slice(0, MAX_ERROR_MESSAGE), QUERY_AUTH_HINT);
         }
-        return { status: 'failed', error: `Power BI respondeu ${res.status}: ${daxErrorFrom(detail)}`.trim() };
+        return {
+          status: 'failed',
+          error: `Power BI respondeu ${res.status}: ${daxErrorFrom(detail)}`.trim(),
+        };
       }
       const json = (await res.json()) as ExecuteQueriesResponse;
       // Erro pode vir com HTTP 200 (ex.: "mais de uma tabela"/"mais de N linhas") — surfacear.
@@ -197,7 +222,8 @@ export function createFabricGateway(deps: FabricClientDeps = {}): FabricGateway 
   }
 
   return {
-    listWorkspaces: () => medido('listWorkspaces', undefined, () => getPaged<FabricWorkspace>('/groups')),
+    listWorkspaces: () =>
+      medido('listWorkspaces', undefined, () => getPaged<FabricWorkspace>('/groups')),
     listDatasets: (workspaceId) =>
       medido('listDatasets', undefined, () =>
         getPaged<FabricDataset>(`/groups/${encodeURIComponent(workspaceId)}/datasets`),

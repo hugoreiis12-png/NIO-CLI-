@@ -42,9 +42,8 @@ function mapRow(row: ChunkRow, score: number): ScoredChunk {
 
 function fail(err: unknown): RagResult<never> {
   const message = (err as Error).message ?? String(err);
-  const offline = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH|terminating connection|57P03/i.test(
-    message,
-  );
+  const offline =
+    /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH|terminating connection|57P03/i.test(message);
   return { status: offline ? 'unavailable' : 'failed', error: message };
 }
 
@@ -52,7 +51,10 @@ export function createDocIndexRepository(): DocIndex {
   return {
     async indexChunks(chunks: DocChunk[], embeddings: number[][]) {
       if (chunks.length !== embeddings.length) {
-        return { status: 'failed', error: `${chunks.length} chunks para ${embeddings.length} embeddings` };
+        return {
+          status: 'failed',
+          error: `${chunks.length} chunks para ${embeddings.length} embeddings`,
+        };
       }
       const bad = embeddings.find((e) => e.length !== EMBEDDING_DIMS);
       if (bad) {
@@ -71,7 +73,15 @@ export function createDocIndexRepository(): DocIndex {
               `INSERT INTO dax_doc_chunk (repo, ref, path, heading, content, content_hash, embedding)
                VALUES ($1, $2, $3, $4, $5, $6, $7::vector)
                ON CONFLICT (repo, ref, path, content_hash) DO NOTHING`,
-              [c.repo, c.ref, c.path, c.heading ?? null, c.content, contentHash(c.content), toVector(embeddings[i]!)],
+              [
+                c.repo,
+                c.ref,
+                c.path,
+                c.heading ?? null,
+                c.content,
+                contentHash(c.content),
+                toVector(embeddings[i]!),
+              ],
             );
             inserted += res.rowCount ?? 0;
           }
@@ -121,7 +131,10 @@ export function createDocIndexRepository(): DocIndex {
  * Busca um chunk pelo caminho (ex.: o inventário de tabelas, que o orquestrador
  * injeta sempre). Fora do port `DocIndex` porque é acesso direto, sem similaridade.
  */
-export async function findChunkByPath(repo: string, path: string): Promise<RagResult<string | null>> {
+export async function findChunkByPath(
+  repo: string,
+  path: string,
+): Promise<RagResult<string | null>> {
   try {
     const res = await query<{ content: string }>(
       `SELECT content FROM dax_doc_chunk WHERE repo = $1 AND path = $2
@@ -179,7 +192,9 @@ export async function countChunks(repo: string): Promise<RagResult<number>> {
 }
 
 /** Quantas medidas indexadas carregam a fórmula DAX — diagnóstico do `rag status`. */
-export async function countMeasuresWithExpression(repo: string): Promise<RagResult<{ total: number; comFormula: number }>> {
+export async function countMeasuresWithExpression(
+  repo: string,
+): Promise<RagResult<{ total: number; comFormula: number }>> {
   try {
     const res = await query<{ total: string; com: string }>(
       `SELECT count(*)::int AS total,
@@ -188,7 +203,10 @@ export async function countMeasuresWithExpression(repo: string): Promise<RagResu
       [repo],
     );
     const row = res.rows[0];
-    return { status: 'ok', data: { total: Number(row?.total ?? 0), comFormula: Number(row?.com ?? 0) } };
+    return {
+      status: 'ok',
+      data: { total: Number(row?.total ?? 0), comFormula: Number(row?.com ?? 0) },
+    };
   } catch (err) {
     return fail(err);
   }
@@ -197,7 +215,10 @@ export async function countMeasuresWithExpression(repo: string): Promise<RagResu
 /** Remove versões antigas do acervo de um modelo, preservando o `ref` atual. */
 export async function pruneOldRefs(repo: string, keepRef: string): Promise<RagResult<number>> {
   try {
-    const res = await query(`DELETE FROM dax_doc_chunk WHERE repo = $1 AND ref <> $2`, [repo, keepRef]);
+    const res = await query(`DELETE FROM dax_doc_chunk WHERE repo = $1 AND ref <> $2`, [
+      repo,
+      keepRef,
+    ]);
     return { status: 'ok', data: res.rowCount ?? 0 };
   } catch (err) {
     return fail(err);

@@ -62,13 +62,21 @@ test('startSecurityChallenge: provedor externo → smsMode=provider, sem devCode
 
 function fakeUser(over: Partial<UserCli> = {}): UserCli {
   return {
-    id: 1, name: 'hugo', auth2: false, phone: null, ipsUsing: [],
-    timestampCreation: new Date(), timestampPasswordChange: null, timestampLastSession: null,
+    id: 1,
+    name: 'hugo',
+    auth2: false,
+    phone: null,
+    ipsUsing: [],
+    timestampCreation: new Date(),
+    timestampPasswordChange: null,
+    timestampLastSession: null,
     ...over,
   };
 }
 
-function deps(over: { user?: UserCli | null; ips?: LoginIpEvent[]; failures?: AuthFailure[] } = {}) {
+function deps(
+  over: { user?: UserCli | null; ips?: LoginIpEvent[]; failures?: AuthFailure[] } = {},
+) {
   const users = {
     findById: async () => (over.user === undefined ? fakeUser() : over.user),
     getBackupCodes: async () => ({ codes: null, pepperId: 0 }),
@@ -84,13 +92,19 @@ function deps(over: { user?: UserCli | null; ips?: LoginIpEvent[]; failures?: Au
 
 test('status: sempre inclui recentIps (mapeado pra { ip, lastSeen ISO, count })', async () => {
   const seen = new Date('2026-09-01T12:00:00Z');
-  const st = await status(1, deps({ ips: [{ ip: '203.0.113.9', firstSeen: seen, lastSeen: seen, count: 3 }] }));
+  const st = await status(
+    1,
+    deps({ ips: [{ ip: '203.0.113.9', firstSeen: seen, lastSeen: seen, count: 3 }] }),
+  );
   expect(st.recentIps).toEqual([{ ip: '203.0.113.9', lastSeen: seen.toISOString(), count: 3 }]);
 });
 
 test('status: recentFailedAttempts mapeado (at ISO, event, ip) — ADR 0012', async () => {
   const at = new Date('2026-09-05T08:30:00Z');
-  const st = await status(1, deps({ failures: [{ at, event: 'password_fail', ip: '198.51.100.7' }] }));
+  const st = await status(
+    1,
+    deps({ failures: [{ at, event: 'password_fail', ip: '198.51.100.7' }] }),
+  );
   expect(st.recentFailedAttempts).toEqual([
     { at: at.toISOString(), event: 'password_fail', ip: '198.51.100.7' },
   ]);
@@ -167,9 +181,20 @@ test('changePassword: ok → grava hash novo e revoga todas as sessões', async 
 });
 
 test('status: repos de auditoria que lançam não derrubam o status', async () => {
-  const users = { findById: async () => fakeUser(), getBackupCodes: async () => ({ codes: null, pepperId: 0 }) } as unknown as UserRepository;
-  const loginIps = { recent: async () => { throw new Error('db down'); } } as unknown as LoginIpRepository;
-  const authEvents = { recentFailures: async () => { throw new Error('db down'); } } as unknown as AuthEventRepository;
+  const users = {
+    findById: async () => fakeUser(),
+    getBackupCodes: async () => ({ codes: null, pepperId: 0 }),
+  } as unknown as UserRepository;
+  const loginIps = {
+    recent: async () => {
+      throw new Error('db down');
+    },
+  } as unknown as LoginIpRepository;
+  const authEvents = {
+    recentFailures: async () => {
+      throw new Error('db down');
+    },
+  } as unknown as AuthEventRepository;
   const st = await status(1, { users, loginIps, authEvents });
   expect(st.recentIps).toEqual([]);
   expect(st.recentFailedAttempts).toEqual([]);
@@ -179,18 +204,28 @@ test('status: repos de auditoria que lançam não derrubam o status', async () =
 function exhaustedChallengeDeps() {
   const calls = { consume: 0, disable2fa: 0 };
   const challenge: LoginChallenge = {
-    id: 'ch-1', userId: 1, purpose: 'enable_2fa', codeHash: 'x', channel: 'whatsapp',
-    attempts: CHALLENGE_MAX_ATTEMPTS, expiresAt: new Date(Date.now() + 60_000),
-    consumedAt: null, createdAt: new Date(),
+    id: 'ch-1',
+    userId: 1,
+    purpose: 'enable_2fa',
+    codeHash: 'x',
+    channel: 'whatsapp',
+    attempts: CHALLENGE_MAX_ATTEMPTS,
+    expiresAt: new Date(Date.now() + 60_000),
+    consumedAt: null,
+    createdAt: new Date(),
   };
   const challenges = {
     findById: async () => challenge,
     incrementAttempts: async () => challenge.attempts,
-    consume: async () => { calls.consume++; },
+    consume: async () => {
+      calls.consume++;
+    },
   } as unknown as LoginChallengeRepository;
   const users = {
     getBackupCodes: async () => ({ codes: null, pepperId: 0 }),
-    disable2fa: async () => { calls.disable2fa++; },
+    disable2fa: async () => {
+      calls.disable2fa++;
+    },
   } as unknown as UserRepository;
   return { deps: { challenges, users }, calls };
 }

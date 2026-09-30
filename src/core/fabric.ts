@@ -40,5 +40,9 @@ export interface FabricGateway {
    * Executa um DAX (`DEFINE/EVALUATE`) contra o dataset e devolve as linhas
    * (`executeQueries`). Erro de DAX (HTTP 400) vira `failed` com a mensagem, não exceção.
    */
-  executeDax(workspaceId: string, datasetId: string, dax: string): Promise<FabricResult<FabricRow[]>>;
+  executeDax(
+    workspaceId: string,
+    datasetId: string,
+    dax: string,
+  ): Promise<FabricResult<FabricRow[]>>;
 }

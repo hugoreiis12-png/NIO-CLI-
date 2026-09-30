@@ -12,8 +12,23 @@
 
 /** Palavras da linguagem que aparecem antes de `[` mas não são tabela. */
 const DAX_KEYWORDS = new Set([
-  'evaluate', 'define', 'measure', 'column', 'table', 'var', 'return', 'order', 'by',
-  'start', 'at', 'asc', 'desc', 'not', 'in', 'and', 'or',
+  'evaluate',
+  'define',
+  'measure',
+  'column',
+  'table',
+  'var',
+  'return',
+  'order',
+  'by',
+  'start',
+  'at',
+  'asc',
+  'desc',
+  'not',
+  'in',
+  'and',
+  'or',
 ]);
 
 /** `'Nome Com Espaço'` — em DAX aspas simples só cercam identificador de tabela. */
@@ -40,7 +55,9 @@ function fold(name: string): string {
 export function locallyDefined(dax: string): Set<string> {
   const nomes = new Set<string>();
   if (!/\bDEFINE\b/i.test(dax)) return nomes;
-  for (const m of dax.matchAll(/\b(?:TABLE|VAR|COLUMN|MEASURE)\s+([A-Za-z_][A-Za-z0-9_]{0,127})\s*(?=[[=])/gi)) {
+  for (const m of dax.matchAll(
+    /\b(?:TABLE|VAR|COLUMN|MEASURE)\s+([A-Za-z_][A-Za-z0-9_]{0,127})\s*(?=[[=])/gi,
+  )) {
     nomes.add(m[1]!.toLowerCase());
   }
   // `DEFINE X = …` sem a palavra-chave (forma que o modelo escreve às vezes).

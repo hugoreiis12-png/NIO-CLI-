@@ -70,7 +70,8 @@ export function renderTrail(steps: readonly TaskStep[]): string {
   return steps
     .map((s) => {
       const saida = s.error ?? JSON.stringify(s.output ?? {});
-      const corte = saida.length > OUTPUT_SLICE ? `${saida.slice(0, OUTPUT_SLICE)}…(truncado)` : saida;
+      const corte =
+        saida.length > OUTPUT_SLICE ? `${saida.slice(0, OUTPUT_SLICE)}…(truncado)` : saida;
       return `[${s.stepNumber}.${s.attempt}] ${s.name} — ${s.status}\n  ${corte}`;
     })
     .join('\n');
@@ -92,10 +93,7 @@ export function buildVerdictPrompt(task: Task, steps: readonly TaskStep[]): stri
 }
 
 /** Nunca devolve mais steps do que cabe no teto — o worker não precisa reconferir. */
-export function clampNextSteps(
-  propostos: readonly PlannedStep[],
-  restante: number,
-): PlannedStep[] {
+export function clampNextSteps(propostos: readonly PlannedStep[], restante: number): PlannedStep[] {
   return restante <= 0 ? [] : propostos.slice(0, restante);
 }
 

@@ -56,9 +56,10 @@ export class SyncReport {
 }
 
 /** Resumo + status de um resultado de provisionamento (usado por sync e init). */
-export function summarizeProvision(
-  files: { action: string }[],
-): { status: SectionStatus; summary: string } {
+export function summarizeProvision(files: { action: string }[]): {
+  status: SectionStatus;
+  summary: string;
+} {
   const n = (a: string) => files.filter((f) => f.action === a).length;
   const werr = n("write-error");
   const conflict = n("skip-conflict");

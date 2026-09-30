@@ -42,9 +42,9 @@ test('mapUserRow preserva flags', () => {
 
 test('create: rejeita senha curta antes de tocar o banco (enforce server-side)', async () => {
   const repo = createUserRepository();
-  await expect(repo.create({ name: 'x', password: 'a'.repeat(MIN_PASSWORD_LENGTH - 1) })).rejects.toThrow(
-    /curta/,
-  );
+  await expect(
+    repo.create({ name: 'x', password: 'a'.repeat(MIN_PASSWORD_LENGTH - 1) }),
+  ).rejects.toThrow(/curta/);
 });
 
 test('mapUserRow expõe phone mas nunca backup_codes', () => {

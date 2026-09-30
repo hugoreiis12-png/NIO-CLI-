@@ -46,7 +46,9 @@ async function runEnable(): Promise<void> {
     process.exit(1);
   });
   if (st.enabled) {
-    console.log(`${c.yellow(sym.warn)} 2FA já está ativo (${st.phoneHint}). Use \`disable-2fa\` pra trocar.`);
+    console.log(
+      `${c.yellow(sym.warn)} 2FA já está ativo (${st.phoneHint}). Use \`disable-2fa\` pra trocar.`,
+    );
     return;
   }
 
@@ -69,7 +71,12 @@ async function runEnable(): Promise<void> {
   console.log(`  ${c.dim(`WhatsApp enviado para ${phone}`)}`);
   noteSmsMode({ smsMode, devCode });
 
-  const code = (await input({ message: "Código de confirmação", validate: (v) => v.trim().length > 0 || "obrigatório" })).trim();
+  const code = (
+    await input({
+      message: "Código de confirmação",
+      validate: (v) => v.trim().length > 0 || "obrigatório",
+    })
+  ).trim();
   try {
     const { backupCodes } = await gatewaySecurity.confirmEnable(token, challengeId, code, phone);
     console.log(`${c.green(sym.ok)} 2º fator ativado.`);
@@ -97,12 +104,16 @@ function noteSmsMode(r: { smsMode?: string; devCode?: string }): void {
       ),
     );
   } else if (r.smsMode === "unconfigured") {
-    console.log(`  ${c.yellow(sym.warn)} WhatsApp não configurado no gateway — use um código de backup.`);
+    console.log(
+      `  ${c.yellow(sym.warn)} WhatsApp não configurado no gateway — use um código de backup.`,
+    );
   }
 }
 
 /** Dispara o WhatsApp pro número registrado e devolve o challengeId + código digitado. */
-async function challengeAndCode(token: string): Promise<{ challengeId: string; code: string; type: "otp" | "backup" }> {
+async function challengeAndCode(
+  token: string,
+): Promise<{ challengeId: string; code: string; type: "otp" | "backup" }> {
   let challengeId: string;
   let smsMode: string | undefined;
   let devCode: string | undefined;
@@ -114,7 +125,10 @@ async function challengeAndCode(token: string): Promise<{ challengeId: string; c
   }
   console.log(`  ${c.dim("WhatsApp enviado para o número registrado.")}`);
   noteSmsMode({ smsMode, devCode });
-  const useBackup = !(await confirm({ message: "Recebeu o WhatsApp (ou tem o código)?", default: true }));
+  const useBackup = !(await confirm({
+    message: "Recebeu o WhatsApp (ou tem o código)?",
+    default: true,
+  }));
   const code = (
     await input({
       message: useBackup ? "Código de backup" : "Código recebido por WhatsApp",
@@ -148,7 +162,12 @@ async function runRegenerate(): Promise<void> {
   section("2º fator", "regenerar códigos de backup");
   const { challengeId, code, type } = await challengeAndCode(token);
   try {
-    const { backupCodes } = await gatewaySecurity.regenerateBackupCodes(token, challengeId, code, type);
+    const { backupCodes } = await gatewaySecurity.regenerateBackupCodes(
+      token,
+      challengeId,
+      code,
+      type,
+    );
     console.log(`${c.green(sym.ok)} códigos antigos invalidados.`);
     printBackupCodes(backupCodes);
   } catch (err) {
@@ -173,7 +192,9 @@ async function runChangePassword(): Promise<void> {
   }
   try {
     await gatewaySecurity.changePassword(token, current, next);
-    console.log(`${c.green(sym.ok)} senha trocada. Todas as sessões foram encerradas — rode \`${brand.name} login\`.`);
+    console.log(
+      `${c.green(sym.ok)} senha trocada. Todas as sessões foram encerradas — rode \`${brand.name} login\`.`,
+    );
   } catch (err) {
     console.error(`${c.red(sym.err)} ${(err as Error).message}`);
     process.exit(1);
@@ -231,7 +252,9 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
 }
 
 export function registerSecurityCommands(program: Command): void {
-  const cmd = program.command("security").description("Senha e 2º fator do login (WhatsApp OTP + códigos de backup)");
+  const cmd = program
+    .command("security")
+    .description("Senha e 2º fator do login (WhatsApp OTP + códigos de backup)");
 
   cmd.command("enable-2fa").description("Ativa o 2º fator via WhatsApp").action(runEnable);
   cmd.command("disable-2fa").description("Desativa o 2º fator").action(runDisable);

@@ -80,7 +80,10 @@ test('build + recipe: funde languages/frameworks/mcps/toolchains e grava extra.r
     envVars: { NODE_ENV: 'development' },
     aliases: { nr: 'npm run' },
   });
-  const env = await new EnvironmentBuilder(undefined, fakeGateway('present')).build('fullstack', recipe);
+  const env = await new EnvironmentBuilder(undefined, fakeGateway('present')).build(
+    'fullstack',
+    recipe,
+  );
 
   expect(env.config.frameworks).toEqual(expect.arrayContaining(['react', 'next']));
   expect(env.config.mcps).toEqual(expect.arrayContaining(['nio-lang', 'postgres']));
@@ -98,7 +101,9 @@ test('build + recipe: id de toolchain/MCP desconhecido → recipeWarnings, não 
     mcpIds: ['inventado'],
   });
   const env = await new EnvironmentBuilder(undefined, fakeGateway('present')).build('dba', recipe);
-  expect(env.recipeWarnings).toEqual(expect.arrayContaining(['toolchain "cobol"', 'MCP "inventado"']));
+  expect(env.recipeWarnings).toEqual(
+    expect.arrayContaining(['toolchain "cobol"', 'MCP "inventado"']),
+  );
   expect(env.config.mcps).not.toContain('inventado');
 });
 

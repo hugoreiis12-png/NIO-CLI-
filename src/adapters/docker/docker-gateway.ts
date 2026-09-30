@@ -24,7 +24,11 @@ export function composeArgs(action: ComposeAction, opts: ComposeOptions = {}): s
   const base = ['compose', ...fileFlag(opts.file), action];
   switch (action) {
     case 'up':
-      return [...base, ...(opts.detach === false ? [] : ['-d']), ...(opts.build ? ['--build'] : [])];
+      return [
+        ...base,
+        ...(opts.detach === false ? [] : ['-d']),
+        ...(opts.build ? ['--build'] : []),
+      ];
     case 'logs':
       return [
         ...base,
@@ -75,16 +79,16 @@ function exec(args: string[], capture: boolean): DockerResult {
 
   if (res.error) return { status: 'failed', exitCode: null, error: res.error.message };
   if (res.status !== 0) {
-    const detail = capture
-      ? ((res.stderr as string) || (res.stdout as string) || '').trim()
-      : '';
+    const detail = capture ? ((res.stderr as string) || (res.stdout as string) || '').trim() : '';
     return {
       status: 'failed',
       exitCode: res.status,
       error: detail || `docker saiu com código ${res.status}`,
     };
   }
-  const out = capture ? (((res.stdout as string) ?? '') + ((res.stderr as string) ?? '')).trim() : undefined;
+  const out = capture
+    ? (((res.stdout as string) ?? '') + ((res.stderr as string) ?? '')).trim()
+    : undefined;
   return { status: 'ok', exitCode: 0, ...(out !== undefined ? { stdout: out } : {}) };
 }
 

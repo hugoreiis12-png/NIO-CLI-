@@ -55,7 +55,11 @@ async function downloadRepo(
 
     return { ...base, status: 'fetched' };
   } catch (err) {
-    return { ...base, status: existsSync(dest) ? 'cached' : 'failed', error: (err as Error).message };
+    return {
+      ...base,
+      status: existsSync(dest) ? 'cached' : 'failed',
+      error: (err as Error).message,
+    };
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }

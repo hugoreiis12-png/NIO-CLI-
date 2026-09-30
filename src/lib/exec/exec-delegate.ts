@@ -1,15 +1,19 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { skillsDir } from '../skills/skills.js';
 import { homePath } from '../../brand.js';
 import { HARNESS_RULES_REL, HARNESS_PATTERNS_REL } from '../clients/harness.js';
-import {
-  QWEN_ENGINE,
-  qwenComplete,
-  parseFileBlocks,
-} from './qwen-client.js';
+import { QWEN_ENGINE, qwenComplete, parseFileBlocks } from './qwen-client.js';
 
 /**
  * Delegação de execução: roda o **Qwen vLLM local** (API direta, sem binário externo)
@@ -276,10 +280,7 @@ function newJob(worktree: string): ExecJob {
 }
 
 /** Background: devolve na hora (uso do MCP, que é processo longo). */
-export function startExec(opts: {
-  worktree: string;
-  instruction: string;
-}): ExecJob {
+export function startExec(opts: { worktree: string; instruction: string }): ExecJob {
   const job = save(newJob(opts.worktree));
   void runEngine(job, buildPrompt(opts.instruction));
   return job;

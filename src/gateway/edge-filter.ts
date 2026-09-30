@@ -1,6 +1,6 @@
 /**
  * Edge Filter  primeira triagem de toda request que chega no `nio-gateway`,
- * antes de qualquer rota. 
+ * antes de qualquer rota.
  */
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
@@ -24,7 +24,8 @@ export function buildContext(req: FilterableRequest): RequestContext {
   const traceHeader = req.headers['x-nio-trace-id'];
   // TP-6: o header vem do cliente (até `maxHeaderSize`, ~16 KB) e é gravado
   // verbatim em `auth_events.trace_id` — cap em 64 chars.
-  const traceId = (Array.isArray(traceHeader) ? traceHeader[0] : traceHeader)?.slice(0, 64) || randomUUID();
+  const traceId =
+    (Array.isArray(traceHeader) ? traceHeader[0] : traceHeader)?.slice(0, 64) || randomUUID();
   return {
     traceId,
     method: req.method ?? 'UNKNOWN',
@@ -77,7 +78,9 @@ export function extractGatewayToken(req: FilterableRequest): string | null {
  * `X-Forwarded-For` — **só ligue isso quando o Kong for a ÚNICA entrada do
  * gateway** (senão qualquer um forja o header). Normaliza IPv4-mapeado.
  */
-export function clientIp(req: FilterableRequest & { socket?: { remoteAddress?: string } }): string | null {
+export function clientIp(
+  req: FilterableRequest & { socket?: { remoteAddress?: string } },
+): string | null {
   let ip: string | null = null;
   const trust = /^(1|true|yes|on)$/i.test((process.env.NIO_TRUST_PROXY ?? '').trim());
   if (trust) {

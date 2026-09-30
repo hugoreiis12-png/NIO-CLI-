@@ -116,7 +116,10 @@ test('planOpencodeUpdate: model ausente → não configurado, next seta o defaul
 });
 
 test('planOpencodeUpdate: model diferente do default → não configurado, next sobrescreve', () => {
-  const existing = { model: 'outro-modelo', mcp: { nio: { type: 'local', ...opencodeEntry, enabled: true } } };
+  const existing = {
+    model: 'outro-modelo',
+    mcp: { nio: { type: 'local', ...opencodeEntry, enabled: true } },
+  };
   const { alreadyConfigured, next } = planOpencodeUpdate(existing, opencodeEntry);
   expect(alreadyConfigured).toBe(false);
   expect(next.model).toBe(NIO_OPERATOR_MODEL);
@@ -124,7 +127,14 @@ test('planOpencodeUpdate: model diferente do default → não configurado, next 
 
 test('planOpencodeUpdate: command diferente → não configurado, next atualiza a entrada', () => {
   const existing = {
-    mcp: { nio: { type: 'local', command: ['outro-bin'], environment: { [CLIENT_ENV]: 'opencode' }, enabled: true } },
+    mcp: {
+      nio: {
+        type: 'local',
+        command: ['outro-bin'],
+        environment: { [CLIENT_ENV]: 'opencode' },
+        enabled: true,
+      },
+    },
   };
   const { alreadyConfigured, next } = planOpencodeUpdate(existing, opencodeEntry);
   expect(alreadyConfigured).toBe(false);

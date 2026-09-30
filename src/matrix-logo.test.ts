@@ -58,7 +58,8 @@ test('terminal pequeno COM TTY ainda recebe o estático (há humano lendo)', asy
   } finally {
     Object.defineProperty(process.stdout, 'isTTY', { value: undefined, configurable: true });
     Object.defineProperty(process.stdout, 'rows', { value: linhas, configurable: true });
-    if (ci === undefined) delete process.env.CI; else process.env.CI = ci;
+    if (ci === undefined) delete process.env.CI;
+    else process.env.CI = ci;
   }
 });
 
@@ -73,7 +74,8 @@ test('animateMatrixLogo: NIO_NO_ANIM força o estático mesmo com TTY', async ()
   } finally {
     delete process.env.NIO_NO_ANIM;
     Object.defineProperty(process.stdout, 'isTTY', { value: undefined, configurable: true });
-    if (ci === undefined) delete process.env.CI; else process.env.CI = ci;
+    if (ci === undefined) delete process.env.CI;
+    else process.env.CI = ci;
   }
 });
 
@@ -101,7 +103,8 @@ test('em TTY desenha, mas não em CI', () => {
     expect(shouldDrawLogo()).toBe(false);
   } finally {
     Object.defineProperty(process.stdout, 'isTTY', { value: antes, configurable: true });
-    if (ci === undefined) delete process.env.CI; else process.env.CI = ci;
+    if (ci === undefined) delete process.env.CI;
+    else process.env.CI = ci;
   }
 });
 

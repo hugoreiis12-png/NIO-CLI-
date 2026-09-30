@@ -29,10 +29,7 @@ export function cmd(s: string): string {
 }
 
 /** Selo com fundo colorido — estado bem visível ao lado de um título. */
-export function badge(
-  label: string,
-  color: 'green' | 'yellow' | 'gray' | 'cyan' = 'gray',
-): string {
+export function badge(label: string, color: 'green' | 'yellow' | 'gray' | 'cyan' = 'gray'): string {
   const bg = {
     green: chalk.bgGreen,
     yellow: chalk.bgYellow,
@@ -96,7 +93,7 @@ export function sectionTitle(title: string, subtitle?: string): string {
  */
 export function clearScreen(): void {
   if (!process.stdout.isTTY || process.env[envName('NO_CLEAR')]) return;
-  process.stdout.write("\x1b[2J\x1b[H");
+  process.stdout.write('\x1b[2J\x1b[H');
 }
 
 /** Começa uma seção "em tela nova": limpa (se TTY) e imprime o título. */

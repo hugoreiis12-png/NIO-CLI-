@@ -33,7 +33,9 @@ function parsePeppers(): Map<number, Buffer> {
     const id = Number(sep >= 0 ? trimmed.slice(0, sep) : NaN);
     const secret = sep >= 0 ? trimmed.slice(sep + 1) : '';
     if (!Number.isInteger(id) || id <= 0 || !secret) {
-      throw new Error(`NIO_PEPPERS inválido: entrada "${trimmed}" (esperado "id:segredo", id inteiro > 0).`);
+      throw new Error(
+        `NIO_PEPPERS inválido: entrada "${trimmed}" (esperado "id:segredo", id inteiro > 0).`,
+      );
     }
     if (secret.length < MIN_JWT_SECRET_LENGTH) {
       throw new Error(

@@ -29,7 +29,10 @@ export async function learningDeps(): Promise<{
 }
 
 /** Fim de turno: grava o que errou-e-depois-acertou. Silencioso. */
-export async function learnTurn(messages: readonly ChatMessage[], profile?: string): Promise<number> {
+export async function learnTurn(
+  messages: readonly ChatMessage[],
+  profile?: string,
+): Promise<number> {
   const deps = await learningDeps();
   if (!deps) return 0;
   try {

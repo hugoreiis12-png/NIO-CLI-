@@ -70,7 +70,10 @@ test('nenhuma superfície fora de src/app importa os repositórios de task', () 
     if (alvo) infratores.push(`${rel.split(sep).join('/')} → ${alvo}`);
   }
   // Mensagem nomeia o infrator: quem quebrar precisa saber o que fazer.
-  expect(infratores, `passe pelo TaskManager em vez de importar direto:\n  ${infratores.join('\n  ')}`).toEqual([]);
+  expect(
+    infratores,
+    `passe pelo TaskManager em vez de importar direto:\n  ${infratores.join('\n  ')}`,
+  ).toEqual([]);
 }, 30_000);
 
 test('o gate enxerga uma violação plantada — senão não prova nada', () => {

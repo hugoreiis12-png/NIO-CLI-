@@ -12,15 +12,14 @@
  * Sem IO direto: o repo e o builder são injetáveis (default = implementações
  * reais), então os testes rodam sem banco nem subprocesso.
  */
-import type {
-  Session,
-  SessionStatus,
-  Profile,
-  Ide,
-  EnvironmentConfig,
-} from '../core/types.js';
+import type { Session, SessionStatus, Profile, Ide, EnvironmentConfig } from '../core/types.js';
 import type { SessionRepository } from '../core/repositories.js';
-import type { McpSpec, EnsureResult, EnvironmentRecipe, RecipeCatalog } from '../core/environment.js';
+import type {
+  McpSpec,
+  EnsureResult,
+  EnvironmentRecipe,
+  RecipeCatalog,
+} from '../core/environment.js';
 import { createSessionRepository } from '../adapters/pg/session-repository.js';
 import { createRecipeCatalog } from '../adapters/skills/recipe-catalog.js';
 import { EnvironmentBuilder } from './environment-builder.js';

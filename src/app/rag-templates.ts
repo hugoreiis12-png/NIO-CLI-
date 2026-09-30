@@ -33,7 +33,9 @@ export function normalizeQuestion(question: string): string {
  * semântico é outra pergunta** — um DAX válido num dataset é inválido noutro.
  */
 export function questionHash(questionNorm: string, workspaceId: string, datasetId: string): string {
-  return createHash('sha256').update(`${workspaceId}\u0000${datasetId}\u0000${questionNorm}`).digest('hex');
+  return createHash('sha256')
+    .update(`${workspaceId}\u0000${datasetId}\u0000${questionNorm}`)
+    .digest('hex');
 }
 
 /** Corta valores longos da amostra; preserva o tipo quando não é string. */

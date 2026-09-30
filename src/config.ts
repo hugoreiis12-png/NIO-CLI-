@@ -53,7 +53,7 @@ export interface UserConfig {
 }
 
 /** Arquivo de config do usuário — `nio.json` → `nio.user.json` (respeita o brand). */
-export const USER_CONFIG_FILE = PROJECT_CONFIG_FILE.replace(/\.json$/, ".user.json");
+export const USER_CONFIG_FILE = PROJECT_CONFIG_FILE.replace(/\.json$/, '.user.json');
 
 export function getUserConfigPath(cwd: string = process.cwd()): string {
   const base = isAbsolute(cwd) ? cwd : join(process.cwd(), cwd);
@@ -65,7 +65,7 @@ function readUserIde(dir: string): Ide | undefined {
   const path = join(dir, USER_CONFIG_FILE);
   if (!existsSync(path)) return undefined;
   try {
-    const u = JSON.parse(readFileSync(path, "utf8")) as { ide?: unknown };
+    const u = JSON.parse(readFileSync(path, 'utf8')) as { ide?: unknown };
     if (isIde(u.ide)) return u.ide;
   } catch {
     /* user file inválido → ignora */
@@ -118,7 +118,9 @@ function migrateLegacySelection(obj: Record<string, unknown>): Selection | undef
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function getProjectConfigPath(cwd: string = process.cwd()): string {
-  return isAbsolute(cwd) ? join(cwd, PROJECT_CONFIG_FILE) : join(process.cwd(), cwd, PROJECT_CONFIG_FILE);
+  return isAbsolute(cwd)
+    ? join(cwd, PROJECT_CONFIG_FILE)
+    : join(process.cwd(), cwd, PROJECT_CONFIG_FILE);
 }
 
 /**
@@ -195,7 +197,9 @@ function readProjectConfigFile(path: string): Record<string, unknown> {
 function shapeProjectConfig(obj: Record<string, unknown>): ProjectConfig {
   const projectId = obj.project_id;
   if (projectId !== undefined && (typeof projectId !== 'string' || !UUID_REGEX.test(projectId))) {
-    throw new Error(`${PROJECT_CONFIG_FILE}: campo "project_id", quando presente, deve ser um UUID válido.`);
+    throw new Error(
+      `${PROJECT_CONFIG_FILE}: campo "project_id", quando presente, deve ser um UUID válido.`,
+    );
   }
 
   const repositoryId = obj.repository_id;
@@ -204,12 +208,16 @@ function shapeProjectConfig(obj: Record<string, unknown>): ProjectConfig {
     repositoryId !== null &&
     (typeof repositoryId !== 'string' || !UUID_REGEX.test(repositoryId))
   ) {
-    throw new Error(`${PROJECT_CONFIG_FILE}: campo "repository_id" deve ser UUID, null ou ausente.`);
+    throw new Error(
+      `${PROJECT_CONFIG_FILE}: campo "repository_id" deve ser UUID, null ou ausente.`,
+    );
   }
 
   const sessionId = obj.session_id;
   if (sessionId !== undefined && (typeof sessionId !== 'string' || !UUID_REGEX.test(sessionId))) {
-    throw new Error(`${PROJECT_CONFIG_FILE}: campo "session_id", quando presente, deve ser um UUID válido.`);
+    throw new Error(
+      `${PROJECT_CONFIG_FILE}: campo "session_id", quando presente, deve ser um UUID válido.`,
+    );
   }
 
   const config: ProjectConfig = {};
@@ -226,7 +234,10 @@ function shapeProjectConfig(obj: Record<string, unknown>): ProjectConfig {
   return config;
 }
 
-export function loadProjectConfig(cwd: string = process.cwd(), stopAt?: string): ProjectConfig | null {
+export function loadProjectConfig(
+  cwd: string = process.cwd(),
+  stopAt?: string,
+): ProjectConfig | null {
   // Precedência pro ambiente (Desktop Extension / Cowork não têm nio.json no cwd).
   const envConfig = loadProjectConfigFromEnv();
   if (envConfig) return envConfig;
@@ -251,14 +262,14 @@ export function writeProjectConfig(config: ProjectConfig, cwd: string = process.
   if (config.repository_id !== undefined) repo.repository_id = config.repository_id;
   if (config.session_id) repo.session_id = config.session_id;
   if (config.selection) repo.selection = config.selection;
-  writeFileSync(getProjectConfigPath(cwd), JSON.stringify(repo, null, 2) + "\n", "utf8");
+  writeFileSync(getProjectConfigPath(cwd), JSON.stringify(repo, null, 2) + '\n', 'utf8');
 }
 
 /** Grava o `nio.user.json` (por-máquina, gitignored): ide + prefs pessoais. */
 export function writeUserConfig(user: UserConfig, cwd: string = process.cwd()): void {
   const obj: Record<string, unknown> = {};
   if (user.ide) obj.ide = user.ide;
-  writeFileSync(getUserConfigPath(cwd), JSON.stringify(obj, null, 2) + "\n", "utf8");
+  writeFileSync(getUserConfigPath(cwd), JSON.stringify(obj, null, 2) + '\n', 'utf8');
 }
 
 /**
@@ -270,17 +281,17 @@ export function migrateConfigSplit(cwd: string = process.cwd()): boolean {
   if (!existsSync(repoPath)) return false;
   let obj: Record<string, unknown>;
   try {
-    obj = JSON.parse(readFileSync(repoPath, "utf8")) as Record<string, unknown>;
+    obj = JSON.parse(readFileSync(repoPath, 'utf8')) as Record<string, unknown>;
   } catch {
     return false;
   }
-  if (!("ide" in obj)) return false;
+  if (!('ide' in obj)) return false;
 
   const ide = obj.ide;
   delete obj.ide;
   delete obj.sections; // resquícios do formato ainda mais antigo
   delete obj.rules;
-  writeFileSync(repoPath, JSON.stringify(obj, null, 2) + "\n", "utf8");
+  writeFileSync(repoPath, JSON.stringify(obj, null, 2) + '\n', 'utf8');
 
   if (isIde(ide) && !readUserIde(cwd)) {
     writeUserConfig({ ide }, cwd);
@@ -289,43 +300,43 @@ export function migrateConfigSplit(cwd: string = process.cwd()): boolean {
 }
 
 function readGitignore(cwd: string): { path: string; text: string } {
-  const path = join(cwd, ".gitignore");
-  return { path, text: existsSync(path) ? readFileSync(path, "utf8") : "" };
+  const path = join(cwd, '.gitignore');
+  return { path, text: existsSync(path) ? readFileSync(path, 'utf8') : '' };
 }
 
 // Sufixos ESTÁVEIS dos marcadores do `.gitignore`. O prefixo é a marca (`# nio`),
 // que muda num rebrand — então casamos por sufixo pra reconhecer/limpar o marcador de
 // QUALQUER marca (é a migração que remove o marcador antigo).
-const GITIGNORE_USER_SUFFIX = "(config local do usuário)";
-const GITIGNORE_PROJECT_SUFFIX = "(binding local do projeto)";
+const GITIGNORE_USER_SUFFIX = '(config local do usuário)';
+const GITIGNORE_PROJECT_SUFFIX = '(binding local do projeto)';
 
 /** Linha é um marcador nosso do sufixo dado? Agnóstico à marca. */
 function isGitignoreMarker(line: string, suffix: string): boolean {
   const t = line.trim();
-  return t.startsWith("#") && t.endsWith(suffix);
+  return t.startsWith('#') && t.endsWith(suffix);
 }
 
 /** Garante uma entrada no `.gitignore` (idempotente). Cria o arquivo se não existir. */
 export function ensureGitignored(
   entry: string = USER_CONFIG_FILE,
   cwd: string = process.cwd(),
-): "added" | "present" {
+): 'added' | 'present' {
   const { path, text } = readGitignore(cwd);
   const marker = `# ${brand.name} ${GITIGNORE_USER_SUFFIX}`;
   // Migração: varre marcadores de usuário de outra marca (preserva o atual).
   const kept = text
     .split(/\r?\n/)
     .filter((l) => l.trim() === marker || !isGitignoreMarker(l, GITIGNORE_USER_SUFFIX));
-  const base = kept.join("\n");
+  const base = kept.join('\n');
 
   if (kept.some((l) => l.trim() === entry)) {
-    if (base !== text) writeFileSync(path, base, "utf8"); // persiste a limpeza
-    return "present";
+    if (base !== text) writeFileSync(path, base, 'utf8'); // persiste a limpeza
+    return 'present';
   }
-  const sep = base.length > 0 && !base.endsWith("\n") ? "\n" : "";
-  const block = `${sep}${base.length > 0 ? "\n" : ""}${marker}\n${entry}\n`;
-  writeFileSync(path, base + block, "utf8");
-  return "added";
+  const sep = base.length > 0 && !base.endsWith('\n') ? '\n' : '';
+  const block = `${sep}${base.length > 0 ? '\n' : ''}${marker}\n${entry}\n`;
+  writeFileSync(path, base + block, 'utf8');
+  return 'added';
 }
 
 /** Remove uma entrada exata do `.gitignore` (+ o marcador de projeto órfão, de qualquer marca). `true` se removeu. */
@@ -337,7 +348,7 @@ export function removeFromGitignore(entry: string, cwd: string = process.cwd()):
     (l) => l.trim() !== entry && !isGitignoreMarker(l, GITIGNORE_PROJECT_SUFFIX),
   );
   if (kept.length === lines.length) return false;
-  writeFileSync(path, kept.join("\n"), "utf8");
+  writeFileSync(path, kept.join('\n'), 'utf8');
   return true;
 }
 
@@ -345,7 +356,7 @@ export function removeFromGitignore(entry: string, cwd: string = process.cwd()):
  * Ajusta o `.gitignore` pro split: tira o `nio.json` (agora versionado, do time) e
  * garante o `nio.user.json` (do usuário) ignorado. Retorna se acrescentou o user file.
  */
-export function fixGitignoreForSplit(cwd: string = process.cwd()): "added" | "present" {
+export function fixGitignoreForSplit(cwd: string = process.cwd()): 'added' | 'present' {
   removeFromGitignore(PROJECT_CONFIG_FILE, cwd);
   return ensureGitignored(USER_CONFIG_FILE, cwd);
 }

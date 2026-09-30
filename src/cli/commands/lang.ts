@@ -25,7 +25,9 @@ export function registerLangCommand(program: Command): void {
 
       const failed = results.filter((r) => r.status === "failed").length;
       if (failed > 0) {
-        console.log(`${c.yellow(sym.warn)} ${failed} repo(s) falharam — o resto do cache segue utilizável.`);
+        console.log(
+          `${c.yellow(sym.warn)} ${failed} repo(s) falharam — o resto do cache segue utilizável.`,
+        );
         process.exitCode = 1;
       }
     });

@@ -36,7 +36,10 @@ test('reference com topic: devolve o .md mais relevante (não o README)', () => 
   const repo = join(dir, 'python-sdk');
   mkdirSync(join(repo, 'docs'), { recursive: true });
   writeFileSync(join(repo, 'README.md'), '# Python SDK\nintro geral');
-  writeFileSync(join(repo, 'docs', 'authentication.md'), '# Auth\ncomo fazer authentication no server');
+  writeFileSync(
+    join(repo, 'docs', 'authentication.md'),
+    '# Auth\ncomo fazer authentication no server',
+  );
 
   const ref = createKnowledgeStore(dir).reference('python', 'authentication');
   expect(ref.found).toBe(true);

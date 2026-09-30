@@ -33,8 +33,15 @@ export const definition: Tool = {
     type: 'object',
     properties: {
       name: { type: 'string', description: 'Nome da sessão (livre, ajuda a identificar depois).' },
-      profile: { type: 'string', enum: [...PROFILES], description: 'Perfil de ambiente (ver `nio_profile_get`).' },
-      project_path: { type: 'string', description: 'Caminho absoluto da pasta do projeto da sessão (deve existir).' },
+      profile: {
+        type: 'string',
+        enum: [...PROFILES],
+        description: 'Perfil de ambiente (ver `nio_profile_get`).',
+      },
+      project_path: {
+        type: 'string',
+        description: 'Caminho absoluto da pasta do projeto da sessão (deve existir).',
+      },
       ide: { type: 'string', enum: [...IDES], description: 'Editor da sessão. Default: other.' },
       recipe: {
         type: 'string',
@@ -82,9 +89,12 @@ export async function handler(args: unknown, ctx: ToolContext): Promise<CallTool
   let recipe;
   if (recipeSlug) {
     recipe = createRecipeCatalog().get(recipeSlug) ?? undefined;
-    if (!recipe) return errorResult(`Recipe "${recipeSlug}" não encontrada (rode \`${brand.name} sync\`?).`);
+    if (!recipe)
+      return errorResult(`Recipe "${recipeSlug}" não encontrada (rode \`${brand.name} sync\`?).`);
     if (recipe.profile !== profile) {
-      return errorResult(`Recipe "${recipeSlug}" é do perfil "${recipe.profile}", não "${profile}".`);
+      return errorResult(
+        `Recipe "${recipeSlug}" é do perfil "${recipe.profile}", não "${profile}".`,
+      );
     }
   }
 
