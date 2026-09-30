@@ -38,8 +38,11 @@
 ```
 entrypoints:  src/cli.ts (nio)              src/gateway/index.ts (nio-gateway)
               src/mcp-server.ts (nio-cli)   src/mcp-server-lang.ts (nio-lang)
+              src/worker.ts (nio-worker)   ← executa as tasks duráveis
 app/:         SessionManager · EnvironmentBuilder · DependencyWatcher · DockerManager
-              · LanguageConfigurator · ai-client (headless) 
+              · LanguageConfigurator · ai-client (headless)
+              · TaskManager (ponto ÚNICO de tasks) · TaskRunner (laço do worker)
+              · task-planner/task-validator (vLLM direto) · approval-policy · turn-task
 tui/:         interface NIO em Ink (launchNioTui) ↔ opencode serve via @opencode-ai/sdk
 core/:        types.ts (entidades + enums do schema)
               + ports por domínio, só interfaces, ZERO IO:
@@ -47,8 +50,11 @@ core/:        types.ts (entidades + enums do schema)
                 environment.ts  (ProfileCatalog/RecipeCatalog/ToolchainGateway/IdeGateway + shapes)
                 docker.ts       (DockerGateway)   messaging.ts (SmsSender)
                 lang.ts         (KnowledgeStore/LanguageCatalog/ScaffoldGateway/…)
+                tasks.ts        (Task/TaskStep/TaskRepository/StepRepository/TaskQueue)
+                agent.ts        (Planner/StepExecutor/Validator/PermissionDecider)
 adapters/:    pg/ (Postgres, driver `pg`)  ide/ (vscode)  pkg/ (npm,pip,…)
               docker/  sms/ (HTTP genérico)  skills/ (cache do repo NIO-SKILLS)  lang/
+              agent/ (StepExecutor sobre o opencode serve)
 gateway/:     index.ts (HTTP nativo) · edge-filter.ts · middleware/ · services/
 profiles/:    catálogo dos 6 perfis (hardcoded no fonte)
 ```
@@ -60,7 +66,22 @@ profiles/:    catálogo dos 6 perfis (hardcoded no fonte)
 - **Perfis** (`fullstack`, `analyst`, `scientist`, `dba`, `qa`, `bi`) são fixos no
   código; novos perfis só entram alterando o fonte.
 - **Enums do schema** (`profile`, `status`, `ide`, `dependency_type`, `purpose`,
-  `channel`) viram **union types** em `core/types.ts` — fonte única, sem string solta.
+  `channel`, `task status/kind`, `step status`) viram **union types** em
+  `core/types.ts` — fonte única, sem string solta.
+- **Execução durável** (`tasks`/`task_steps`, doc em
+  `docs/arch/ARQUITETURA-DURABLE-TASKS-E-MEMORIA.md`): uma request vira task
+  persistida e o `nio-worker` a executa — fechar o terminal não mata o trabalho.
+  Quatro invariantes que **não** se negociam:
+  - **Ponto único**: nada fora de `src/app/` importa os repositórios de task.
+    `app/task-boundary.test.ts` falha o build se alguém furar (é o que faltou ao
+    `SessionManager`, furado em 7 pontos).
+  - **Checkpoint-and-resume, não replay**: LLM não é determinístico e `bash` tem
+    efeito colateral. Um step pode rodar duas vezes — efeito externo é idempotente.
+  - **`kind` separa quem executa**: `agent` é do worker; `chat` é da TUI, em
+    processo. O `claim` só pega `agent` — senão o worker re-executaria o turno
+    do usuário.
+  - **Nada roda sem decisão**: o default do `PermissionDecider` é `park`. A
+    allowlist é `ProfileDefinition.autoApprove`, obrigatória nos 6 perfis.
 
 ## MCP
 
