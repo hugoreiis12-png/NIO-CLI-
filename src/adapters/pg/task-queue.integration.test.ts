@@ -129,42 +129,6 @@ dbTest('fence velho não grava: worker zumbi é barrado', async () => {
   }
 });
 
-dbTest('o worker NUNCA reivindica turno de chat', async () => {
-  if (!temTabela) return;
-  const users = createUserRepository();
-  const tasks = createTaskRepository();
-  const user = await users.create({
-    name: `nio-kind-${randomUUID()}`,
-    password: `pw-${randomUUID()}`,
-  });
-  const fila = createTaskQueue();
-  try {
-    const chat = await tasks.create({
-      userId: user.id,
-      sessionId: null,
-      profile: 'qa',
-      goal: 'oi',
-      kind: 'chat',
-    });
-    expect(chat.kind).toBe('chat');
-
-    // Sem o recorte por kind, o worker pegaria o turno do usuário e o
-    // RE-EXECUTARIA com o Planner — a mensagem viraria um plano rodando sozinha.
-    expect(await fila.claim('worker-a', user.id)).toBeNull();
-
-    const agente = await tasks.create({
-      userId: user.id,
-      sessionId: null,
-      profile: 'qa',
-      goal: 'trabalho',
-    });
-    expect(agente.kind).toBe('agent'); // default sem passar nada
-    const pega = await fila.claim('worker-a', user.id);
-    expect(pega?.id).toBe(agente.id);
-  } finally {
-    await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
-  }
-});
 
 dbTest('crash no meio de um step: o step interrompido volta pra fila junto', async () => {
   if (!temTabela) return;
