@@ -25,6 +25,7 @@ import { registerConfigCommand } from "./commands/config.js";
 import { registerFabricCommand } from "./commands/fabric.js";
 import { registerStartCommand } from "./commands/start.js";
 import { registerAiCommand } from "./commands/ai.js";
+import { registerTaskCommand } from "./commands/task.js";
 
 /** `logoShown` fica em `cli.ts` — aqui só o hook do help. */
 export function buildProgram(logoShown: () => boolean = () => false): Command {
@@ -50,6 +51,7 @@ export function buildProgram(logoShown: () => boolean = () => false): Command {
   registerFabricCommand(program);
   registerStartCommand(program);
   registerAiCommand(program);
+  registerTaskCommand(program);
 
   return program;
 }

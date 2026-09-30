@@ -41,6 +41,7 @@ const MODULES: ReadonlyArray<{ names: readonly string[]; load: () => Promise<Reg
   { names: ["fabric"], load: async () => (await import("./commands/fabric.js")).registerFabricCommand },
   { names: ["start"], load: async () => (await import("./commands/start.js")).registerStartCommand },
   { names: ["ai"], load: async () => (await import("./commands/ai.js")).registerAiCommand },
+  { names: ["task"], load: async () => (await import("./commands/task.js")).registerTaskCommand },
 ];
 
 /** Comandos-folha: nome e descrição aqui, módulo só quando executa. */
