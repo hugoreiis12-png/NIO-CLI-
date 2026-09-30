@@ -36,10 +36,7 @@ export function readJsonSafe(path: string): Record<string, unknown> | null {
   }
 }
 
-function ensureMcpServersJson(
-  path: string,
-  rootKey: 'mcpServers' | 'servers',
-): InstallResult {
+function ensureMcpServersJson(path: string, rootKey: 'mcpServers' | 'servers'): InstallResult {
   if (!existsSync(path)) {
     writeJson(path, { [rootKey]: { [brand.mcpServerKey]: { command: MCP_COMMAND } } });
     return { status: 'created', path };
@@ -106,10 +103,10 @@ export function coworkConfigured(): boolean {
   }
 }
 
-/** Path absoluto do `dist/mcp-server.js` deste pacote (compila pra `dist/lib/`). */
-function mcpServerJsPath(): string {
-  const here = dirname(fileURLToPath(import.meta.url)); // .../dist/lib
-  return join(here, '..', 'mcp-server.js'); // .../dist/mcp-server.js
+/** Path absoluto do `dist/mcp-server.js` deste pacote (compila pra `dist/lib/clients/`). */
+export function mcpServerJsPath(): string {
+  const here = dirname(fileURLToPath(import.meta.url)); // .../dist/lib/clients
+  return join(here, '..', '..', 'mcp-server.js'); // .../dist/mcp-server.js
 }
 
 interface CoworkEntry {
@@ -380,7 +377,10 @@ export function contextConfigWarning(
  */
 export function compactionReserved(context = NIO_AI_CONTEXT): number {
   if (context <= 0) return COMPACTION_FLOOR;
-  return Math.min(context, Math.max(COMPACTION_FLOOR, Math.round(context * COMPACTION_RESERVE_RATIO)));
+  return Math.min(
+    context,
+    Math.max(COMPACTION_FLOOR, Math.round(context * COMPACTION_RESERVE_RATIO)),
+  );
 }
 
 export const DEFAULT_OPENCODE_COMPACTION: Record<string, unknown> = {
@@ -468,7 +468,9 @@ export function planNioAiProvider(
   context: number,
   output: number,
 ): Record<string, unknown> {
-  const providers = { ...((existing.provider ?? {}) as Record<string, OpencodeProviderEntry | undefined>) };
+  const providers = {
+    ...((existing.provider ?? {}) as Record<string, OpencodeProviderEntry | undefined>),
+  };
   const cur = providers[provider] ?? {};
   const models = { ...(cur.models ?? {}) } as Record<string, OpencodeModelEntry>;
   // Declara a janela COM margem: `context` é a real do modelo, não a orçável.
@@ -487,7 +489,11 @@ export function planNioAiProvider(
     ...cur,
     npm: cur.npm ?? '@ai-sdk/openai-compatible',
     name: cur.name ?? 'NIO local (vLLM)',
-    options: { ...cur.options, baseURL, apiKey: (cur.options?.apiKey as string | undefined) ?? 'local' },
+    options: {
+      ...cur.options,
+      baseURL,
+      apiKey: (cur.options?.apiKey as string | undefined) ?? 'local',
+    },
     models,
   };
   return { ...existing, provider: providers };
@@ -502,7 +508,9 @@ function nioAiProviderOk(
   context: number,
   output: number,
 ): boolean {
-  const p = (existing.provider as Record<string, OpencodeProviderEntry | undefined> | undefined)?.[provider];
+  const p = (existing.provider as Record<string, OpencodeProviderEntry | undefined> | undefined)?.[
+    provider
+  ];
   if (!p || p.options?.baseURL !== baseURL) return false;
   // Capacidade também entra na comparação: sem isto o config JÁ EXISTENTE do usuário nunca
   // ganharia `attachment` e a imagem seguiria sendo descartada em silêncio.
@@ -524,15 +532,21 @@ function opencodeHasBaseURL(existing: Record<string, unknown>): boolean {
  * Remove o `baseURL` do provider `opencode` (Headroom DESATIVADO — client fala direto
  * no OpenCode Zen). Limpa `options`/`provider.opencode` que ficarem vazios. Pura, sem IO.
  */
-export function clearOpencodeProviderBaseURL(existing: Record<string, unknown>): Record<string, unknown> {
-  const providers = existing.provider as Record<string, OpencodeProviderEntry | undefined> | undefined;
+export function clearOpencodeProviderBaseURL(
+  existing: Record<string, unknown>,
+): Record<string, unknown> {
+  const providers = existing.provider as
+    | Record<string, OpencodeProviderEntry | undefined>
+    | undefined;
   const cur = providers?.opencode;
   if (cur?.options?.baseURL === undefined) return existing; // nada a limpar
   const restOptions: Record<string, unknown> = { ...cur.options };
   delete restOptions.baseURL; // Record plano → delete permitido
   // `options: undefined` some no JSON.stringify (chaves undefined são omitidas).
   const opencode: OpencodeProviderEntry =
-    Object.keys(restOptions).length > 0 ? { ...cur, options: restOptions } : { ...cur, options: undefined };
+    Object.keys(restOptions).length > 0
+      ? { ...cur, options: restOptions }
+      : { ...cur, options: undefined };
   return { ...existing, provider: { ...providers, opencode } };
 }
 
@@ -563,7 +577,14 @@ export function planOpencodeUpdate(
   // precisa existir com o modelo+limite declarados; sem baseURL, o opencode não deve
   // ter baseURL de hijack legado (fica no default big-pickle).
   const providerOk = baseURL
-    ? nioAiProviderOk(existing, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_CONTEXT, NIO_AI_OUTPUT)
+    ? nioAiProviderOk(
+        existing,
+        NIO_AI_PROVIDER,
+        baseURL,
+        NIO_AI_MODEL_ID,
+        NIO_AI_CONTEXT,
+        NIO_AI_OUTPUT,
+      )
     : !opencodeHasBaseURL(existing);
   const alreadyConfigured =
     nioOk &&
@@ -593,7 +614,15 @@ export function planOpencodeUpdate(
   if (!existing.compaction) next.compaction = DEFAULT_OPENCODE_COMPACTION; // janela apertada — nunca sobrescreve
   if (!existing.watcher) next.watcher = DEFAULT_OPENCODE_WATCHER; // nunca sobrescreve
   next = clearOpencodeProviderBaseURL(next); // limpa qualquer hijack legado no provider `opencode`
-  if (baseURL) next = planNioAiProvider(next, NIO_AI_PROVIDER, baseURL, NIO_AI_MODEL_ID, NIO_AI_CONTEXT, NIO_AI_OUTPUT);
+  if (baseURL)
+    next = planNioAiProvider(
+      next,
+      NIO_AI_PROVIDER,
+      baseURL,
+      NIO_AI_MODEL_ID,
+      NIO_AI_CONTEXT,
+      NIO_AI_OUTPUT,
+    );
   return { alreadyConfigured, next };
 }
 

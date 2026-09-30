@@ -1,7 +1,8 @@
 import { test, expect } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   planOpencodeUpdate,
   planNioAiProvider,
@@ -18,6 +19,7 @@ import {
   contextConfigWarning,
   toolOutputLimits,
   compactionReserved,
+  mcpServerJsPath,
 } from './client-configs.js';
 import type { McpSpec } from '../../core/environment.js';
 
@@ -73,7 +75,9 @@ test('planOpencodeUpdate: com baseURL → semeia o provider dedicado, NÃO toca 
 
   const seeded = first.next;
   expect(planOpencodeUpdate(seeded, NIO_ENTRY, [], url).alreadyConfigured).toBe(true);
-  expect(planOpencodeUpdate(seeded, NIO_ENTRY, [], 'http://other/v1').alreadyConfigured).toBe(false);
+  expect(planOpencodeUpdate(seeded, NIO_ENTRY, [], 'http://other/v1').alreadyConfigured).toBe(
+    false,
+  );
 });
 
 test('planOpencodeUpdate: idempotente — rodar sobre o próprio resultado marca alreadyConfigured', () => {
@@ -120,7 +124,10 @@ test('installOpencodeGlobal: aponta o provider pro backend de IA (NIO_AI_BASE_UR
 test('upsertOpencodeMcp: registra um MCP remoto (type: remote + url), preserva o resto', () => {
   const d = mkdtempSync(join(tmpdir(), 'nio-mcp-'));
   const p = join(d, 'opencode.json');
-  writeFileSync(p, JSON.stringify({ model: 'x', mcp: { nio: { type: 'local', command: ['nio-cli'] } } }));
+  writeFileSync(
+    p,
+    JSON.stringify({ model: 'x', mcp: { nio: { type: 'local', command: ['nio-cli'] } } }),
+  );
 
   const dockerSpec: McpSpec = { id: 'docker', url: 'http://127.0.0.1:8811/mcp' };
   const r1 = upsertOpencodeMcp(dockerSpec, { path: p });
@@ -128,7 +135,11 @@ test('upsertOpencodeMcp: registra um MCP remoto (type: remote + url), preserva o
   const cfg = JSON.parse(readFileSync(p, 'utf8'));
   expect(cfg.model).toBe('x');
   expect(cfg.mcp.nio.command).toEqual(['nio-cli']);
-  expect(cfg.mcp.docker).toEqual({ type: 'remote', url: 'http://127.0.0.1:8811/mcp', enabled: true });
+  expect(cfg.mcp.docker).toEqual({
+    type: 'remote',
+    url: 'http://127.0.0.1:8811/mcp',
+    enabled: true,
+  });
 
   // idempotente
   expect(upsertOpencodeMcp(dockerSpec, { path: p }).status).toBe('already_configured');
@@ -179,7 +190,6 @@ test('janela declarada fica ENTRE o piso de compactação e o teto do servidor',
   expect(declarado).toBeGreaterThan(NIO_AI_OUTPUT + compactionReserved(NIO_AI_CONTEXT));
 });
 
-
 test('ACEITE: a janela declarada cabe no teto do servidor junto com o output', () => {
   // O estouro real: prompt 96257 + output 2048 = 98305 contra max_model_len 98304.
   // O servidor soma os dois contra o MESMO teto, então declarar a janela cheia
@@ -227,7 +237,10 @@ test('capacidades usam só chaves do schema oficial (additionalProperties: false
   // Chave inventada aqui quebra o opencode.json inteiro, não só a visão.
   const permitidas = ['attachment', 'modalities'];
   expect(Object.keys(modelCapabilities(true)).every((k) => permitidas.includes(k))).toBe(true);
-  expect(modelCapabilities(true).modalities).toEqual({ input: ['text', 'image'], output: ['text'] });
+  expect(modelCapabilities(true).modalities).toEqual({
+    input: ['text', 'image'],
+    output: ['text'],
+  });
 });
 
 test('backend texto-only → nenhuma capacidade declarada', () => {
@@ -251,4 +264,18 @@ test('tool_output: teto padrão corta o que entraria no contexto, sem perder o d
   expect(lim.max_bytes).toBe(20_000);
   expect(lim.max_lines).toBe(800);
   expect(lim.max_bytes!).toBeLessThan(51_200); // mais apertado que o default do opencode
+});
+
+test('mcpServerJsPath sobe DOIS níveis (§10.4) — não um, como no bug antigo', () => {
+  // `client-configs.ts` mora em `lib/clients/`; o alvo `mcp-server.js` é irmão
+  // do pacote (raiz de `src/` em teste, raiz de `dist/` no build). Testar a
+  // ESTRUTURA (dois níveis acima), não uma string literal de diretório — o
+  // teste roda contra `src/`, não contra `dist/`, então ancorar em "/dist/"
+  // teria falhado no caminho certo e mascarado o bug no caminho errado.
+  const aqui = dirname(fileURLToPath(import.meta.url)); // .../src/lib/clients
+  const esperado = join(aqui, '..', '..', 'mcp-server.js'); // .../src/mcp-server.js
+  const bugAntigo = join(aqui, '..', 'mcp-server.js'); // .../src/lib/mcp-server.js — o path quebrado
+
+  expect(mcpServerJsPath()).toBe(esperado);
+  expect(mcpServerJsPath()).not.toBe(bugAntigo);
 });
