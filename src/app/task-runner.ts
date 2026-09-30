@@ -126,7 +126,9 @@ export class TaskRunner {
 
   /** Ciclo completo da task: planeja (se preciso), executa, valida, repete. */
   private async processar(task: Task, workerId: string): Promise<void> {
-    if (task.status === 'planning') await this.planejar(task);
+    // Chat delegadas (Opção A): já têm steps prontos na criação, não replanejam
+    const isChatDelegada = task.kind === 'chat' && task.currentStep !== null;
+    if (task.status === 'planning' && !isChatDelegada) await this.planejar(task);
 
     for (let ciclo = 0; ciclo < MAX_CICLOS; ciclo++) {
       const parou = await this.executarSteps(task, workerId);
