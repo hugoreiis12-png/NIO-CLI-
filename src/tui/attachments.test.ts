@@ -67,14 +67,18 @@ test('buildAttachedInput: embute conteúdo dos arquivos e remove o path do texto
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('buildAttachedInput: xlsx vira CSV das abas embutido', async () => {
-  const { dir, xlsx } = fixture();
-  const { text } = await buildAttachedInput(`analisa ${xlsx}`);
-  expect(text).toContain('arquivo anexado: planilha.xlsx');
-  expect(text).toContain('x,y'); // cabeçalho da planilha como CSV
-  expect(text).toContain('10,20'); // dados
-  rmSync(dir, { recursive: true, force: true });
-});
+test(
+  'buildAttachedInput: xlsx vira CSV das abas embutido',
+  async () => {
+    const { dir, xlsx } = fixture();
+    const { text } = await buildAttachedInput(`analisa ${xlsx}`);
+    expect(text).toContain('arquivo anexado: planilha.xlsx');
+    expect(text).toContain('x,y'); // cabeçalho da planilha como CSV
+    expect(text).toContain('10,20'); // dados
+    rmSync(dir, { recursive: true, force: true });
+  },
+  30_000, // §11.1: exceljs faz IO real de workbook — ~900ms isolado, estoura 5s default sob contenção da suíte completa
+);
 
 test('buildAttachedInput: imagem vira FilePartInput data-URI (Item 4b)', async () => {
   const { dir, png } = fixture();
