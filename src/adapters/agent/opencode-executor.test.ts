@@ -282,14 +282,22 @@ test('estouro de contexto: cria sessão NOVA, reenvia com resumo, conclui normal
       // TROCOU — se este evento viesse com o 's1' antigo (como o `parteTexto`
       // padrão faz), `ehDeOutraSessao` o descartaria e o teste passaria vazio
       // pelo motivo errado.
-      evt('message.part.updated', { part: { id: 't1', sessionID: 's-nova-1', type: 'text', text: 'achei depois de recuperar' } }),
+      evt('message.part.updated', {
+        part: { id: 't1', sessionID: 's-nova-1', type: 'text', text: 'achei depois de recuperar' },
+      }),
       evt('session.idle', {}),
     ],
     permitir,
   );
 
   const priorSteps: TaskStep[] = [
-    fakeStepWith({ id: 9, stepNumber: 0, name: 'passo anterior', status: 'done', output: { text: 'resultado do passo 1' } }),
+    fakeStepWith({
+      id: 9,
+      stepNumber: 0,
+      name: 'passo anterior',
+      status: 'done',
+      output: { text: 'resultado do passo 1' },
+    }),
   ];
   const out = await exec.run(fakeTask(), fakeStep(), priorSteps);
 
@@ -344,7 +352,9 @@ test('resposta cortada (output_length): MESMA sessão, pede continuação, conca
   expect(out.engineSessionId).toBe('s1');
   expect(out.halt).toBeUndefined();
   // As duas partes concatenam — é a resposta "continuada", não duas respostas soltas.
-  expect(out.output).toEqual({ text: 'começo da resposta, cortado aqui — e o resto depois de continuar' });
+  expect(out.output).toEqual({
+    text: 'começo da resposta, cortado aqui — e o resto depois de continuar',
+  });
   expect(reg.prompts[1]).toContain('Continue EXATAMENTE de onde parou');
 });
 

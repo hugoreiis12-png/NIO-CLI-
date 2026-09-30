@@ -118,7 +118,10 @@ test('engineErrorFrom: estouro sem nome, só a mensagem crua do provider', () =>
   // O motor nem sempre nomeia — às vezes só devolve APIError com a frase do provider.
   const e = engineErrorFrom(
     evt('session.error', {
-      error: { name: 'APIError', data: { message: 'This model\'s maximum context length is 32000 tokens' } },
+      error: {
+        name: 'APIError',
+        data: { message: "This model's maximum context length is 32000 tokens" },
+      },
     }),
   );
   expect(e?.kind).toBe('context_overflow');
@@ -138,10 +141,14 @@ test('engineErrorFrom: erro genérico do motor não tem recuperação automátic
 test('engineErrorFrom: MessageAbortedError não é falha — foi um abort nosso', () => {
   // Sem isto, todo `session.abort()` que o próprio executor dispara (timeout,
   // fim do step) pareceria um erro do motor e tentaria "recuperar" à toa.
-  expect(engineErrorFrom(evt('session.error', { error: { name: 'MessageAbortedError' } }))).toBeNull();
+  expect(
+    engineErrorFrom(evt('session.error', { error: { name: 'MessageAbortedError' } })),
+  ).toBeNull();
 });
 
 test('engineErrorFrom: ignora evento sem error e evento de outro tipo', () => {
   expect(engineErrorFrom(evt('session.error', {}))).toBeNull();
-  expect(engineErrorFrom(evt('message.part.updated', { error: { name: 'ContextOverflowError' } }))).toBeNull();
+  expect(
+    engineErrorFrom(evt('message.part.updated', { error: { name: 'ContextOverflowError' } })),
+  ).toBeNull();
 });
