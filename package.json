@@ -48,6 +48,8 @@
     "nio"
   ],
   "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
     "build": "node --input-type=commonjs -e \"fs=require('fs');fs.rmSync('dist',{recursive:true,force:true})\" && tsc && node --input-type=commonjs -e \"const fs=require('fs');fs.cpSync('src/cli/copy','dist/cli/copy',{recursive:true});for(const f of ['cli.js','mcp-server.js','gateway/index.js','mcp-server-lang.js','worker.js'])fs.chmodSync('dist/'+f,0o755)\"",
     "gen:docs": "bun run scripts/gen-reference.ts",
     "db:ping": "bun run scripts/db-ping.ts",
@@ -67,7 +69,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@node-rs/argon2": "^2.2.0",
     "@opencode-ai/sdk": "1.18.25",
-    "adm-zip": "^0.6.0",
+    "adm-zip": "^0.6.1",
     "boxen": "^7.1.1",
     "chalk": "^5.6.2",
     "commander": "^12.1.0",
@@ -78,20 +80,23 @@
     "react": "^18.3.1",
     "smol-toml": "^1.8.0",
     "update-notifier": "^7.3.1",
-    "xlsx": "^0.18.5",
+    "exceljs": "^4.4.0",
     "zod": "^4.5.4"
   },
   "//optionalDependencies": "Embedder local do RAG de DAX (adapters/embed). Opcional de propósito: puxa binários nativos do onnxruntime (~100MB+) e só quem usa Fabric/RAG precisa. Ausente ou com build nativo falho, o CLI funciona normal — as tools de RAG respondem `unconfigured` pedindo `nio fabric rag setup`. O import é dinâmico, então NUNCA entra no cold-start.",
   "optionalDependencies": {
     "@huggingface/transformers": "^4.3.0"
   },
-  "//overrides": "transitivas de @modelcontextprotocol/sdk (transporte HTTP — NIO usa só stdio). Força as versões corrigidas p/ deixar o `bun audit` limpo; ranges compatíveis com os pais.",
+  "//overrides": "Força versões corrigidas em transitivas vulneráveis (auditoria QP, 2026-09-30): adm-zip vem duplicado pelo onnxruntime-node num range antigo, fast-uri/ip-address vêm do @modelcontextprotocol/sdk (transporte HTTP — NIO usa só stdio). Não deixa o `bun audit` zerado sozinho — os 2-3 vulns restantes (xlsx em devDependencies, uuid via exceljs) são de outra origem e estão documentados/aceitos em docs/security/fourth-pass.md.",
   "overrides": {
-    "fast-uri": "^3.1.7",
+    "adm-zip": "^0.6.1",
+    "fast-uri": "^3.1.8",
+    "ip-address": "^10.7.2",
     "hono": "^4.13.7",
     "qs": "^6.16.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@types/adm-zip": "^0.5.8",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.20.1",
@@ -99,6 +104,7 @@
     "@types/react": "^18.3.31",
     "@types/update-notifier": "^6.0.8",
     "ink-testing-library": "^4.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "xlsx": "^0.18.5"
   }
 }

@@ -6,7 +6,14 @@ import * as XLSX from 'xlsx';
 import { Jimp } from 'jimp';
 import { detectPaths, buildAttachedInput } from './attachments.js';
 
-function fixture(): { dir: string; csv: string; txt: string; xlsx: string; spaced: string; png: string } {
+function fixture(): {
+  dir: string;
+  csv: string;
+  txt: string;
+  xlsx: string;
+  spaced: string;
+  png: string;
+} {
   const dir = mkdtempSync(join(tmpdir(), 'nio-attach-'));
   const csv = join(dir, 'dados.csv');
   const txt = join(dir, 'notas.txt');
@@ -20,7 +27,14 @@ function fixture(): { dir: string; csv: string; txt: string; xlsx: string; space
   const spaced = join(sub, 'arq.txt');
   writeFileSync(spaced, 'texto com espaco no path');
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['x', 'y'], [10, 20]]), 'Plan1');
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet([
+      ['x', 'y'],
+      [10, 20],
+    ]),
+    'Plan1',
+  );
   XLSX.writeFile(wb, xlsx);
   return { dir, csv, txt, xlsx, spaced, png };
 }
@@ -96,7 +110,10 @@ test('buildAttachedInput: imagem acima do teto é REDUZIDA (downscale) → part 
   for (let i = 0; i < img.bitmap.data.length; i++) img.bitmap.data[i] = (Math.random() * 256) | 0; // ruído real → png grande
   await img.write(p as `${string}.png`);
   // teto força o downscale; a versão reduzida (64px jpeg) cabe folgado
-  const { fileParts, text } = await buildAttachedInput(`veja ${p}`, { maxImageBytes: 100_000, maxDim: 64 });
+  const { fileParts, text } = await buildAttachedInput(`veja ${p}`, {
+    maxImageBytes: 100_000,
+    maxDim: 64,
+  });
   expect(fileParts).toHaveLength(1);
   expect(fileParts[0]!.mime).toBe('image/jpeg'); // re-encodada ao reduzir
   expect(fileParts[0]!.url.startsWith('data:image/jpeg;base64,')).toBe(true);

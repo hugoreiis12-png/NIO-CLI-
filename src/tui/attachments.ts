@@ -23,10 +23,17 @@ export interface DetectedPath {
 
 // Constantes de extensão -> tipo de anexo. Só arquivos com extensão conhecida entram na detecção.
 const EXT_KIND: Record<string, AttachKind> = {
-  '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.gif': 'image', '.webp': 'image',
+  '.png': 'image',
+  '.jpg': 'image',
+  '.jpeg': 'image',
+  '.gif': 'image',
+  '.webp': 'image',
   '.csv': 'csv',
-  '.txt': 'txt', '.md': 'txt', '.log': 'txt',
-  '.xlsx': 'xlsx', '.xls': 'xlsx',
+  '.txt': 'txt',
+  '.md': 'txt',
+  '.log': 'txt',
+  '.xlsx': 'xlsx',
+  '.xls': 'xlsx',
 };
 
 /** Candidatos a caminho: primeiro os entre aspas (podem ter espaço), depois os "soltos". */
@@ -60,11 +67,32 @@ export function detectPaths(text: string): DetectedPath[] {
 /** Lê um anexo de texto (csv/txt como está; xlsx → CSV de todas as abas). */
 async function readAsText(det: DetectedPath): Promise<string> {
   if (det.kind === 'xlsx') {
-    const XLSX = await import('xlsx'); // lazy: só carrega SheetJS quando há xlsx
-    const wb = XLSX.readFile(det.path);
-    return wb.SheetNames.map((n) => XLSX.utils.sheet_to_csv(wb.Sheets[n]!)).join('\n\n');
+    // exceljs no lugar do SheetJS: o npm não publica versão corrigida do `xlsx`
+    // (2 CVEs high), e planilha anexada é entrada não-confiável por definição.
+    const { Workbook } = await import('exceljs'); // lazy: fora do cold start
+    const wb = new Workbook();
+    await wb.xlsx.readFile(det.path);
+    return wb.worksheets
+      .map((ws) => {
+        const linhas: string[] = [];
+        ws.eachRow((row) => linhas.push(celulasParaCsv(row)));
+        return linhas.join('\n');
+      })
+      .join('\n\n');
   }
   return readFileSync(det.path, 'utf8');
+}
+
+/** Uma linha do exceljs em CSV. Aspas dobradas e campo citado quando precisa. */
+function celulasParaCsv(row: { values: unknown }): string {
+  // `row.values` do exceljs é 1-indexado: a posição 0 vem sempre vazia.
+  const celulas = (Array.isArray(row.values) ? row.values.slice(1) : []) as unknown[];
+  return celulas
+    .map((v) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    })
+    .join(',');
 }
 
 /** Remove a 1ª ocorrência do token de path do texto. */
@@ -74,8 +102,11 @@ function stripToken(text: string, token: string): string {
 }
 
 const IMAGE_MIME: Record<string, string> = {
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif', '.webp': 'image/webp',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
 };
 
 /** Lê uma imagem e monta o `FilePartInput` como data-URI base64 (Item 4b). */
@@ -92,8 +123,14 @@ function isImageSignature(b: Buffer): boolean {
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return true; // JPEG
   if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return true; // GIF
   if (
-    b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && // RIFF
-    b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50 // WEBP
+    b[0] === 0x52 &&
+    b[1] === 0x49 &&
+    b[2] === 0x46 &&
+    b[3] === 0x46 && // RIFF
+    b[8] === 0x57 &&
+    b[9] === 0x45 &&
+    b[10] === 0x42 &&
+    b[11] === 0x50 // WEBP
   )
     return true;
   return false;
@@ -118,7 +155,9 @@ async function downscaleImage(
     const out = await img.getBuffer(JimpMime.jpeg, { quality: 72 });
     if (maxBytes > 0 && out.length > maxBytes) return null; // ainda grande → desiste
     return {
-      type: 'file', mime: 'image/jpeg', filename: basename(path),
+      type: 'file',
+      mime: 'image/jpeg',
+      filename: basename(path),
       url: `data:image/jpeg;base64,${out.toString('base64')}`,
     };
   } catch {
