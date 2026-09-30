@@ -9,6 +9,10 @@
 > **Atualização 2026-09-20 (sprint organizacional)**: reorganização de módulos (separação `lib/auth`→`gateway/auth`/servidor vs cliente, split de `lib/docker.ts`, 2 renomes de clareza) + atualização de toda a documentação desatualizada (`README.md`, `AGENT.md`, `KONG-GATEWAY-USO.md`, `ARQUITETURA-ENVIRONMENT-BUILDER.md`, `ARQUITETURA-TUI-INTERACOES-MOTOR.md`, `PUBLISHING.md` + strings de `nio docs`/`--help`). Zero mudança de comportamento — `tsc`/`bun test`/`bun run build` verdes após cada passo. 1 bug real achado de bônus, registrado em **5.3**, não corrigido de propósito (fora do escopo "reorg pura"). `docs/TASKS-TUI-STREAMING.md` foi removido pelo dono do projeto — item 7.4 resumido inline.
 >
 > **Atualização 2026-09-21**: runbook de rotação de segredos/config de prod (JWT, senha do Postgres, gateway token, TLS) documentado em [§ 6.6](#66-runbook-de-rotação-de-segredosconfig-de-prod). Nenhum comando foi executado — é o procedimento pra quando H-1/H-2/6.1 forem tocados de fato. Confirmado por leitura de código: nenhum desses segredos entra no pacote npm (`package.json.files` não inclui `docker-compose.deploy.yml`, único lugar onde são referenciados).
+>
+> **Atualização 2026-09-29 (quarta passada completa)**: auditoria nova sobre a `v0.17.0` (commit `ebabc46`), com os gates rodados de verdade — não só leitura de código. Resultados: `tsc --noEmit` ✅ limpo · `bun test` ⚠️ **983 pass / 2 fail** · `bun audit` ❌ **6 vulns (3 high, 3 moderate)** · zero `any` ✅. Itens novos em [§ 8](#8-achados-de-2026-09-29--arquitetura-e-documentação) (arquitetura), [§ 9](#9-achados-de-2026-09-29--banco-de-dados) (banco), [§ 10](#10-achados-de-2026-09-29--qualidade-de-código) (qualidade) e [§ 11](#11-achados-de-2026-09-29--estabilidade-da-suíte) (suíte). Os achados **de segurança** desta passada (QP-1 a QP-6) estão em [`security/fourth-pass.md`](security/fourth-pass.md). **Nada foi implementado** — é análise, não sprint.
+>
+> Reverificações desta passada: **2.1** (7 imports diretos de `createSessionRepository`), **2.2** (agora 11 arquivos > 300 linhas), **3.1** (`log_session`/`session_activity` sem uma única referência em `src/`) e **5.3** (`mcpServerJsPath()` — **confirmado em runtime** no `dist/` construído, ver [§ 10.4](#104-mcpserverjspath-resolve-caminho-inexistente-médio--53-confirmado-em-runtime)) continuam **abertos e reproduzíveis**. O item **1.1** (`@docs/_patterns.md`) **regrediu** — ver [§ 8.3](#83-docs_patternsmd-voltou-ao-agentsmd--item-11-regrediu-baixo). A ressalva de 09-19 sobre 3 erros de `tsc` em `attachments.ts` **caducou** (era drift de `node_modules`, hoje limpo).
 
 ## Como usar
 
@@ -226,6 +230,238 @@ NIO_DATABASE_CA=/caminho/para/ca.crt
 `docs/TASKS-TUI-STREAMING.md` foi removido pelo dono do projeto (2026-09-19, itens considerados resolvidos em prod) — a task original ficava lá, resumo aqui: instrumentação temporária em `src/tui/state.ts` (`applyEvent`, log condicional em `typeof p.delta === 'string'`), rodar `NIO_DEBUG=1 nio ai` ao vivo, checar `~/.nio/tui.log`, registrar resultado (0 ou N), remover o log antes de commitar. Zero risco de regressão por desenho — nada fica no código a menos que se decida implementar o hybrid delta+snapshot depois, e mesmo esse preserva o fallback de snapshot (`raw.text` como fonte de verdade quando `delta` não vem).
 **Ação**: rodar quando a rede voltar; decidir a Task 1b só com o resultado real, não com suposição.
 **Status**: bloqueado — sem acesso a `192.168.0.140:8001` desta máquina.
+
+---
+
+## 8. Achados de 2026-09-29 — arquitetura e documentação
+
+> Contexto: quarta passada completa sobre a `v0.17.0` (commit `ebabc46`). Gates medidos na hora: `tsc --noEmit` ✅ limpo · `bun test` ⚠️ 983 pass / **2 fail** / 8 skip · `bun audit` ❌ **6 vulns (3 high, 3 moderate)** · zero `any` em produção ✅.
+>
+> Os achados **de segurança** desta passada (QP-1 a QP-6) estão em [`security/fourth-pass.md`](security/fourth-pass.md), não aqui.
+>
+> **Nenhum item desta passada foi implementado.** São candidatos a backlog.
+
+### 8.1 `src/lib/` é uma quarta camada não declarada — 23% do código [MÉDIO]
+O `AGENT.md` descreve a arquitetura hexagonal como `core/` · `app/` · `adapters/` · `gateway/` e **não menciona `src/lib/`**. Medido: `lib/` tem **9.180 linhas em 85 arquivos** — é o maior diretório do projeto, à frente de `app/` (4.231) e `core/` (1.013).
+
+O problema não é o tamanho, é a mistura de camadas num único balde:
+- **Lógica de app**: `lib/deps/` (scan e install de dependências), `lib/provision/`, `lib/exec/` (map-reduce, plan-delegate, qwen-client)
+- **Adapter puro**: `lib/auth/gateway-client.ts` (HTTP), `lib/skills/skills-cache.ts` (rede + zip + cache em disco)
+- **Utilitário legítimo**: `lib/proc.ts`, `lib/colors.ts`, `lib/duration.ts`, `lib/tool-result.ts`
+
+36 arquivos não-teste de `lib/` fazem IO (`node:fs`, `node:child_process`, `fetch`). Na prática existe um bypass do hexágono do tamanho de um quarto do repositório — o que não invalida a disciplina de `core/` (que está limpa, ver § 8.4), mas significa que a regra documentada descreve 3/4 do código.
+
+**Ação [decisão]**: escolher uma das três, não deixar implícito.
+1. Realocar por camada: `lib/deps|provision|exec` → `app/`, `lib/auth/gateway-client|skills-cache` → `adapters/`, e `lib/` fica só com utilitário sem domínio (~1.500 linhas).
+2. Declarar `lib/` como camada legítima no `AGENT.md`, com regra explícita do que entra (utilitário transversal sem regra de negócio) e do que não entra.
+3. Aceitar como está e remover a alegação de hexágono estrito do `AGENT.md`.
+
+Recomendação: **(2)** primeiro (é barato e para o sangramento), **(1)** incremental depois. A **(3)** desperdiça a disciplina real que existe em `core/`.
+
+### 8.2 Subsistema Fabric/PowerBI/RAG fora da documentação — ~4.800 linhas [MÉDIO]
+Medido por diretório:
+
+| Área | Linhas (sem teste) |
+|---|---:|
+| `src/app/{dax-*,rag-*,schema-*,lesson-*,learning,measure-lookup,scan-to-schema}.ts` | 2.336 |
+| `src/adapters/fabric/` | 1.072 |
+| `src/tools/{fabric-*,pbi-*}.ts` | 940 |
+| `src/adapters/{embed,powerbi}/` | 231 |
+| `src/core/{fabric,rag,learning}.ts` | 226 |
+| **Total** | **~4.800** |
+
+Nada disso aparece no `AGENT.md` (que descreve `app/` como "SessionManager · EnvironmentBuilder · DependencyWatcher · DockerManager · LanguageConfigurator · ai-client") nem em `docs/arch/` — são 11 documentos de arquitetura e **nenhum** sobre Fabric. Existe `docs/security/runbook-fabric-prod.md`, que cobre operação, não desenho.
+
+**Risco**: quem entra no projeto lê um mapa que descreve outro repositório. É a maior superfície do código e a menos documentada.
+
+**Ação**: `docs/arch/ARQUITETURA-FABRIC-RAG.md` — ports (`core/fabric.ts`, `core/rag.ts`, `core/learning.ts`), fluxo de ingestão de schema, o loop `agent_lesson`, e o papel do `dax-guard` como gate local. Mais um parágrafo no `AGENT.md` ligando pra lá.
+
+### 8.3 `@docs/_patterns.md` voltou ao `AGENTS.md` — item 1.1 regrediu [BAIXO]
+O item 1.1 foi fechado em 2026-09-19 removendo a linha `@docs/_patterns.md` do `AGENTS.md`, com a justificativa verificada de que o arquivo nunca existiu no histórico git.
+
+Hoje:
+```
+$ cat AGENTS.md
+# AGENTS.md
+## Harness
+@docs/_rules/nio.md
+@docs/_patterns.md      ← voltou
+
+$ ls docs/_patterns.md
+ls: cannot access 'docs/_patterns.md': No such file or directory
+```
+
+A referência quebrada está de volta no `AGENTS.md` do projeto **e** no `~/AGENTS.md` global. Toda sessão de agente começa tentando resolver um import inexistente.
+
+**Ação**: remover a linha de novo nos dois arquivos. Para não regredir uma terceira vez, considerar criar `docs/_patterns.md` como stub apontando pra `docs/_rules/nio.md` — o caminho volta por hábito muscular, e um stub é mais barato que vigiar.
+
+### 8.4 Itens de arquitetura reverificados nesta passada
+- **`core/` é genuinamente puro** — zero import de `pg`/`node:fs`/`node:child_process` nos 9 arquivos. Os únicos imports são `./types.js` e tipos locais. Confirmado por grep exaustivo.
+- **`SessionManager`/`EnvironmentBuilder` usam DI real** com default de produção, o que é o que permite 993 testes rodarem sem banco nem subprocesso. Padrão bom, vale preservar.
+- **Uma inversão de dependência**: `src/adapters/pg/dax-memory-repository.ts:21` importa `questionHash` de `../../app/rag-templates.js` — adapter dependendo de app. É o único ponto onde a seta aponta ao contrário. **Ação**: mover `questionHash` para `core/rag.ts` (é função pura de hash) ou para o próprio adapter. Uma linha.
+- **§ 2.1 continua aberto e intacto**: os mesmos 7 arquivos importam `createSessionRepository` direto, pulando o `SessionManager` que se declara "o ponto ÚNICO" em `session-manager.ts:1-6`. Reconfirmado arquivo por arquivo, sem mudança desde 2026-09-18.
+
+---
+
+## 9. Achados de 2026-09-29 — banco de dados
+
+### 9.1 `log_session` e `session_activity` são schema morto [MÉDIO — § 3.1 reconfirmado]
+O item 3.1 continua aberto, e a medição desta passada é mais forte que a anterior: além de não terem repository, as duas tabelas têm **zero referência em todo o `src/`**. A única menção é declarativa, em `core/types.ts:105` e `:117`.
+
+São 2 tabelas, 6 índices e 2 FKs que nunca receberam um `INSERT` desde que foram criadas. Custo real: cada leitura do `schema.sql` (humana ou de agente) gasta atenção com um domínio que não existe.
+
+**Ação [decisão]**: implementar o repository (se a auditoria de atividade de sessão ainda for um requisito) ou dropar em migration. A escolha tem 3 meses — o custo de deixar aberto é maior que o de qualquer das duas respostas.
+
+### 9.2 Itens de banco reverificados
+- **100% das queries são parametrizadas.** Grep por interpolação `${}` dentro de `query(` nos 22 arquivos de `adapters/pg/`: **zero ocorrências**. Sem superfície de SQL injection.
+- **pgvector está declarado corretamente** — `CREATE EXTENSION IF NOT EXISTS vector` existe no `db/schema.sql:185` **e** nas migrations `0010_dax_rag.sql:26` e `0011_agent_lesson.sql:10`. Os três índices de embedding (`dax_doc_chunk`, `dax_query_template`, `agent_lesson`) estão cobertos nos dois caminhos (schema HEAD e incremental). Registrado porque um rascunho desta passada chegou a marcar isso como achado: o grep original filtrava `CREATE TABLE|INDEX|TYPE` e por construção nunca acharia `CREATE EXTENSION`. **Ausência num grep filtrado não é evidência de ausência** — reverificado e descartado.
+- FKs com `ON DELETE CASCADE` em todas as tabelas filhas, CHECK constraints espelhando os union types de `core/types.ts`, índices compostos `(campo, at DESC)` nas tabelas de auditoria, GIN em `sessions.config`, trigger de `updated_at`. Modelagem sólida — nada a fazer.
+- § 3.4 (`ips_using` como TEXT) continua aberto e continua INFO: a tabela `login_ip_events` já faz o trabalho melhor, então é resíduo do v1 esperando uma limpeza, não um risco.
+
+---
+
+## 10. Achados de 2026-09-29 — qualidade de código
+
+### 10.1 Não há linter nem formatter no projeto [MÉDIO]
+Nenhum ESLint / Biome / Prettier no `devDependencies`, e nenhum step de lint no `ci.yml` (que roda: scan de segredos → typecheck → build → Postgres efêmero → `bun test`).
+
+O gate de **correção** é forte. O de **estilo** não existe, e o resultado é visível: `src/gateway/middleware/auth.ts` tem indentação inconsistente (2, 4 e 6 espaços dentro da mesma função) e 4 erros de digitação no docblock — "framewrok", "hanlder", "Algoritimo", "algoitimo". A lógica do arquivo é boa (é onde mora a checagem de `sub` do SP-2); ele só nunca passou por revisão de forma.
+
+**Ação**: adicionar Biome (uma dependência, um `biome.json`, um step no CI). Escolhido sobre ESLint+Prettier por ser uma ferramenta só e não precisar de config de plugin pra TS+JSX. Rodar `biome check --write` uma vez gera um diff grande de formatação — fazer isso em **commit isolado**, sem mudança de comportamento, pra não poluir o `git blame` de nada substantivo.
+
+### 10.2 Não existe script `test` no `package.json` [BAIXO]
+130 arquivos de teste, 993 testes, e o `package.json` não tem `"test"`. O `ci.yml` chama `bun test` direto. Quem clona o repo não descobre como rodar a suíte pelo manifesto — e o `scripts` já tem 12 entradas, então a ausência parece deliberada sem ser.
+
+**Ação**:
+```diff
+  "scripts": {
++   "test": "bun test",
++   "typecheck": "tsc --noEmit",
+    "build": "...",
+```
+Adicionar `typecheck` junto pelo mesmo motivo — o CI o executa como `bunx tsc --noEmit`, sem atalho no manifesto.
+
+### 10.3 Violações do harness: 11 arquivos > 300 linhas, 3 funções muito longas [MÉDIO — § 2.2 remedido]
+Remedição do item 2.2 em 2026-09-29:
+
+| Linhas | Arquivo |
+|---:|---|
+| 900 | `src/tui/state.ts` |
+| 707 | `src/lib/clients/client-configs.ts` |
+| 644 | `src/tui/app.tsx` |
+| 614 | `src/cli/commands/docker.ts` |
+| 595 | `src/tui/components.tsx` |
+| 394 | `src/gateway/index.ts` |
+| 377 | `src/cli/commands/sync.ts` |
+| 356 | `src/lib/auth/nio-config.ts` |
+| 351 | `src/config.ts` |
+| 308 | `src/cli/commands/docs/content.ts` |
+| 304 | `src/adapters/pg/client.ts` |
+
+Funções acima de 30 linhas (regra do harness), as três que destoam de verdade:
+
+| Linhas | Local | Função |
+|---:|---|---|
+| **553** | `src/tui/app.tsx:92` | `App` |
+| **309** | `src/cli/commands/sync.ts:69` | `registerSyncCommand` |
+| **170** | `src/tui/state.ts:457` | `applyEvent` |
+
+Ressalva metodológica: as funções `create*` de `adapters/pg/` (78–95 linhas) aparecem na medição mas **não são violação real** — são factories que retornam um objeto de métodos curtos, um nível de abstração só. Mesmo caso em `createFabricGateway` (101) e `createDaxMemoryRepository` (88). Não gastar esforço aí.
+
+**Padrão**: a dívida está concentrada no `tui/` (5.838 linhas, segundo maior diretório e o código mais novo). É o único lugar do repo que destoa visivelmente do rigor do resto — cresceu rápido e sem o mesmo cuidado.
+
+**Ação**, em ordem de retorno:
+1. `App` (553 linhas) — extrair os hooks de estado (`useChat`, `usePermissions`, `useQuestions`) e deixar o componente só de composição. É a maior alavanca isolada do repo.
+2. `applyEvent` (170) — é um reducer com um `switch` grande; quebrar por família de evento (`applyMessageEvent`, `applyToolEvent`, `applyPermissionEvent`) mantendo o `switch` de topo como dispatcher.
+3. `registerSyncCommand` (309) — é registro de subcomandos do commander; extrair um handler por subcomando.
+
+### 10.4 `mcpServerJsPath()` resolve caminho inexistente [MÉDIO — § 5.3 CONFIRMADO em runtime]
+O item 5.3 continua aberto. Esta passada o **confirmou no `dist/` construído**, não só por leitura:
+
+```ts
+// src/lib/clients/client-configs.ts:110-113
+function mcpServerJsPath(): string {
+  const here = dirname(fileURLToPath(import.meta.url)); // comentário diz ".../dist/lib"
+  return join(here, '..', 'mcp-server.js');             // → dist/lib/mcp-server.js
+}
+```
+
+```
+$ ls dist/lib/clients/client-configs.js   ✅ existe  ← o arquivo compila AQUI
+$ ls dist/mcp-server.js                   ✅ existe  ← o alvo real
+$ ls dist/lib/mcp-server.js               ❌ No such file or directory  ← o que o código aponta
+```
+
+O arquivo compila para `dist/lib/clients/`, não `dist/lib/`. Falta **um nível** de `..`. O comentário inline está errado junto com o código, o que explica por que passou por duas revisões sem ser notado.
+
+**Impacto**: `installCoworkGlobal()` (chamado por `nio sync`, `sync.ts:249`) escreve no `claude_desktop_config.json` do usuário uma entrada MCP com `args: ["<path inexistente>"]`. O conector nio no Claude Desktop não sobe.
+
+**Fix**:
+```diff
+  function mcpServerJsPath(): string {
+-   const here = dirname(fileURLToPath(import.meta.url)); // .../dist/lib
+-   return join(here, '..', 'mcp-server.js'); // .../dist/mcp-server.js
++   const here = dirname(fileURLToPath(import.meta.url)); // .../dist/lib/clients
++   return join(here, '..', '..', 'mcp-server.js'); // .../dist/mcp-server.js
+  }
+```
+
+**Teste de regressão** (o que teria pego isto):
+```ts
+test('mcpServerJsPath aponta pro dist/mcp-server.js que o build gera', () => {
+  expect(mcpServerJsPath().replace(/\\/g, '/')).toMatch(/\/dist\/mcp-server\.js$/);
+});
+```
+Exportar a função (hoje é privada) ou testar via `installCoworkGlobal` num tmpdir. A asserção precisa ancorar no **fim** do path — um teste que só cheque "contém mcp-server.js" passaria com o bug.
+
+### 10.5 Itens de qualidade reverificados
+- **Zero `any` em produção** — grep por `: any` / `as any` / `<any>` fora de testes: 0 ocorrências. `strict: true` no `tsconfig`.
+- **Zero `shell: true`** fora de `lib/proc.ts`, que documenta o porquê (CVE-2024-27980). Todo subprocesso usa argv array — sem superfície de command injection.
+- Qualidade de comentário acima da média: vários registram *por quê* com data e origem ("as mensagens abaixo vieram de `agent_lesson` em produção — não da documentação"). É o tipo que envelhece bem; preservar no refactor do § 10.3.
+- Erros tipados por domínio (`SessionNotFoundError`, `AmbiguousSessionError`) e contrato de ports de IO respeitado (gateways devolvem `{status, error}`, não lançam).
+
+**Sobre a ressalva de 2026-09-19 nos "Itens sem ação"**: os 3 erros de `tsc` em `src/tui/attachments.ts` (`xlsx`/`jimp` sem tipos) **não existem mais** — `tsc --noEmit` roda limpo hoje. Era drift de `node_modules` como diagnosticado, resolvido por `bun install`.
+
+---
+
+## 11. Achados de 2026-09-29 — estabilidade da suíte
+
+### 11.1 Suíte instável no Windows: 2 testes falham por contenção, não por lógica [MÉDIO]
+```
+$ bun test
+src/adapters/fabric/query-metrics.test.ts:
+(fail) grava e lê de volta                       [9837.90ms]  ← timeout após 5000ms
+(fail) linha corrompida é pulada, o resto é lido [10582.50ms] ← timeout após 5000ms
+ 983 pass · 8 skip · 2 fail — Ran 993 tests across 130 files. [34.35s]
+```
+
+O mesmo arquivo isolado:
+```
+$ bun test src/adapters/fabric/query-metrics.test.ts
+ 12 pass · 0 fail — Ran 12 tests across 1 file. [108.00ms]
+```
+
+**~100× mais lento dentro da suíte completa.** Não é bug de lógica no `query-metrics.ts` — os dois testes que falham são exatamente os dois que fazem `appendFileSync` + `readdirSync` reais em `tmpdir()`. A causa é contenção: 130 arquivos concorrendo por `tmpdir` no NTFS (com Defender no caminho) mais pools `pg` abertos por outros arquivos segurando o event loop.
+
+**Por que importa mais do que parece**: o CI roda em Linux e passa. O desenvolvedor local vê vermelho, o gate vê verde. Suíte que falha "normalmente" deixa de ser lida — e aí a falha seguinte, que for real, passa batido.
+
+**Ação**, em ordem de preferência:
+1. Timeout explícito nos dois testes de IO: `test('...', () => { ... }, 30_000)`. Uma linha cada, honesto sobre o custo de IO em NTFS.
+2. Se reaparecer em outros arquivos, investigar pools `pg` não fechados nos testes de integração — `afterAll(() => pool.end())` faltando é o suspeito.
+3. Só se 1 e 2 não resolverem: `bun test --isolate`. Custa tempo de suíte; é a última opção, não a primeira.
+
+### 11.2 `bun test` carrega o `.env` real [BAIXO]
+A primeira linha da saída da suíte é `[0.12ms] ".env"`, e durante a execução aparecem avisos de TLS do banco:
+```
+[pg] AVISO: NIO_DATABASE_SSL_INSECURE=1 — TLS sem verificação de certificado.
+```
+
+Alguns desses avisos vêm de `client.test.ts` exercitando o caminho de propósito (legítimo), mas o `.env` de desenvolvimento estar no ambiente de teste significa que o resultado da suíte depende da máquina. É o mesmo mecanismo do item § 5.2 já resolvido ("1 teste falhando por drift de ambiente") — resolvido naquele caso pontual, não na causa.
+
+**Ação**: `.env.test` com valores fixos e neutros, carregado pelo `bunfig.toml` (`[test] preload`), isolando a suíte do `.env` de dev. Confirmar antes se `lib/load-env.ts` já tem precedência para isso — pode ser só uma variável de ambiente no CI.
+
+### 11.3 Cobertura de teste reverificada
+130 arquivos de teste para 225 arquivos de produção (**~58%**), e do tipo certo: testam contrato, usam injeção de dependência em vez de mock de módulo, e os de integração estão separados por convenção de nome (`*.integration.test.ts`) rodando contra Postgres real no CI. Nada a fazer — é um ponto forte do projeto.
 
 ---
 
