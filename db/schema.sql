@@ -94,42 +94,6 @@ CREATE INDEX idx_auth_sessions_user ON auth_sessions(user_id);
 CREATE INDEX idx_auth_sessions_expires ON auth_sessions(expires_at);
 
 -- ───────────────────────────────────────────────
--- Tabela: Logs de Sessão (metadata)
--- ───────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS log_session (
-    id BIGSERIAL PRIMARY KEY,
-    session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, -- (i) amarra o log à sessão (UUID) dona
-    id_user_create BIGINT NOT NULL REFERENCES user_cli(id) ON DELETE CASCADE,
-    timestamp_creation TIMESTAMPTZ DEFAULT NOW(),
-    hash_identification TEXT NOT NULL UNIQUE,
-    system_version_os TEXT,
-    version_cli TEXT NOT NULL,
-    model_context TEXT
-);
-
-CREATE INDEX idx_log_session_session ON log_session(session_id);
-CREATE INDEX idx_log_session_user ON log_session(id_user_create);
-CREATE INDEX idx_log_session_hash ON log_session(hash_identification);
-
--- ───────────────────────────────────────────────
--- Tabela: Atividades da Sessão
--- ───────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS session_activity (
-    id BIGSERIAL PRIMARY KEY,
-    session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, -- (ii) referencia sessions(id) direto (antes: log_session BIGINT)
-    mensage_user TEXT,
-    context_session JSONB NOT NULL DEFAULT '{}',
-    timestamp_creation TIMESTAMPTZ DEFAULT NOW(),
-    tools JSONB DEFAULT '[]',
-    hash_activity TEXT,
-    sequence_logic_number BIGINT
-);
-
-CREATE INDEX idx_session_activity_session ON session_activity(session_id);
-CREATE INDEX idx_session_activity_hash ON session_activity(hash_activity);
-CREATE INDEX idx_session_activity_seq ON session_activity(sequence_logic_number);
-
--- ───────────────────────────────────────────────
 -- Tabela: Eventos de Dependência (watcher)
 -- ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS dependency_events (
@@ -271,10 +235,6 @@ COMMENT ON TABLE user_cli IS 'Usuários autenticados na NIO-CLI';
 COMMENT ON COLUMN user_cli.password IS 'Hash argon2id (PHC string). Hashing e verificação na camada de aplicação; o banco nunca vê a senha em texto puro.';
 COMMENT ON TABLE sessions IS 'Sessões de ambiente de desenvolvimento (fonte da verdade)';
 COMMENT ON TABLE auth_sessions IS 'Sessões de login (JWT) — separada de sessions (ambiente). Multi-dispositivo: várias linhas ativas por usuário. id é o jti do JWT; revoked_at IS NULL = válida.';
-COMMENT ON TABLE log_session IS 'Logs de metadata das sessões ativas';
-COMMENT ON COLUMN log_session.session_id IS 'FK para sessions(id) — a sessão dona deste log.';
-COMMENT ON TABLE session_activity IS 'Atividades individuais dentro de uma sessão';
-COMMENT ON COLUMN session_activity.session_id IS 'FK para sessions(id) — referência direta à sessão (não passa mais por log_session).';
 COMMENT ON TABLE dependency_events IS 'Eventos detectados pelo watcher de dependências';
 COMMENT ON COLUMN user_cli.phone IS 'Número E.164 pro SMS do 2º fator. NULL = auth_2 desativado.';
 COMMENT ON COLUMN user_cli.backup_codes IS 'Hashes argon2id dos 10 códigos de backup (uso único), separados por | ; entrada usada = [USED]. NULL = sem 2FA.';
@@ -368,8 +328,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nio_gateway') THEN CREATE ROLE nio_gateway NOLOGIN; END IF;
 END $$;
 GRANT USAGE ON SCHEMA public TO nio_cli, nio_gateway;
-GRANT SELECT, INSERT, UPDATE, DELETE ON sessions, dependency_events, log_session, session_activity TO nio_cli;
-GRANT USAGE, SELECT ON SEQUENCE log_session_id_seq, session_activity_id_seq TO nio_cli;
+GRANT SELECT, INSERT, UPDATE, DELETE ON sessions, dependency_events TO nio_cli;
 GRANT SELECT (id, name, auth_2, phone, ips_using, timestamp_creation, timestamp_password_change, timestamp_last_session, password_pepper_id, backup_pepper_id) ON user_cli TO nio_cli;
 GRANT SELECT ON auth_sessions TO nio_cli;
 GRANT SELECT, INSERT, UPDATE, DELETE ON user_cli, auth_sessions, login_challenges, auth_events, login_ip_events TO nio_gateway;

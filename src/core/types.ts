@@ -137,30 +137,6 @@ export interface AuthSession {
   createdAt: Date;
 }
 
-/** `log_session` — metadata de execução, ligada à sessão dona (session_id UUID). */
-export interface SessionLog {
-  id: number;
-  sessionId: string;
-  userId: number; // id_user_create
-  hashIdentification: string;
-  systemVersionOs: string | null;
-  versionCli: string;
-  modelContext: string | null;
-  timestampCreation: Date;
-}
-
-/** `session_activity` — atividade individual dentro de uma sessão. */
-export interface SessionActivity {
-  id: number;
-  sessionId: string;
-  messageUser: string | null; // mensage_user
-  contextSession: Record<string, unknown>;
-  tools: unknown[];
-  hashActivity: string | null;
-  sequenceLogicNumber: number | null;
-  timestampCreation: Date;
-}
-
 /** `dependency_events` — evento detectado pelo watcher de dependências. */
 export interface DependencyEvent {
   id: string; // UUID
