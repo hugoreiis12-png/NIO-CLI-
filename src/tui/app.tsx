@@ -1,5 +1,6 @@
 /**
  * Raiz da interface NIO (Ink). Histórico → `<Static>` (scrollback, não re-renderiza);
+ * 
  * área dinâmica = mensagem em andamento (altura limitada) + input. Evita o estouro
  * de altura que corrompe o Ink.
  */
@@ -23,6 +24,8 @@ import {
 } from './components.js';
 import { InfoPanel, CommandRunner, PermissionModal } from './palette.js';
 import { QuestionModal } from './question-modal.js';
+import { useTurnTask } from './use-turn-task.js';
+import { summarizeTurn } from './turn-summary.js';
 import { buildPalette, type PaletteItem } from './palette-source.js';
 import {
   applyEvent,
@@ -122,6 +125,10 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
   const compactingRef = useRef(false); // Frente 5 — já disparou a compactação proativa? (evita duplicar)
 
   const [splash, setSplash] = useState(splashMs > 0);
+  // Trilha do turno em `tasks` (kind=chat): mesma persistência do worker.
+  // Dispara e volta — nunca aguarda o banco (ver use-turn-task).
+  const turnTask = useTurnTask({ session });
+
   useEffect(() => {
     if (splashMs <= 0) return;
     const t = setTimeout(() => setSplash(false), splashMs);
@@ -217,6 +224,7 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
           // Turno fechado: o que errou e depois acertou vira lição. Assíncrono e
           // silencioso — aprender não pode atrasar nem derrubar a interface.
           void learnTurn(chatRef.current.messages, session?.profile);
+          turnTask.end(summarizeTurn(chatRef.current.messages));
           // Credita as lições do prompt que acabou de fechar, olhando só o que veio
           // depois dele — e zera, pra não creditar duas vezes no próximo idle.
           if (injectedLessons.current.length > 0) {
@@ -300,6 +308,7 @@ export function App({ handle, program, cwd, session, splashMs = 1200, model }: A
     setDraft('');
     userTurnActive.current = true; // este turno foi pedido pelo usuário → não abortar
     setChat((prev) => pushUserMessage(prev, text)); // eco mostra o texto ORIGINAL
+    turnTask.begin(text); // registra o turno com o texto do usuário, não o enriquecido
     // Anexos: embute o conteúdo dos arquivos (csv/txt/xlsx) no texto e coleta parts de
     // imagem (Item 4b). Falha → segue com o texto cru.
     let enriched = text;
