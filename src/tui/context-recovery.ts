@@ -12,24 +12,19 @@
  */
 import type { ChatMessage } from './state.js';
 
+/**
+ * Movida para `core/agent.ts`: o executor headless (`adapters/agent/`) precisa
+ * da MESMA heurística e não pode importar de `tui/` (seta invertida do
+ * hexágono). Reexportada aqui pra não quebrar quem já importa daqui.
+ */
+export { isContextOverflow } from '../core/agent.js';
+
 /** Teto do resumo. Pequeno de propósito: ele vai no prompt inicial da sessão nova. */
 export const HANDOFF_MAX_CHARS = 4000;
 /** Quantos turnos recentes entram. O começo da conversa é o que menos importa agora. */
 const HANDOFF_TURNS = 12;
 /** Teto por turno, pra um único retorno de tool gigante não comer o resumo todo. */
 const TURN_MAX_CHARS = 400;
-
-/**
- * O erro é de estouro de contexto? O motor às vezes entrega o nome
- * (`ContextOverflowError`), às vezes só um `APIError` com a mensagem do provider —
- * por isso os dois caminhos.
- */
-export function isContextOverflow(name: string, message = ''): boolean {
-  if (name === 'ContextOverflowError') return true;
-  return /maximum context length|context length exceeded|reduce the length|too many tokens/i.test(
-    message,
-  );
-}
 
 const clamp = (text: string, max: number): string =>
   text.length > max ? `${text.slice(0, max)}…` : text;

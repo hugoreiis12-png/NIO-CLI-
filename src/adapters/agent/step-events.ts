@@ -12,8 +12,14 @@
  *    famílias (`question.*` e `question.v2.*`) — o motor escolhe qual emitir.
  * 3. Os eventos **não vêm filtrados por sessão**. Sem recortar pelo `sessionID`,
  *    a saída de outra sessão entra no step errado.
+ *
+ * Uma quarta, achada depois (2026-09-30): `session.error` cobre tanto estouro de
+ * janela de contexto quanto resposta cortada pelo teto de saída — dois problemas
+ * com recuperação BEM diferente (sessão nova vs. pedir continuação), que o
+ * executor precisa distinguir, não só detectar que "deu erro".
  */
 import type { ToolCallTrace } from '../../core/tasks.js';
+import { isContextOverflow } from '../../core/agent.js';
 
 /** Shape do part como o motor manda (o SDK não tipa os campos que usamos). */
 interface RawPart {
@@ -94,6 +100,42 @@ export function questionFrom(evt: unknown): PedidoBloqueante | null {
   const p = props(evt) as { id?: string; sessionID?: string; title?: string; question?: string };
   if (!p.id || !p.sessionID) return null;
   return { id: p.id, sessionId: p.sessionID, subject: p.title ?? p.question ?? 'pergunta' };
+}
+
+/**
+ * `context_overflow` e `output_length` têm recuperação automática (sessão nova
+ * com resumo; pedido de continuação). `other` é o resto — erro genuíno do
+ * motor, sem recuperação conhecida, falha o step com o texto real do provider.
+ */
+export type EngineErrorKind = 'context_overflow' | 'output_length' | 'other';
+
+export interface EngineError {
+  kind: EngineErrorKind;
+  name: string;
+  message: string;
+}
+
+/**
+ * Normaliza `session.error`. Mesma heurística de `isContextOverflow` que a TUI
+ * usa — o motor às vezes nomeia o erro, às vezes só devolve a mensagem crua do
+ * provider por trás de um `APIError` genérico.
+ */
+export function engineErrorFrom(evt: unknown): EngineError | null {
+  if (tipo(evt) !== 'session.error') return null;
+  const p = props(evt) as { error?: { name?: string; data?: { message?: string } } };
+  const err = p.error;
+  if (!err) return null;
+  // Abort deliberado (nosso próprio `session.abort`, ou Esc na TUI) não é falha do motor.
+  if (err.name === 'MessageAbortedError') return null;
+
+  const nome = err.name ?? '';
+  const mensagem = typeof err.data?.message === 'string' ? err.data.message : '';
+  const kind: EngineErrorKind = isContextOverflow(nome, mensagem)
+    ? 'context_overflow'
+    : nome === 'MessageOutputLengthError'
+      ? 'output_length'
+      : 'other';
+  return { kind, name: nome || 'EngineError', message: mensagem || nome || 'erro no motor' };
 }
 
 export interface StepAccumulated {

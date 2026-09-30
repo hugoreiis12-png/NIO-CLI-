@@ -7,16 +7,40 @@ import { test, expect } from 'bun:test';
 import { TaskRunner } from './task-runner.js';
 import type { Planner, StepExecutor, StepOutcome, Validator, Verdict } from '../core/agent.js';
 import type {
-  NewStepInput, StepRepository, Task, TaskQueue, TaskRepository, TaskStep,
+  NewStepInput,
+  StepRepository,
+  Task,
+  TaskQueue,
+  TaskRepository,
+  TaskStep,
 } from '../core/tasks.js';
 import type { TaskStatus } from '../core/types.js';
 
 function novaTask(status: TaskStatus = 'planning'): Task {
   return {
-    id: 't1', sessionId: null, userId: 7, profile: 'qa', goal: 'contar arquivos',
-    status, currentStep: null, maxSteps: 25, workingSet: {}, engineSessionId: null,
-    result: null, error: null, attempts: 0, fence: 1, lockedBy: 'w1', lockedAt: new Date(),
-    createdAt: new Date(), updatedAt: new Date(), completedAt: null, awaitingKind: null, awaitingSubject: null, approvedTools: [], kind: 'agent',
+    id: 't1',
+    sessionId: null,
+    userId: 7,
+    profile: 'qa',
+    goal: 'contar arquivos',
+    status,
+    currentStep: null,
+    maxSteps: 25,
+    workingSet: {},
+    engineSessionId: null,
+    result: null,
+    error: null,
+    attempts: 0,
+    fence: 1,
+    lockedBy: 'w1',
+    lockedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    completedAt: null,
+    awaitingKind: null,
+    awaitingSubject: null,
+    approvedTools: [],
+    kind: 'agent',
   };
 }
 
@@ -36,9 +60,24 @@ function fakeRepos(m: Mundo): { tasks: TaskRepository; steps: StepRepository; qu
   const inserir = (novos: readonly NewStepInput[]): TaskStep[] =>
     novos.map((s) => {
       const step: TaskStep = {
-        id: proximoId++, taskId: m.task.id, stepNumber: s.stepNumber, attempt: 1,
-        name: s.name, status: 'pending', input: s.input ?? null, output: null, toolCalls: null,
-        tokensIn: null, tokensOut: null, error: null, startedAt: null, completedAt: null, awaitingKind: null, awaitingSubject: null, approvedTools: [], kind: 'agent',
+        id: proximoId++,
+        taskId: m.task.id,
+        stepNumber: s.stepNumber,
+        attempt: 1,
+        name: s.name,
+        status: 'pending',
+        input: s.input ?? null,
+        output: null,
+        toolCalls: null,
+        tokensIn: null,
+        tokensOut: null,
+        error: null,
+        startedAt: null,
+        completedAt: null,
+        awaitingKind: null,
+        awaitingSubject: null,
+        approvedTools: [],
+        kind: 'agent',
       };
       m.steps.push(step);
       return step;
@@ -66,9 +105,15 @@ function fakeRepos(m: Mundo): { tasks: TaskRepository; steps: StepRepository; qu
           if (patch?.awaitingSubject !== undefined) m.task.awaitingSubject = patch.awaitingSubject;
         }),
       complete: async (_id, fence, result) =>
-        comFence(fence, () => { m.task.status = 'completed'; m.task.result = result; }),
+        comFence(fence, () => {
+          m.task.status = 'completed';
+          m.task.result = result;
+        }),
       fail: async (_id, fence, error) =>
-        comFence(fence, () => { m.task.status = 'failed'; m.task.error = error; }),
+        comFence(fence, () => {
+          m.task.status = 'failed';
+          m.task.error = error;
+        }),
       approve: async () => true,
       cancel: async () => true,
     },
@@ -77,18 +122,27 @@ function fakeRepos(m: Mundo): { tasks: TaskRepository; steps: StepRepository; qu
       append: async (_t, novos) => inserir(novos),
       listByTask: async () => m.steps,
       nextPending: async () => m.steps.find((s) => s.status === 'pending') ?? null,
-      start: async (id) => { const s = acharStep(id); if (s) s.status = 'running'; },
+      start: async (id) => {
+        const s = acharStep(id);
+        if (s) s.status = 'running';
+      },
       reopen: async (id) => {
         const s = acharStep(id);
         if (s?.status === 'running') s.status = 'pending';
       },
       finish: async (id, r) => {
         const s = acharStep(id);
-        if (s) { s.status = 'done'; s.output = r.output; }
+        if (s) {
+          s.status = 'done';
+          s.output = r.output;
+        }
       },
       failStep: async (id, error) => {
         const s = acharStep(id);
-        if (s) { s.status = 'failed'; s.error = error; }
+        if (s) {
+          s.status = 'failed';
+          s.error = error;
+        }
       },
       retry: async (id) => acharStep(id)!,
       lastStepNumber: async () => Math.max(0, ...m.steps.map((s) => s.stepNumber)),
@@ -122,17 +176,33 @@ const validadorQue = (...vereditos: Verdict[]): Validator => {
 
 const concluiu: Verdict = { complete: true, result: 'pronto' };
 
-function montar(m: Mundo, planner: Planner, validator: Validator, executor: StepExecutor): TaskRunner {
+function montar(
+  m: Mundo,
+  planner: Planner,
+  validator: Validator,
+  executor: StepExecutor,
+): TaskRunner {
   const { tasks, steps, queue } = fakeRepos(m);
   return new TaskRunner({
-    planner, validator, executor, tasks, steps, queue,
-    heartbeatMs: 5, onEvent: (e) => m.eventos.push(e),
+    planner,
+    validator,
+    executor,
+    tasks,
+    steps,
+    queue,
+    heartbeatMs: 5,
+    onEvent: (e) => m.eventos.push(e),
   });
 }
 
 test('caminho feliz: planeja, executa tudo, valida e conclui', async () => {
   const m = criarMundo();
-  const runner = montar(m, planoDe('a', 'b'), validadorQue(concluiu), executorQue(() => OK));
+  const runner = montar(
+    m,
+    planoDe('a', 'b'),
+    validadorQue(concluiu),
+    executorQue(() => OK),
+  );
 
   expect(await runner.runOnce('w1', 7)).toBe(true);
   expect(m.task.status).toBe('completed');
@@ -144,8 +214,16 @@ test('caminho feliz: planeja, executa tudo, valida e conclui', async () => {
 
 test('halt de aprovação: task estaciona e o step SEGUE pendente (retomável)', async () => {
   const m = criarMundo();
-  const halt = { ...OK, halt: { kind: 'approval' as const, subject: 'bash', reason: 'precisa humano' } };
-  const runner = montar(m, planoDe('a', 'b'), validadorQue(concluiu), executorQue(() => halt));
+  const halt = {
+    ...OK,
+    halt: { kind: 'approval' as const, subject: 'bash', reason: 'precisa humano' },
+  };
+  const runner = montar(
+    m,
+    planoDe('a', 'b'),
+    validadorQue(concluiu),
+    executorQue(() => halt),
+  );
 
   await runner.runOnce('w1', 7);
   expect(m.task.status).toBe('waiting_approval');
@@ -160,10 +238,40 @@ test('halt de aprovação: task estaciona e o step SEGUE pendente (retomável)',
   expect(m.task.awaitingSubject).toBe('bash');
 });
 
+test('halt de erro do motor: falha com o diagnóstico REAL, não um genérico', async () => {
+  // O executor já tentou recuperar sozinho (sessão nova / continuação) e não
+  // conseguiu — `reason` carrega o motivo real, diferente do texto fixo do timeout.
+  const m = criarMundo();
+  const halt = {
+    ...OK,
+    halt: {
+      kind: 'engine_error' as const,
+      subject: 'ContextOverflowError',
+      reason: 'estouro de contexto — 2 tentativa(s) de recuperação esgotada(s)',
+    },
+  };
+  const runner = montar(
+    m,
+    planoDe('a'),
+    validadorQue(concluiu),
+    executorQue(() => halt),
+  );
+
+  await runner.runOnce('w1', 7);
+  expect(m.task.status).toBe('failed');
+  expect(m.task.error).toBe('estouro de contexto — 2 tentativa(s) de recuperação esgotada(s)');
+  expect(m.steps[0]!.status).toBe('failed');
+});
+
 test('halt de timeout: falha e marca o step, não estaciona', async () => {
   const m = criarMundo();
   const halt = { ...OK, halt: { kind: 'timeout' as const, subject: 'a', reason: 'estourou' } };
-  const runner = montar(m, planoDe('a'), validadorQue(concluiu), executorQue(() => halt));
+  const runner = montar(
+    m,
+    planoDe('a'),
+    validadorQue(concluiu),
+    executorQue(() => halt),
+  );
 
   await runner.runOnce('w1', 7);
   expect(m.task.status).toBe('failed');
@@ -173,9 +281,16 @@ test('halt de timeout: falha e marca o step, não estaciona', async () => {
 test('validator INCOMPLETO com próximos passos: acrescenta e executa de novo', async () => {
   const m = criarMundo();
   const incompleto: Verdict = {
-    complete: false, reason: 'falta juntar', nextSteps: [{ name: 'c', instruction: 'junte' }],
+    complete: false,
+    reason: 'falta juntar',
+    nextSteps: [{ name: 'c', instruction: 'junte' }],
   };
-  const runner = montar(m, planoDe('a'), validadorQue(incompleto, concluiu), executorQue(() => OK));
+  const runner = montar(
+    m,
+    planoDe('a'),
+    validadorQue(incompleto, concluiu),
+    executorQue(() => OK),
+  );
 
   await runner.runOnce('w1', 7);
   expect(m.eventos).toContain('task_extended');
@@ -188,7 +303,12 @@ test('validator INCOMPLETO com próximos passos: acrescenta e executa de novo', 
 test('INCOMPLETO sem próximos passos vira falha — não loop infinito', async () => {
   const m = criarMundo();
   const semSaida: Verdict = { complete: false, reason: 'orçamento acabou', nextSteps: [] };
-  const runner = montar(m, planoDe('a'), validadorQue(semSaida), executorQue(() => OK));
+  const runner = montar(
+    m,
+    planoDe('a'),
+    validadorQue(semSaida),
+    executorQue(() => OK),
+  );
 
   await runner.runOnce('w1', 7);
   // Era a obrigação herdada da fatia 1.7: o Validator não tem estado de "esgotado".
@@ -201,7 +321,9 @@ test('lease perdido interrompe o processamento na hora', async () => {
   const m = criarMundo();
   const executados: string[] = [];
   const runner = montar(
-    m, planoDe('a', 'b'), validadorQue(concluiu),
+    m,
+    planoDe('a', 'b'),
+    validadorQue(concluiu),
     executorQue((step) => {
       executados.push(step.name);
       m.leaseVivo = false; // outro worker assumiu no meio do 1º step
@@ -229,14 +351,32 @@ test('escrita com fence velho não afeta nada (guarda do Postgres espelhada)', a
 test('retomada: task já planejada não replaneja', async () => {
   const m = criarMundo('running');
   m.steps.push({
-    id: 1, taskId: 't1', stepNumber: 10, attempt: 1, name: 'a', status: 'pending',
-    input: null, output: null, toolCalls: null, tokensIn: null, tokensOut: null,
-    error: null, startedAt: null, completedAt: null,
+    id: 1,
+    taskId: 't1',
+    stepNumber: 10,
+    attempt: 1,
+    name: 'a',
+    status: 'pending',
+    input: null,
+    output: null,
+    toolCalls: null,
+    tokensIn: null,
+    tokensOut: null,
+    error: null,
+    startedAt: null,
+    completedAt: null,
   });
   const plannerQueExplode: Planner = {
-    plan: async () => { throw new Error('não deveria replanejar'); },
+    plan: async () => {
+      throw new Error('não deveria replanejar');
+    },
   };
-  const runner = montar(m, plannerQueExplode, validadorQue(concluiu), executorQue(() => OK));
+  const runner = montar(
+    m,
+    plannerQueExplode,
+    validadorQue(concluiu),
+    executorQue(() => OK),
+  );
 
   await runner.runOnce('w1', 7);
   expect(m.task.status).toBe('completed');
@@ -246,8 +386,12 @@ test('retomada: task já planejada não replaneja', async () => {
 test('erro do executor vira falha da task, não derruba o worker', async () => {
   const m = criarMundo();
   const runner = montar(
-    m, planoDe('a'), validadorQue(concluiu),
-    executorQue(() => { throw new Error('motor caiu'); }),
+    m,
+    planoDe('a'),
+    validadorQue(concluiu),
+    executorQue(() => {
+      throw new Error('motor caiu');
+    }),
   );
 
   await runner.runOnce('w1', 7);
@@ -259,8 +403,12 @@ test('fila vazia devolve false', async () => {
   const m = criarMundo();
   const { tasks, steps, queue } = fakeRepos(m);
   const runner = new TaskRunner({
-    planner: planoDe('a'), validator: validadorQue(concluiu), executor: executorQue(() => OK),
-    tasks, steps, queue: { ...queue, claim: async () => null },
+    planner: planoDe('a'),
+    validator: validadorQue(concluiu),
+    executor: executorQue(() => OK),
+    tasks,
+    steps,
+    queue: { ...queue, claim: async () => null },
   });
   expect(await runner.runOnce('w1', 7)).toBe(false);
 });

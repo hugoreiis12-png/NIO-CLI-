@@ -23,7 +23,8 @@ test('reconhece o erro pelo nome', () => {
 
 test('reconhece pela mensagem do provider quando o nome é genérico', () => {
   // O caso real: chegou como APIError com a mensagem crua do vLLM.
-  const m = "This model's maximum context length is 98304 tokens. However, you requested 2048 output tokens";
+  const m =
+    "This model's maximum context length is 98304 tokens. However, you requested 2048 output tokens";
   expect(isContextOverflow('APIError', m)).toBe(true);
 });
 
@@ -52,7 +53,9 @@ test('ACEITE: o resumo cabe na janela por construção, mesmo com tool gigante',
 });
 
 test('registra as tools usadas, não a saída delas', () => {
-  const digest = buildHandoffDigest([msg('assistant', [texto('consultei'), tool('nio_fabric_query')])]);
+  const digest = buildHandoffDigest([
+    msg('assistant', [texto('consultei'), tool('nio_fabric_query')]),
+  ]);
   expect(digest).toContain('nio_fabric_query');
   expect(digest).not.toContain('xxxxx'); // a saída da tool não entra
 });

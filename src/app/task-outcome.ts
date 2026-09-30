@@ -19,6 +19,13 @@ export interface TransicaoTask {
  *
  * `approval` e `question` mantêm o step pendente de propósito: a task dorme e,
  * quando o humano liberar, o worker retoma DESTE step, não do começo.
+ *
+ * `timeout` e `engine_error` falham a task: são coisa que o executor já tentou
+ * recuperar sozinho (sessão nova em estouro de contexto, continuação em
+ * resposta cortada) e não conseguiu — não há decisão humana que destrave via
+ * `nio task approve`, então manter pendente só esconderia que já foi tentado.
+ * `engine_error` usa `halt.reason` (o diagnóstico real) em vez de um texto
+ * genérico — sem isso, um estouro de contexto apareceria como "timeout".
  */
 export function haltParaTransicao(halt: StepHalt): TransicaoTask {
   if (halt.kind === 'timeout') {
@@ -27,6 +34,9 @@ export function haltParaTransicao(halt: StepHalt): TransicaoTask {
       error: `Passo "${halt.subject}" excedeu o tempo máximo.`,
       mantemStepPendente: false,
     };
+  }
+  if (halt.kind === 'engine_error') {
+    return { status: 'failed', error: halt.reason, mantemStepPendente: false };
   }
   return { status: 'waiting_approval', error: null, mantemStepPendente: true };
 }

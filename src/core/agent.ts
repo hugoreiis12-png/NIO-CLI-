@@ -31,11 +31,18 @@ export interface Planner {
 
 /**
  * Motivo de um step ter parado sem concluir. O worker traduz isto em estado de
- * task: `approval` → `waiting_approval`; `timeout` → falha com retry possível.
+ * task: `approval`/`question` → `waiting_approval`; `timeout`/`engine_error` →
+ * falha.
+ *
+ * `engine_error` é o que sobra depois que a recuperação automática (estouro de
+ * contexto → sessão nova com resumo; resposta cortada → prompt de continuação)
+ * já foi tentada e esgotada, ou quando o erro não tem recuperação conhecida.
+ * `reason` carrega o diagnóstico real — não um texto genérico — porque sem isso
+ * um estouro de contexto seria indistinguível de um timeout no `nio task show`.
  */
 export interface StepHalt {
-  kind: 'approval' | 'question' | 'timeout';
-  /** Tool ou pergunta que exigiu o humano. */
+  kind: 'approval' | 'question' | 'timeout' | 'engine_error';
+  /** Tool, pergunta, ou nome do erro do motor que interrompeu o step. */
   subject: string;
   reason: string;
 }
@@ -72,14 +79,22 @@ export interface PermissionDecider {
 }
 
 /**
- * Executa UM step. Um step = uma chamada `session.prompt` no motor.
+ * Executa UM step. Um step = uma chamada `session.prompt` no motor (mais as
+ * chamadas de recuperação automática que a implementação decidir fazer por
+ * dentro — sessão nova em estouro de contexto, continuação em resposta cortada
+ * — que permanecem invisíveis ao chamador enquanto convergem).
  *
  * Pode rodar duas vezes para o mesmo step: o modelo é checkpoint-and-resume, não
  * replay determinístico (crash entre executar e gravar re-executa). Implementação
  * com efeito colateral externo precisa ser idempotente.
+ *
+ * `priorSteps` é a trilha JÁ CONCLUÍDA da task (não inclui o `step` atual) — a
+ * implementação usa isto para montar contexto de continuidade se precisar
+ * recriar a sessão do motor no meio do step. Puramente informativo: a
+ * implementação não pode assumir nenhuma ordem além da que o array já traz.
  */
 export interface StepExecutor {
-  run(task: Task, step: TaskStep): Promise<StepOutcome>;
+  run(task: Task, step: TaskStep, priorSteps: readonly TaskStep[]): Promise<StepOutcome>;
 }
 
 /** Veredito do Validator: fechou, ou falta o quê. */
@@ -104,4 +119,21 @@ export type ApprovalDecision = 'auto' | 'needs_approval';
  */
 export interface ApprovalPolicy {
   check(toolName: string, profile: Profile): ApprovalDecision;
+}
+
+/**
+ * O erro é de estouro de contexto? O motor às vezes entrega o nome
+ * (`ContextOverflowError`), às vezes só um `APIError` com a mensagem crua do
+ * provider — por isso os dois caminhos.
+ *
+ * Compartilhado entre a TUI (`tui/context-recovery.ts`) e o executor headless
+ * (`adapters/agent/`): a heurística não pode divergir entre os dois caminhos,
+ * senão um reconhece o estouro e o outro não. Fica em `core/` por ser puro
+ * (zero IO) e por nenhum dos dois lados poder importar do outro.
+ */
+export function isContextOverflow(name: string, message = ''): boolean {
+  if (name === 'ContextOverflowError') return true;
+  return /maximum context length|context length exceeded|reduce the length|too many tokens/i.test(
+    message,
+  );
 }

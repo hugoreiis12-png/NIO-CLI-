@@ -21,15 +21,40 @@ import type {
 import type { Task, TaskStep } from '../../core/tasks.js';
 import {
   createStepAccumulator,
+  engineErrorFrom,
   eventSessionId,
   isTurnEnd,
   permissionFrom,
   questionFrom,
   type PedidoBloqueante,
+  type StepAccumulated,
 } from './step-events.js';
 
 /** Teto por step. Generoso para trabalho real, finito para não travar o worker. */
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * Teto de sessões novas por estouro de contexto NO MESMO STEP. Se o resumo de
+ * recuperação — que é montado localmente e deliberadamente curto — ainda assim
+ * não cabe, insistir é desperdício: o step falha com diagnóstico honesto em vez
+ * de ficar criando sessão atrás de sessão.
+ */
+const MAX_CONTEXT_RETRIES = 2;
+/** Teto de "continue" por resposta cortada. Sem isto um step preso em saída
+ * gigante (ou um modelo que nunca converge) pediria continuação pra sempre. */
+const MAX_CONTINUATION_RETRIES = 3;
+
+/** Teto do resumo de recuperação — pequeno de propósito: se ELE também
+ * estourasse, a recuperação falharia pelo mesmo motivo do erro original. */
+const RECOVERY_DIGEST_MAX_CHARS = 3000;
+/** Teto por step concluído no resumo — um output gigante não pode comer o resto. */
+const PRIOR_STEP_MAX_CHARS = 300;
+/** Teto do progresso parcial (texto já acumulado nesta sessão antes do reset). */
+const PARTIAL_PROGRESS_MAX_CHARS = 800;
+
+const PROMPT_CONTINUAR =
+  'Sua resposta anterior foi cortada por exceder o teto de tokens de saída. ' +
+  'Continue EXATAMENTE de onde parou, sem repetir o que já foi dito.';
 
 /** Sem política injetada nada roda — o cofre nasce fechado. */
 const DECIDER_PADRAO: PermissionDecider = { decide: () => 'park' };
@@ -102,7 +127,7 @@ function ehDeOutraSessao(evt: unknown, sessionId: string): boolean {
   return id !== undefined && id !== sessionId;
 }
 
-function haltDe(kind: StepHalt['kind'], subject: string): StepHalt {
+function haltDe(kind: 'approval' | 'question' | 'timeout', subject: string): StepHalt {
   const motivo = {
     approval: `a tool "${subject}" exige aprovação humana neste perfil`,
     question: `o motor perguntou "${subject}" e não há humano na sessão`,
@@ -111,60 +136,154 @@ function haltDe(kind: StepHalt['kind'], subject: string): StepHalt {
   return { kind, subject, reason: motivo };
 }
 
+/** `engine_error` carrega diagnóstico livre — não um template dos outros 3 kinds. */
+function haltErroDoMotor(subject: string, reason: string): StepHalt {
+  return { kind: 'engine_error', subject, reason };
+}
+
+/**
+ * Resumo local (SEM chamar o motor — é ele que estourou) pra retomar numa
+ * sessão nova. Curto de propósito e feito só de dados já em mãos (a trilha
+ * persistida + o que já saiu deste step antes do reset).
+ */
+function digestoDeRecuperacao(
+  task: Task,
+  step: TaskStep,
+  priorSteps: readonly TaskStep[],
+  progressoParcial: string,
+): string {
+  const linhas: string[] = [
+    'A sessão anterior estourou a janela de contexto e foi reiniciada.',
+    `Objetivo da tarefa: ${task.goal}`,
+  ];
+
+  const concluidos = priorSteps.filter((s) => s.status === 'done');
+  if (concluidos.length > 0) {
+    linhas.push('', 'Passos já concluídos:');
+    for (const s of concluidos) {
+      const saida =
+        typeof s.output?.text === 'string' ? s.output.text : JSON.stringify(s.output ?? {});
+      linhas.push(`- [${s.stepNumber}] ${s.name}: ${saida.slice(0, PRIOR_STEP_MAX_CHARS)}`);
+    }
+  }
+
+  linhas.push('', `Passo atual (${step.stepNumber}): ${step.name}`);
+  linhas.push((step.input?.instruction as string | undefined) ?? step.name);
+
+  if (progressoParcial.trim()) {
+    linhas.push(
+      '',
+      'Progresso parcial deste passo antes do reset (pode estar incompleto):',
+      progressoParcial.slice(0, PARTIAL_PROGRESS_MAX_CHARS),
+    );
+  }
+
+  linhas.push('', 'Continue a partir daqui. Não repita o que já foi feito.');
+  const texto = linhas.join('\n');
+  return texto.length > RECOVERY_DIGEST_MAX_CHARS
+    ? `${texto.slice(0, RECOVERY_DIGEST_MAX_CHARS)}…`
+    : texto;
+}
+
 export function createOpencodeStepExecutor(deps: OpencodeExecutorDeps): StepExecutor {
   const deciderFor = deps.deciderFor ?? ((): PermissionDecider => DECIDER_PADRAO);
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const subscribe = deps.subscribe;
 
-  /** Garante a sessão do motor: reusa a da task (re-attach) ou cria uma. */
-  async function garantirSessao(task: Task): Promise<string> {
-    if (task.engineSessionId) return task.engineSessionId;
-    const criada = await deps.client.session.create({ body: { title: `nio task ${task.id.slice(0, 8)}` } });
+  /** Cria uma sessão nova no motor, ignorando a da task (usado na recuperação). */
+  async function criarSessaoNova(task: Task, sufixoTitulo = ''): Promise<string> {
+    const criada = await deps.client.session.create({
+      body: { title: `nio task ${task.id.slice(0, 8)}${sufixoTitulo}` },
+    });
     const id = (criada as { data?: { id?: string } }).data?.id;
     if (!id) throw new Error('opencode não devolveu id de sessão.');
     return id;
   }
 
+  /** Garante a sessão do motor: reusa a da task (re-attach) ou cria uma. */
+  async function garantirSessao(task: Task): Promise<string> {
+    return task.engineSessionId ?? criarSessaoNova(task);
+  }
+
   return {
-    async run(task: Task, step: TaskStep): Promise<StepOutcome> {
-      const sessionId = await garantirSessao(task);
-      const acc = createStepAccumulator();
+    async run(task: Task, step: TaskStep, priorSteps: readonly TaskStep[]): Promise<StepOutcome> {
+      let sessionIdAtual = await garantirSessao(task);
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), timeoutMs);
       let halt: StepHalt | undefined;
+      let resultado: StepAccumulated = { text: '', toolCalls: [], tokensIn: 0, tokensOut: 0 };
 
       try {
-        halt = await consumir(deciderFor(task), sessionId, step, task, acc, ac);
+        const consumo = await consumir(
+          deciderFor(task),
+          sessionIdAtual,
+          step,
+          task,
+          priorSteps,
+          ac,
+          (novoId) => {
+            sessionIdAtual = novoId;
+          },
+        );
+        halt = consumo.halt;
+        resultado = consumo.resultado;
       } finally {
         clearTimeout(timer);
         ac.abort();
-        // Abortar SEMPRE: saída por halt, erro ou timeout não pode deixar o
-        // motor trabalhando numa sessão que ninguém mais está lendo.
-        await deps.client.session.abort({ path: { id: sessionId } }).catch(() => {});
+        // Abortar SEMPRE, na sessão FINAL (pode ter trocado por recuperação de
+        // estouro): saída por halt, erro ou timeout não pode deixar o motor
+        // trabalhando numa sessão que ninguém mais está lendo.
+        await deps.client.session.abort({ path: { id: sessionIdAtual } }).catch(() => {});
       }
 
-      const { text, toolCalls, tokensIn, tokensOut } = acc.result();
       return {
-        output: { text },
-        toolCalls,
-        tokensIn,
-        tokensOut,
-        engineSessionId: sessionId,
+        output: { text: resultado.text },
+        toolCalls: resultado.toolCalls,
+        tokensIn: resultado.tokensIn,
+        tokensOut: resultado.tokensOut,
+        engineSessionId: sessionIdAtual,
         ...(halt ? { halt } : {}),
       };
     },
   };
 
-  /** Laço de eventos. Devolve o `halt` que interrompeu, ou `undefined` no fim normal. */
+  interface ResultadoConsumo {
+    halt?: StepHalt;
+    resultado: StepAccumulated;
+  }
+
+  /**
+   * Laço de eventos de UM step — mas pode atravessar VÁRIAS sessões do motor por
+   * dentro (estouro de contexto) e VÁRIOS envios (resposta cortada), tudo
+   * invisível pro `run()`: o stream SSE é global (não por sessão), então trocar
+   * de sessão é só trocar qual `sessionId` o filtro e o próximo envio usam — não
+   * precisa reconectar.
+   */
   async function consumir(
     decider: PermissionDecider,
-    sessionId: string,
+    sessionIdInicial: string,
     step: TaskStep,
     task: Task,
-    acc: ReturnType<typeof createStepAccumulator>,
+    priorSteps: readonly TaskStep[],
     ac: AbortController,
-  ): Promise<StepHalt | undefined> {
+    onSessionChange: (novoId: string) => void,
+  ): Promise<ResultadoConsumo> {
+    let sessionIdAtual = sessionIdInicial;
+    let acc = createStepAccumulator();
     let promptEnviado = false;
+    let tentativasContexto = 0;
+    let tentativasContinuacao = 0;
+
+    const enviar = (texto: string): void => {
+      void deps.client.session
+        .prompt({
+          path: { id: sessionIdAtual },
+          body: { model: deps.model, parts: [{ type: 'text', text: texto }] },
+        })
+        .catch(() => {
+          /* falha de envio aparece como turno que nunca fecha → timeout */
+        });
+    };
 
     for await (const evt of subscribe(deps.client, ac.signal)) {
       // `null` = (re)conectou. Na primeira vez é o sinal de que dá pra mandar o
@@ -172,23 +291,18 @@ export function createOpencodeStepExecutor(deps: OpencodeExecutorDeps): StepExec
       if (evt === null) {
         if (promptEnviado) continue;
         promptEnviado = true;
-        void deps.client.session
-          .prompt({
-            path: { id: sessionId },
-            body: { model: deps.model, parts: [{ type: 'text', text: buildStepPrompt(task, step) }] },
-          })
-          .catch(() => {
-            /* falha de envio aparece como turno que nunca fecha → timeout */
-          });
+        enviar(buildStepPrompt(task, step));
         continue;
       }
-      if (ac.signal.aborted) return haltDe('timeout', step.name);
-      if (ehDeOutraSessao(evt, sessionId)) continue;
+      if (ac.signal.aborted) return { halt: haltDe('timeout', step.name), resultado: acc.result() };
+      if (ehDeOutraSessao(evt, sessionIdAtual)) continue;
 
       const perm = permissionFrom(evt);
       if (perm) {
         const decisao: PermissionDecision = decider.decide(perm.subject, task.profile);
-        if (decisao === 'park') return haltDe('approval', perm.subject);
+        if (decisao === 'park') {
+          return { halt: haltDe('approval', perm.subject), resultado: acc.result() };
+        }
         await responderPermissao(deps.client, perm, decisao === 'allow');
         continue;
       }
@@ -197,13 +311,56 @@ export function createOpencodeStepExecutor(deps: OpencodeExecutorDeps): StepExec
       if (pergunta) {
         // Rejeita ANTES de sair: sem resposta o motor fica preso esperando.
         await rejeitarPergunta(deps.baseUrl, pergunta);
-        return haltDe('question', pergunta.subject);
+        return { halt: haltDe('question', pergunta.subject), resultado: acc.result() };
+      }
+
+      const erro = engineErrorFrom(evt);
+      if (erro) {
+        if (erro.kind === 'context_overflow') {
+          if (tentativasContexto >= MAX_CONTEXT_RETRIES) {
+            return {
+              halt: haltErroDoMotor(
+                erro.name,
+                `estouro de contexto — ${MAX_CONTEXT_RETRIES} tentativa(s) de recuperação esgotada(s)`,
+              ),
+              resultado: acc.result(),
+            };
+          }
+          tentativasContexto++;
+          const digest = digestoDeRecuperacao(task, step, priorSteps, acc.result().text);
+          // Sessão NOVA, não reenvio: é o histórico acumulado que estourou —
+          // insistir na mesma sessão bateria no mesmo teto imediatamente.
+          sessionIdAtual = await criarSessaoNova(task, ' (cont.)');
+          onSessionChange(sessionIdAtual);
+          acc = createStepAccumulator(); // descarta o acumulado contaminado — o digest leva o resumo
+          enviar(digest);
+          continue;
+        }
+        if (erro.kind === 'output_length') {
+          if (tentativasContinuacao >= MAX_CONTINUATION_RETRIES) {
+            return {
+              halt: haltErroDoMotor(
+                erro.name,
+                `resposta cortada repetidamente — ${MAX_CONTINUATION_RETRIES} tentativa(s) de continuação esgotada(s)`,
+              ),
+              resultado: acc.result(),
+            };
+          }
+          tentativasContinuacao++;
+          // MESMA sessão: o problema é o teto de UMA geração, não o histórico
+          // acumulado. O acumulador não é resetado — a parte nova concatena
+          // com a parcial de antes (ids de part diferentes, ver step-events.ts).
+          enviar(PROMPT_CONTINUAR);
+          continue;
+        }
+        // 'other': erro genuíno do motor, sem recuperação conhecida.
+        return { halt: haltErroDoMotor(erro.name, erro.message), resultado: acc.result() };
       }
 
       acc.apply(evt);
-      if (isTurnEnd(evt)) return undefined;
+      if (isTurnEnd(evt)) return { halt: undefined, resultado: acc.result() };
     }
     // Stream acabou sem `idle`: o `subscribeEvents` só sai por abort.
-    return haltDe('timeout', step.name);
+    return { halt: haltDe('timeout', step.name), resultado: acc.result() };
   }
 }

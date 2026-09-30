@@ -157,7 +157,12 @@ export class TaskRunner {
       if (!step) return false;
 
       await this.steps.start(step.id); // CHECKPOINT
-      const outcome = await this.deps.executor.run(task, step);
+      // Trilha já concluída (exclui o step atual, que acabou de virar `running`):
+      // o executor usa isto pra montar contexto de continuidade se precisar
+      // recriar a sessão do motor no meio do step (estouro de contexto).
+      const trilha = await this.steps.listByTask(task.id);
+      const priorSteps = trilha.filter((s) => s.id !== step.id);
+      const outcome = await this.deps.executor.run(task, step, priorSteps);
 
       if (outcome.halt) {
         const t = haltParaTransicao(outcome.halt);
@@ -172,10 +177,17 @@ export class TaskRunner {
         await this.tasks.setStatus(task.id, t.status, task.fence, {
           error: t.error,
           ...(t.status === 'waiting_approval'
-            ? { awaitingKind: outcome.halt.kind === 'question' ? 'question' : 'approval', awaitingSubject: outcome.halt.subject }
+            ? {
+                awaitingKind: outcome.halt.kind === 'question' ? 'question' : 'approval',
+                awaitingSubject: outcome.halt.subject,
+              }
             : {}),
         });
-        this.log('task_halted', { taskId: task.id, kind: outcome.halt.kind, subject: outcome.halt.subject });
+        this.log('task_halted', {
+          taskId: task.id,
+          kind: outcome.halt.kind,
+          subject: outcome.halt.subject,
+        });
         return true;
       }
 
@@ -214,7 +226,10 @@ export class TaskRunner {
     const base = await this.steps.lastStepNumber(task.id);
     await this.steps.append(
       task.id,
-      numberSteps(veredito.nextSteps.map((p) => ({ name: p.name, input: { instruction: p.instruction } })), base),
+      numberSteps(
+        veredito.nextSteps.map((p) => ({ name: p.name, input: { instruction: p.instruction } })),
+        base,
+      ),
     );
     await this.tasks.setStatus(task.id, 'running', task.fence);
     this.log('task_extended', { taskId: task.id, added: veredito.nextSteps.length });

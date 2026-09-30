@@ -6,13 +6,17 @@
 import { test, expect } from 'bun:test';
 import {
   createStepAccumulator,
+  engineErrorFrom,
   eventSessionId,
   isTurnEnd,
   permissionFrom,
   questionFrom,
 } from './step-events.js';
 
-const evt = (type: string, properties: Record<string, unknown> = {}): unknown => ({ type, properties });
+const evt = (type: string, properties: Record<string, unknown> = {}): unknown => ({
+  type,
+  properties,
+});
 
 test('fim de turno: as DUAS formas que o motor emite', () => {
   expect(isTurnEnd(evt('session.idle'))).toBe(true);
@@ -36,8 +40,9 @@ test('permissão: `asked` é o que o motor manda, `updated` é o que o SDK tipa'
 });
 
 test('pergunta: família normal e a paralela `question.v2.*`', () => {
-  expect(questionFrom(evt('question.asked', { id: 'q1', sessionID: 's1', title: 'qual banco?' })))
-    .toEqual({ id: 'q1', sessionId: 's1', subject: 'qual banco?' });
+  expect(
+    questionFrom(evt('question.asked', { id: 'q1', sessionID: 's1', title: 'qual banco?' })),
+  ).toEqual({ id: 'q1', sessionId: 's1', subject: 'qual banco?' });
   // O motor escolhe qual família emitir; perder a v2 trava o turno igual.
   expect(questionFrom(evt('question.v2.asked', { id: 'q2', sessionID: 's1' }))).not.toBeNull();
   expect(questionFrom(evt('question.replied', { id: 'q1', sessionID: 's1' }))).toBeNull();
@@ -60,9 +65,21 @@ test('acumulador: part é SNAPSHOT, não delta — sobrescreve, não concatena',
 
 test('acumulador: tools viram trilha com o último status de cada uma', () => {
   const acc = createStepAccumulator();
-  acc.apply(evt('message.part.updated', { part: { id: 'a', type: 'tool', tool: 'read', state: { status: 'running' } } }));
-  acc.apply(evt('message.part.updated', { part: { id: 'a', type: 'tool', tool: 'read', state: { status: 'completed' } } }));
-  acc.apply(evt('message.part.updated', { part: { id: 'b', type: 'tool', tool: 'grep', state: { status: 'error' } } }));
+  acc.apply(
+    evt('message.part.updated', {
+      part: { id: 'a', type: 'tool', tool: 'read', state: { status: 'running' } },
+    }),
+  );
+  acc.apply(
+    evt('message.part.updated', {
+      part: { id: 'a', type: 'tool', tool: 'read', state: { status: 'completed' } },
+    }),
+  );
+  acc.apply(
+    evt('message.part.updated', {
+      part: { id: 'b', type: 'tool', tool: 'grep', state: { status: 'error' } },
+    }),
+  );
 
   const { toolCalls } = acc.result();
   expect(toolCalls).toHaveLength(2);
@@ -72,8 +89,16 @@ test('acumulador: tools viram trilha com o último status de cada uma', () => {
 
 test('acumulador: tokens somam entre passos agênticos', () => {
   const acc = createStepAccumulator();
-  acc.apply(evt('message.part.updated', { part: { id: 's1', type: 'step-finish', tokens: { input: 100, output: 20 } } }));
-  acc.apply(evt('message.part.updated', { part: { id: 's2', type: 'step-finish', tokens: { input: 50, output: 10 } } }));
+  acc.apply(
+    evt('message.part.updated', {
+      part: { id: 's1', type: 'step-finish', tokens: { input: 100, output: 20 } },
+    }),
+  );
+  acc.apply(
+    evt('message.part.updated', {
+      part: { id: 's2', type: 'step-finish', tokens: { input: 50, output: 10 } },
+    }),
+  );
   expect(acc.result()).toMatchObject({ tokensIn: 150, tokensOut: 30 });
 });
 
@@ -82,4 +107,41 @@ test('acumulador ignora o que não é message.part.updated', () => {
   acc.apply(evt('session.idle'));
   acc.apply(evt('message.part.delta', { part: { id: 'x', type: 'text', text: 'ruído' } }));
   expect(acc.result().text).toBe('');
+});
+
+test('engineErrorFrom: ContextOverflowError nomeado pelo motor', () => {
+  const e = engineErrorFrom(evt('session.error', { error: { name: 'ContextOverflowError' } }));
+  expect(e?.kind).toBe('context_overflow');
+});
+
+test('engineErrorFrom: estouro sem nome, só a mensagem crua do provider', () => {
+  // O motor nem sempre nomeia — às vezes só devolve APIError com a frase do provider.
+  const e = engineErrorFrom(
+    evt('session.error', {
+      error: { name: 'APIError', data: { message: 'This model\'s maximum context length is 32000 tokens' } },
+    }),
+  );
+  expect(e?.kind).toBe('context_overflow');
+});
+
+test('engineErrorFrom: MessageOutputLengthError pede continuação, não sessão nova', () => {
+  const e = engineErrorFrom(evt('session.error', { error: { name: 'MessageOutputLengthError' } }));
+  expect(e?.kind).toBe('output_length');
+});
+
+test('engineErrorFrom: erro genérico do motor não tem recuperação automática', () => {
+  const e = engineErrorFrom(evt('session.error', { error: { name: 'ProviderAuthError' } }));
+  expect(e?.kind).toBe('other');
+  expect(e?.name).toBe('ProviderAuthError');
+});
+
+test('engineErrorFrom: MessageAbortedError não é falha — foi um abort nosso', () => {
+  // Sem isto, todo `session.abort()` que o próprio executor dispara (timeout,
+  // fim do step) pareceria um erro do motor e tentaria "recuperar" à toa.
+  expect(engineErrorFrom(evt('session.error', { error: { name: 'MessageAbortedError' } }))).toBeNull();
+});
+
+test('engineErrorFrom: ignora evento sem error e evento de outro tipo', () => {
+  expect(engineErrorFrom(evt('session.error', {}))).toBeNull();
+  expect(engineErrorFrom(evt('message.part.updated', { error: { name: 'ContextOverflowError' } }))).toBeNull();
 });
