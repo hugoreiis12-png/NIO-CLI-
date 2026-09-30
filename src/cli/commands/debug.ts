@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { getProjectConfigPath, loadProjectConfig } from "../../config.js";
 import { loadSession } from "../../lib/auth/cli-session-store.js";
 import { ping, closePool } from "../../adapters/pg/client.js";
-import { createSessionRepository } from "../../adapters/pg/session-repository.js";
+import { SessionManager } from "../../app/session-manager.js";
 import { isBinaryInstalled } from "../../lib/clients/client-install.js";
 import { headroomHealthy, HEADROOM_URL } from "../../lib/headroom.js";
 import { skillsCached } from "../../lib/skills/skills-cache.js";
@@ -43,20 +43,39 @@ async function runChecks(): Promise<Check[]> {
   // 1. Config do projeto (nio.json)
   const cfgPath = getProjectConfigPath();
   if (!existsSync(cfgPath)) {
-    checks.push({ label: brand.projectConfigFile, level: "warn", detail: "ausente", hint: `Rode \`${brand.name} init\` neste diretório.` });
+    checks.push({
+      label: brand.projectConfigFile,
+      level: "warn",
+      detail: "ausente",
+      hint: `Rode \`${brand.name} init\` neste diretório.`,
+    });
   } else {
     try {
       const cfg = loadProjectConfig();
-      checks.push({ label: brand.projectConfigFile, level: "ok", detail: cfg?.session_id ? `session ${cfg.session_id.slice(0, 8)}` : "sem session vinculada" });
+      checks.push({
+        label: brand.projectConfigFile,
+        level: "ok",
+        detail: cfg?.session_id ? `session ${cfg.session_id.slice(0, 8)}` : "sem session vinculada",
+      });
     } catch (err) {
-      checks.push({ label: brand.projectConfigFile, level: "fail", detail: "JSON inválido", hint: (err as Error).message });
+      checks.push({
+        label: brand.projectConfigFile,
+        level: "fail",
+        detail: "JSON inválido",
+        hint: (err as Error).message,
+      });
     }
   }
 
   // 2. Login local
   const stored = await loadSession();
   if (!stored) {
-    checks.push({ label: "Login local", level: "fail", detail: "sem sessão", hint: `Rode \`${brand.name} login\`.` });
+    checks.push({
+      label: "Login local",
+      level: "fail",
+      detail: "sem sessão",
+      hint: `Rode \`${brand.name} login\`.`,
+    });
   } else {
     checks.push({ label: "Login local", level: "ok", detail: `${stored.name}` });
   }
@@ -66,20 +85,35 @@ async function runChecks(): Promise<Check[]> {
   checks.push(
     dbOk
       ? { label: "Postgres", level: "ok", detail: "conectado" }
-      : { label: "Postgres", level: "fail", detail: "sem conexão", hint: "Confira NIO_DATABASE_URL e a rede/VPN." },
+      : {
+          label: "Postgres",
+          level: "fail",
+          detail: "sem conexão",
+          hint: "Confira NIO_DATABASE_URL e a rede/VPN.",
+        },
   );
 
   // 4. Sessão de ambiente ativa (só se logado + banco ok)
   if (stored && dbOk) {
     try {
-      const active = await createSessionRepository().findActiveByUser(stored.userId);
+      const active = await new SessionManager().findActive(stored.userId);
       checks.push(
         active
           ? { label: "Sessão ativa", level: "ok", detail: `${active.name} (${active.profile})` }
-          : { label: "Sessão ativa", level: "warn", detail: "nenhuma", hint: `Rode \`${brand.name} init\` ou \`${brand.name} sessions activate <id>\`.` },
+          : {
+              label: "Sessão ativa",
+              level: "warn",
+              detail: "nenhuma",
+              hint: `Rode \`${brand.name} init\` ou \`${brand.name} sessions activate <id>\`.`,
+            },
       );
     } catch (err) {
-      checks.push({ label: "Sessão ativa", level: "warn", detail: "não consegui checar", hint: (err as Error).message });
+      checks.push({
+        label: "Sessão ativa",
+        level: "warn",
+        detail: "não consegui checar",
+        hint: (err as Error).message,
+      });
     }
   }
 
@@ -87,14 +121,24 @@ async function runChecks(): Promise<Check[]> {
   checks.push(
     isBinaryInstalled("opencode")
       ? { label: "OpenCode (operador)", level: "ok", detail: "no PATH" }
-      : { label: "OpenCode (operador)", level: "warn", detail: "não encontrado", hint: "Instale o OpenCode pra o handoff do `init` funcionar." },
+      : {
+          label: "OpenCode (operador)",
+          level: "warn",
+          detail: "não encontrado",
+          hint: "Instale o OpenCode pra o handoff do `init` funcionar.",
+        },
   );
 
   // 6. opencode.json
   checks.push(
     existsSync(opencodeGlobalPath())
       ? { label: "opencode.json", level: "ok", detail: "configurado" }
-      : { label: "opencode.json", level: "warn", detail: "ausente", hint: `Gerado pelo \`${brand.name} init\`.` },
+      : {
+          label: "opencode.json",
+          level: "warn",
+          detail: "ausente",
+          hint: `Gerado pelo \`${brand.name} init\`.`,
+        },
   );
 
   // 6b. Headroom (proxy obrigatório do `nio ai`)
@@ -113,7 +157,12 @@ async function runChecks(): Promise<Check[]> {
   checks.push(
     skillsCached()
       ? { label: "Cache de skills", level: "ok" }
-      : { label: "Cache de skills", level: "warn", detail: "vazio", hint: `Rode \`${brand.name} sync\`.` },
+      : {
+          label: "Cache de skills",
+          level: "warn",
+          detail: "vazio",
+          hint: `Rode \`${brand.name} sync\`.`,
+        },
   );
 
   return checks;
@@ -130,7 +179,9 @@ export async function runDebug(): Promise<void> {
   if (fails === 0 && warns === 0) {
     console.log(`${c.green(sym.ok)} Tudo certo.`);
   } else {
-    console.log(`${fails > 0 ? c.red(`${fails} erro(s)`) : ""}${fails && warns ? " · " : ""}${warns > 0 ? c.yellow(`${warns} aviso(s)`) : ""}`);
+    console.log(
+      `${fails > 0 ? c.red(`${fails} erro(s)`) : ""}${fails && warns ? " · " : ""}${warns > 0 ? c.yellow(`${warns} aviso(s)`) : ""}`,
+    );
   }
 
   await closePool().catch(() => {});

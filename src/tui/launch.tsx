@@ -11,7 +11,7 @@ import { localPowerBiDeclared } from '../profiles/mcps.js';
 import type { Profile } from '../core/types.js';
 import { isBinaryInstalled, opencodeVersionSkew } from '../lib/clients/client-install.js';
 import { loadSession } from '../lib/auth/cli-session-store.js';
-import { createSessionRepository } from '../adapters/pg/session-repository.js';
+import { SessionManager } from '../app/session-manager.js';
 import { buildProgram } from '../cli/program.js';
 import { c, sym } from '../lib/colors.js';
 import { startOpencode } from './opencode.js';
@@ -21,14 +21,12 @@ async function resolveSessionMeta(): Promise<{ name: string; profile: string; id
   try {
     const stored = await loadSession();
     if (!stored) return null;
-    const active = await createSessionRepository().findActiveByUser(stored.userId);
+    const active = await new SessionManager().findActive(stored.userId);
     return active ? { name: active.name, profile: active.profile, id: active.id } : null;
   } catch {
     return null;
   }
 }
-
-
 
 function fallbackToOpencodeTui(cwd: string): Promise<number> {
   console.log(c.dim('  (interface NIO indisponível — abrindo a TUI do OpenCode)'));
@@ -47,7 +45,9 @@ export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
     return 1;
   }
   if (!isBinaryInstalled('opencode')) {
-    console.log(`  ${c.yellow(sym.warn)} OpenCode não está no PATH. Instale com \`npm i -g opencode-ai\`.`);
+    console.log(
+      `  ${c.yellow(sym.warn)} OpenCode não está no PATH. Instale com \`npm i -g opencode-ai\`.`,
+    );
     return 127;
   }
   const skew = opencodeVersionSkew();
@@ -63,11 +63,15 @@ export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
   // os MCPs do perfil (evita herdar excel/powerbi/etc. — ~50k tokens de schema por
   // request) e redireciona o XDG_CONFIG_HOME (o serve o herda via process.env).
   try {
-    const { xdgDir, missingInherited } = installNioOpencodeConfig((session?.profile as Profile) ?? null);
+    const { xdgDir, missingInherited } = installNioOpencodeConfig(
+      (session?.profile as Profile) ?? null,
+    );
     process.env.XDG_CONFIG_HOME = xdgDir;
     process.env.OPENCODE_DISABLE_PROJECT_CONFIG = '1';
     if (missingInherited.length > 0) {
-      console.log(`  ${c.yellow(sym.warn)} MCP(s) do perfil ausentes no seu global (ignorados): ${missingInherited.join(', ')}`);
+      console.log(
+        `  ${c.yellow(sym.warn)} MCP(s) do perfil ausentes no seu global (ignorados): ${missingInherited.join(', ')}`,
+      );
     }
     // Modo do Power BI explícito: sem isto o usuário não sabe se está falando com o
     // `.pbix` aberto ou com o Fabric — e a falha do modo errado é silenciosa.
@@ -75,7 +79,9 @@ export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
       console.log(`  ${c.cyan('⬤')} modo local — usando o modelo aberto no Power BI Desktop`);
     }
   } catch (err) {
-    console.warn(`  ${c.yellow(sym.warn)} config dedicado do NIO falhou (segue no global): ${(err as Error).message}`);
+    console.warn(
+      `  ${c.yellow(sym.warn)} config dedicado do NIO falhou (segue no global): ${(err as Error).message}`,
+    );
   }
 
   let handle;
@@ -91,10 +97,13 @@ export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
   // opencode caía no default dele (`opencode/big-pickle`, Zen/Console, rate-limitado)
   // em vez do provider dedicado `nio-local` gravado no opencode.json.
   const model = { providerID: NIO_AI_PROVIDER, modelID: NIO_AI_MODEL_ID };
-  const app = render(<App handle={handle} program={program} cwd={cwd} session={session} model={model} />, {
-    patchConsole: false, // nada de console fora do controle do Ink
-    exitOnCtrlC: true,
-  });
+  const app = render(
+    <App handle={handle} program={program} cwd={cwd} session={session} model={model} />,
+    {
+      patchConsole: false, // nada de console fora do controle do Ink
+      exitOnCtrlC: true,
+    },
+  );
   try {
     await app.waitUntilExit();
   } finally {

@@ -9,7 +9,7 @@ import { dlog } from "../../lib/debug.js";
 import { checkConfig } from "../../lib/auth/nio-config.js";
 import { loadSession } from "../../lib/auth/cli-session-store.js";
 import { gatewayHealth, ensureGatewayRunning } from "../../lib/auth/gateway-process.js";
-import { createSessionRepository } from "../../adapters/pg/session-repository.js";
+import { SessionManager } from "../../app/session-manager.js";
 
 export type Stage = "config" | "gateway" | "login" | "session" | "ready";
 
@@ -24,7 +24,7 @@ const realDeps: StageDeps = {
   configOk: async () => (await checkConfig()).length === 0,
   gatewayHealth: () => gatewayHealth(),
   loadSession,
-  findActive: (userId) => createSessionRepository().findActiveByUser(userId),
+  findActive: (userId) => new SessionManager().findActive(userId),
 };
 
 /** Devolve o primeiro estágio não satisfeito (config → gateway → login → session → ready). */
@@ -87,7 +87,7 @@ async function runStage(stage: Exclude<Stage, "ready">): Promise<void> {
 /** Estágio `ready`: sessão ativa existe. Oferece abrir a sessão (IDE + `nio ai`). */
 async function handleReady(): Promise<void> {
   const session = await loadSession();
-  const active = session ? await createSessionRepository().findActiveByUser(session.userId) : null;
+  const active = session ? await new SessionManager().findActive(session.userId) : null;
   if (!active) return;
   console.log(
     `\n${c.green(sym.ok)} Tudo pronto — sessão ativa: ${c.bold(active.name)} (${active.profile}).`,
@@ -112,7 +112,9 @@ async function askToProceed(meta: StageMeta): Promise<boolean> {
     default: true,
   });
   if (!go) {
-    console.log(c.dim(`Retome quando quiser:  ${cmd("nio start")}   (ou \`${meta.resumeCmd}\` direto)`));
+    console.log(
+      c.dim(`Retome quando quiser:  ${cmd("nio start")}   (ou \`${meta.resumeCmd}\` direto)`),
+    );
   }
   return go;
 }
@@ -140,7 +142,9 @@ export async function continueChain(opts: { from: "cold" | "command" }): Promise
     // (senão o `handleReady` ofereceria abrir o OpenCode de novo).
     if (stage === "session") return;
     if ((await resolveStage()) === stage) {
-      console.log(c.dim(`Ainda em "${meta.label}". Resolva o que faltou e rode ${cmd("nio start")} de novo.`));
+      console.log(
+        c.dim(`Ainda em "${meta.label}". Resolva o que faltou e rode ${cmd("nio start")} de novo.`),
+      );
       return;
     }
   }

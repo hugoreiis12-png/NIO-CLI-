@@ -31,7 +31,12 @@ function session(over: Partial<Session> = {}): Session {
 
 describe('prompt builders', () => {
   test('debug: inclui container, ps, logs, inspect (truncado)', () => {
-    const p = buildDebugPrompt({ container: 'api', ps: 'PS', logs: 'LOGS', inspect: 'I'.repeat(9000) });
+    const p = buildDebugPrompt({
+      container: 'api',
+      ps: 'PS',
+      logs: 'LOGS',
+      inspect: 'I'.repeat(9000),
+    });
     expect(p).toContain('`api`');
     expect(p).toContain('PS');
     expect(p).toContain('LOGS');
@@ -69,17 +74,28 @@ describe('parsers', () => {
 });
 
 describe('cluster state em config.extra.docker', () => {
-  const st: ClusterState = { stack: 'nio-cluster', services: ['a'], composePath: 'x', deployedAt: 't' };
+  const st: ClusterState = {
+    stack: 'nio-cluster',
+    services: ['a'],
+    composePath: 'x',
+    deployedAt: 't',
+  };
 
   test('read: ausente → null; presente → objeto', () => {
     expect(readClusterState(session())).toBeNull();
-    expect(readClusterState(session({ config: { extra: { docker: { cluster: st } } } }))).toEqual(st);
+    expect(readClusterState(session({ config: { extra: { docker: { cluster: st } } } }))).toEqual(
+      st,
+    );
   });
 
   test('persist: funde sem apagar outros campos de extra; null limpa', async () => {
     const calls: unknown[] = [];
-    const repo = { updateConfig: async (_id: string, cfg: unknown) => void calls.push(cfg) } as unknown as SessionRepository;
-    const s = session({ config: { languages: ['ts'], extra: { recipe: 'r', docker: { foo: 1 } } } });
+    const repo = {
+      updateConfig: async (_id: string, cfg: unknown) => void calls.push(cfg),
+    } as unknown as SessionRepository;
+    const s = session({
+      config: { languages: ['ts'], extra: { recipe: 'r', docker: { foo: 1 } } },
+    });
 
     await persistClusterState(repo, s, st);
     expect(calls[0]).toEqual({

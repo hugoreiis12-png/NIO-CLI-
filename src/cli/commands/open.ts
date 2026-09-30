@@ -2,7 +2,7 @@
 // Contrapartida manual da abertura automática no fim do `nio init`.
 import type { Command } from "commander";
 import { loadSession } from "../../lib/auth/cli-session-store.js";
-import { createSessionRepository } from "../../adapters/pg/session-repository.js";
+import { SessionManager } from "../../app/session-manager.js";
 import { createIdeGateway } from "../../adapters/ide/ide-gateway.js";
 import { writeIdeAutostartTask } from "../../lib/ide-tasks.js";
 import { c, sym } from "../../lib/colors.js";
@@ -17,7 +17,7 @@ export async function runOpen(): Promise<void> {
 
   let session;
   try {
-    session = await createSessionRepository().findActiveByUser(stored.userId);
+    session = await new SessionManager().findActive(stored.userId);
   } catch (err) {
     console.error(`${c.red(sym.err)} Falha no banco: ${(err as Error).message}`);
     process.exit(1);
@@ -44,7 +44,9 @@ export async function runOpen(): Promise<void> {
   const result = await createIdeGateway().open(session.ide, session.projectPath);
   switch (result.status) {
     case "opened":
-      console.log(`${c.green(sym.ok)} Abrindo ${c.bold(result.binary ?? "")} em ${c.dim(session.projectPath)}`);
+      console.log(
+        `${c.green(sym.ok)} Abrindo ${c.bold(result.binary ?? "")} em ${c.dim(session.projectPath)}`,
+      );
       break;
     case "skipped":
       console.log(
@@ -61,4 +63,3 @@ export async function runOpen(): Promise<void> {
       break;
   }
 }
-

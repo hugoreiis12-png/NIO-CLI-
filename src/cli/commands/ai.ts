@@ -7,7 +7,7 @@ import type { Command } from "commander";
 import { brand } from "../../brand.js";
 import { c, sym } from "../../lib/colors.js";
 import { loadSession } from "../../lib/auth/cli-session-store.js";
-import { createSessionRepository } from "../../adapters/pg/session-repository.js";
+import { SessionManager } from "../../app/session-manager.js";
 import { headroomHealthy, HEADROOM_URL } from "../../lib/headroom.js";
 import { HeadroomRequiredError } from "../../app/ai-client.js";
 import type { Session } from "../../core/types.js";
@@ -21,7 +21,7 @@ async function requireActiveSession(): Promise<Session> {
   }
   let session: Session | null;
   try {
-    session = await createSessionRepository().findActiveByUser(stored.userId);
+    session = await new SessionManager().findActive(stored.userId);
   } catch (err) {
     console.error(`${c.red(sym.err)} Falha no banco: ${(err as Error).message}`);
     process.exit(1);
@@ -43,7 +43,7 @@ async function requireActiveSession(): Promise<Session> {
  * há um mecanismo só. Quem já tem a variável setada não precisa da flag.
  */
 function applyLocalMode(local: boolean): void {
-  if (local) process.env.NIO_PBI_LOCAL = '1';
+  if (local) process.env.NIO_PBI_LOCAL = "1";
 }
 
 async function runAi(opts: { local?: boolean } = {}): Promise<void> {
@@ -56,7 +56,9 @@ async function runAi(opts: { local?: boolean } = {}): Promise<void> {
   } catch (err) {
     if (err instanceof HeadroomRequiredError) {
       console.error(`${c.red(sym.err)} ${err.message}`);
-      console.error(c.dim(`  suba o Docker e rode \`${brand.name} docker headroom up\`, ou tente de novo.`));
+      console.error(
+        c.dim(`  suba o Docker e rode \`${brand.name} docker headroom up\`, ou tente de novo.`),
+      );
       process.exit(1);
     }
     throw err;
@@ -73,8 +75,7 @@ export function registerAiCommand(program: Command): void {
     )
     .action((opts: { local?: boolean }) => runAi(opts));
 
-  ai
-    .command("status")
+  ai.command("status")
     .description("Estado do Headroom (proxy de compressão — dormente, cliente fala direto no LLM)")
     .action(async () => {
       const up = await headroomHealthy();

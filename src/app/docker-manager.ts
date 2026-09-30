@@ -6,8 +6,7 @@
 import { launchAiClient, HeadroomRequiredError } from './ai-client.js';
 import { CLUSTER_STACK } from '../lib/docker/config.js';
 import type { ClusterState, DockerGateway } from '../core/docker.js';
-import type { Session } from '../core/types.js';
-import type { SessionRepository } from '../core/repositories.js';
+import type { EnvironmentConfig, Session } from '../core/types.js';
 
 /** Contexto coletado de um container problemático — vira parte do prompt do `debug`. */
 export interface DebugContext {
@@ -43,7 +42,11 @@ export function buildDebugPrompt(ctx: DebugContext): string {
 }
 
 /** Prompt do `nio docker orquest`. `dryRun` → só gera o compose, não aplica. */
-export function buildOrquestPrompt(instruction: string, projectPath: string, dryRun: boolean): string {
+export function buildOrquestPrompt(
+  instruction: string,
+  projectPath: string,
+  dryRun: boolean,
+): string {
   return [
     PREAMBLE,
     '',
@@ -77,7 +80,10 @@ export function buildClusterPrompt(instruction: string, projectPath: string): st
 export function parseServicesLine(output: string): string[] {
   const m = /^\s*SERVICES:\s*(.+)$/im.exec(output);
   if (!m) return [];
-  return m[1]!.split(',').map((s) => s.trim()).filter(Boolean);
+  return m[1]!
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -85,10 +91,7 @@ export function parseServicesLine(output: string): string[] {
  * `opencode run`). `stdio: 'inherit'` — o usuário acompanha ao vivo. Resolve com
  * o exit code. Headroom fora do ar (sem Docker) → avisa e resolve 1.
  */
-export async function runOperator(
-  prompt: string,
-  opts: { cwd?: string } = {},
-): Promise<number> {
+export async function runOperator(prompt: string, opts: { cwd?: string } = {}): Promise<number> {
   try {
     return await launchAiClient({ cwd: opts.cwd ?? process.cwd(), prompt });
   } catch (err) {
@@ -127,9 +130,18 @@ export function readClusterState(session: Session): ClusterState | null {
   return extra?.docker?.cluster ?? null;
 }
 
+/**
+ * Só precisa de `updateConfig` — não do `SessionRepository` inteiro (§ 2.1 do
+ * backlog: segregação de interface pra não forçar quem chama a puxar o repo
+ * completo quando um método basta).
+ */
+interface ConfigWriter {
+  updateConfig(sessionId: string, config: EnvironmentConfig): Promise<void>;
+}
+
 /** Persiste (ou limpa, com `null`) o estado do cluster no `sessions.config`. */
 export async function persistClusterState(
-  repo: SessionRepository,
+  repo: ConfigWriter,
   session: Session,
   state: ClusterState | null,
 ): Promise<void> {

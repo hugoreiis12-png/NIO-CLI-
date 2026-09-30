@@ -25,16 +25,12 @@ import {
 } from "../../lib/docker/health.js";
 import { upsertOpencodeMcp } from "../../lib/clients/client-configs.js";
 import { isBinaryInstalled } from "../../lib/clients/client-install.js";
-import {
-  ensureHeadroomRunning,
-  headroomHealthy,
-  HEADROOM_URL,
-} from "../../lib/headroom.js";
+import { ensureHeadroomRunning, headroomHealthy, HEADROOM_URL } from "../../lib/headroom.js";
 import { gatewayHealth } from "../../lib/auth/gateway-process.js";
 import { GATEWAY_URL } from "../../gateway/config.js";
 import { openUrl } from "../../lib/open-url.js";
 import { loadSession } from "../../lib/auth/cli-session-store.js";
-import { createSessionRepository } from "../../adapters/pg/session-repository.js";
+import { SessionManager } from "../../app/session-manager.js";
 import { createDockerGateway } from "../../adapters/docker/docker-gateway.js";
 import {
   buildClusterPrompt,
@@ -68,7 +64,7 @@ async function requireActiveSession(): Promise<Session> {
   }
   let session: Session | null;
   try {
-    session = await createSessionRepository().findActiveByUser(stored.userId);
+    session = await new SessionManager().findActive(stored.userId);
   } catch (err) {
     console.error(`${c.red(sym.err)} Falha no banco: ${(err as Error).message}`);
     process.exit(1);
@@ -112,7 +108,9 @@ async function headroomUp(): Promise<void> {
     console.error(`${c.red(sym.err)} ${r.error}`);
     process.exit(1);
   }
-  console.log(`  ${c.green(sym.ok)} Headroom no ar ${c.dim(HEADROOM_URL)}${r.started ? "" : " (já estava)"}`);
+  console.log(
+    `  ${c.green(sym.ok)} Headroom no ar ${c.dim(HEADROOM_URL)}${r.started ? "" : " (já estava)"}`,
+  );
 }
 
 async function headroomDown(): Promise<void> {
@@ -146,19 +144,31 @@ async function toolkitUp(): Promise<void> {
   // Registra o gateway remoto no opencode.json — o operador ganha as tools Docker.
   try {
     const r = upsertOpencodeMcp(dockerGatewayMcp);
-    const msg = { created: "criado", updated: "atualizado", already_configured: "já estava" }[r.status];
-    console.log(`  ${c.green(sym.ok)} opencode.json — MCP \`docker\` ${msg} (${c.dim(DOCKER_MCP_URL)})`);
+    const msg = { created: "criado", updated: "atualizado", already_configured: "já estava" }[
+      r.status
+    ];
+    console.log(
+      `  ${c.green(sym.ok)} opencode.json — MCP \`docker\` ${msg} (${c.dim(DOCKER_MCP_URL)})`,
+    );
     if (r.backup) console.log(`  ${c.dim(`backup: ${r.backup}`)}`);
   } catch (err) {
-    console.warn(`  ${c.yellow(sym.warn)} não consegui registrar o MCP no opencode.json: ${(err as Error).message}`);
+    console.warn(
+      `  ${c.yellow(sym.warn)} não consegui registrar o MCP no opencode.json: ${(err as Error).message}`,
+    );
   }
 
   const [gw, pt] = await Promise.all([mcpGatewayHealthy(), portainerHealthy()]);
   console.log("");
-  console.log(`  ${gw ? c.green(sym.ok) : c.yellow(sym.warn)} MCP Gateway  ${c.dim(DOCKER_MCP_URL)}`);
-  console.log(`  ${pt ? c.green(sym.ok) : c.yellow(sym.warn)} Portainer    ${c.dim(PORTAINER_URL)}`);
+  console.log(
+    `  ${gw ? c.green(sym.ok) : c.yellow(sym.warn)} MCP Gateway  ${c.dim(DOCKER_MCP_URL)}`,
+  );
+  console.log(
+    `  ${pt ? c.green(sym.ok) : c.yellow(sym.warn)} Portainer    ${c.dim(PORTAINER_URL)}`,
+  );
   console.log("");
-  console.log(c.dim(`  1º acesso ao Portainer pede setup de admin — abra ${PORTAINER_URL} e crie o usuário.`));
+  console.log(
+    c.dim(`  1º acesso ao Portainer pede setup de admin — abra ${PORTAINER_URL} e crie o usuário.`),
+  );
   console.log(c.dim(`  reinicie o \`opencode\` da sessão pra ele pegar as tools Docker.`));
 }
 
@@ -225,11 +235,17 @@ async function stackUp(): Promise<void> {
   // Registra o MCP `docker` no opencode.json (idempotente) — o operador ganha as tools.
   try {
     const r = upsertOpencodeMcp(dockerGatewayMcp);
-    const msg = { created: "criado", updated: "atualizado", already_configured: "já estava" }[r.status];
-    console.log(`  ${c.green(sym.ok)} opencode.json — MCP \`docker\` ${msg} (${c.dim(DOCKER_MCP_URL)})`);
+    const msg = { created: "criado", updated: "atualizado", already_configured: "já estava" }[
+      r.status
+    ];
+    console.log(
+      `  ${c.green(sym.ok)} opencode.json — MCP \`docker\` ${msg} (${c.dim(DOCKER_MCP_URL)})`,
+    );
     if (r.backup) console.log(`  ${c.dim(`backup: ${r.backup}`)}`);
   } catch (err) {
-    console.warn(`  ${c.yellow(sym.warn)} não consegui registrar o MCP no opencode.json: ${(err as Error).message}`);
+    console.warn(
+      `  ${c.yellow(sym.warn)} não consegui registrar o MCP no opencode.json: ${(err as Error).message}`,
+    );
   }
 
   // Espera o gateway publicar a porta no host antes de reportar (o `up -d` volta
@@ -239,8 +255,14 @@ async function stackUp(): Promise<void> {
   }
   await printStackHealth();
   console.log("");
-  console.log(c.dim(`  se algum serviço vier ✗, aguarde alguns segundos e rode \`${brand.name} docker stack status\`.`));
-  console.log(c.dim(`  1º acesso ao Portainer pede setup de admin — abra ${PORTAINER_URL} e crie o usuário.`));
+  console.log(
+    c.dim(
+      `  se algum serviço vier ✗, aguarde alguns segundos e rode \`${brand.name} docker stack status\`.`,
+    ),
+  );
+  console.log(
+    c.dim(`  1º acesso ao Portainer pede setup de admin — abra ${PORTAINER_URL} e crie o usuário.`),
+  );
 }
 
 async function stackDown(): Promise<void> {
@@ -285,7 +307,9 @@ async function runCompose(
 ): Promise<void> {
   requireDocker();
   if (!COMPOSE_ACTIONS.includes(action as ComposeAction)) {
-    console.error(`${c.red(sym.err)} ação inválida "${action}" — use: ${COMPOSE_ACTIONS.join(" | ")}`);
+    console.error(
+      `${c.red(sym.err)} ação inválida "${action}" — use: ${COMPOSE_ACTIONS.join(" | ")}`,
+    );
     process.exit(1);
   }
   const file = opts.file ? resolve(opts.file) : undefined;
@@ -308,7 +332,10 @@ async function runCompose(
 
 /** `"a,b, c"` → `["a","b","c"]` (vazio → `[]`). */
 function splitList(v?: string): string[] {
-  return (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return (v ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 async function runCreate(opts: {
@@ -325,25 +352,39 @@ async function runCreate(opts: {
 
   const image =
     opts.image?.trim() ||
-    (await input({
-      message: "Imagem (ex.: redis:7, node:20)",
-      validate: (v) => v.trim().length > 0 || "obrigatório",
-    })).trim();
+    (
+      await input({
+        message: "Imagem (ex.: redis:7, node:20)",
+        validate: (v) => v.trim().length > 0 || "obrigatório",
+      })
+    ).trim();
 
   const interactive = !opts.image && process.stdout.isTTY;
   const name =
     opts.name?.trim() ||
-    (interactive ? (await input({ message: "Nome do container (opcional)", default: "" })).trim() : "");
+    (interactive
+      ? (await input({ message: "Nome do container (opcional)", default: "" })).trim()
+      : "");
   const ports = opts.port
     ? splitList(opts.port)
     : interactive
-      ? splitList(await input({ message: "Portas host:container, separadas por vírgula (opcional)", default: "" }))
+      ? splitList(
+          await input({
+            message: "Portas host:container, separadas por vírgula (opcional)",
+            default: "",
+          }),
+        )
       : [];
   const env = Object.fromEntries(
     (opts.env
       ? splitList(opts.env)
       : interactive
-        ? splitList(await input({ message: "Env KEY=VALUE, separadas por vírgula (opcional)", default: "" }))
+        ? splitList(
+            await input({
+              message: "Env KEY=VALUE, separadas por vírgula (opcional)",
+              default: "",
+            }),
+          )
         : []
     )
       .map((pair) => pair.split("="))
@@ -353,7 +394,12 @@ async function runCreate(opts: {
   const volumes = opts.volume
     ? splitList(opts.volume)
     : interactive
-      ? splitList(await input({ message: "Volumes host:container, separados por vírgula (opcional)", default: "" }))
+      ? splitList(
+          await input({
+            message: "Volumes host:container, separados por vírgula (opcional)",
+            default: "",
+          }),
+        )
       : [];
 
   const spec: RunSpec = {
@@ -365,12 +411,16 @@ async function runCreate(opts: {
     detach: opts.detach ?? true,
   };
 
-  console.log(`  ${c.dim(`docker run ${spec.detach ? "-d " : ""}${name ? `--name ${name} ` : ""}${image}`)}`);
+  console.log(
+    `  ${c.dim(`docker run ${spec.detach ? "-d " : ""}${name ? `--name ${name} ` : ""}${image}`)}`,
+  );
   const ok =
     opts.yes === true ||
     (interactive && (await confirm({ message: "Criar e subir o container?", default: true })));
   if (!ok) {
-    console.log(c.dim(interactive ? "cancelado." : "sem TTY — passe `-y` pra criar sem confirmação."));
+    console.log(
+      c.dim(interactive ? "cancelado." : "sem TTY — passe `-y` pra criar sem confirmação."),
+    );
     return;
   }
 
@@ -416,10 +466,12 @@ async function runOrquest(
 
   const task =
     instruction?.trim() ||
-    (await input({
-      message: "O que orquestrar? (linguagem natural)",
-      validate: (v) => v.trim().length > 0 || "descreva a tarefa",
-    })).trim();
+    (
+      await input({
+        message: "O que orquestrar? (linguagem natural)",
+        validate: (v) => v.trim().length > 0 || "descreva a tarefa",
+      })
+    ).trim();
 
   section("docker orquest", opts.dryRun ? `${task} (dry-run)` : task);
   const code = await runOperator(
@@ -433,15 +485,21 @@ async function runOrquest(
 
 const CLUSTER_ACTIONS: readonly ClusterAction[] = ["up", "down", "status", "scale"];
 
-async function runCluster(action: string, arg: string | undefined, opts: { dryRun?: boolean }): Promise<void> {
+async function runCluster(
+  action: string,
+  arg: string | undefined,
+  opts: { dryRun?: boolean },
+): Promise<void> {
   requireDocker();
   if (!CLUSTER_ACTIONS.includes(action as ClusterAction)) {
-    console.error(`${c.red(sym.err)} ação inválida "${action}" — use: ${CLUSTER_ACTIONS.join(" | ")}`);
+    console.error(
+      `${c.red(sym.err)} ação inválida "${action}" — use: ${CLUSTER_ACTIONS.join(" | ")}`,
+    );
     process.exit(1);
   }
   const session = await requireActiveSession();
   const gateway = createDockerGateway();
-  const repo = createSessionRepository();
+  const repo = new SessionManager();
 
   if (action === "status") {
     section("docker cluster", `stack ${CLUSTER_STACK}`);
@@ -455,7 +513,11 @@ async function runCluster(action: string, arg: string | undefined, opts: { dryRu
     }
     const persisted = readClusterState(session);
     if (persisted) {
-      console.log(c.dim(`\n  persistido: ${persisted.services.length} serviço(s), deploy ${persisted.deployedAt}`));
+      console.log(
+        c.dim(
+          `\n  persistido: ${persisted.services.length} serviço(s), deploy ${persisted.deployedAt}`,
+        ),
+      );
     }
     return;
   }
@@ -486,10 +548,12 @@ async function runCluster(action: string, arg: string | undefined, opts: { dryRu
   requireOperator();
   const instruction =
     arg?.trim() ||
-    (await input({
-      message: "O que subir no cluster? (ex.: api + worker + redis + postgres)",
-      validate: (v) => v.trim().length > 0 || "descreva os serviços",
-    })).trim();
+    (
+      await input({
+        message: "O que subir no cluster? (ex.: api + worker + redis + postgres)",
+        validate: (v) => v.trim().length > 0 || "descreva os serviços",
+      })
+    ).trim();
 
   section("docker cluster", `up — ${instruction}`);
   const init = await gateway.swarmInit();
@@ -502,14 +566,19 @@ async function runCluster(action: string, arg: string | undefined, opts: { dryRu
     cwd: session.projectPath,
   });
   if (code !== 0) {
-    console.warn(`${c.yellow(sym.warn)} operador saiu com código ${code} — validando o estado real...`);
+    console.warn(
+      `${c.yellow(sym.warn)} operador saiu com código ${code} — validando o estado real...`,
+    );
   }
 
   // Validação: pergunta ao Docker (não confia na saída do operador) e persiste.
   const live = await gateway.stackServices(CLUSTER_STACK);
-  const services = live.status === "ok" ? parseStackServices(live.stdout ?? "").map((s) => s.name) : [];
+  const services =
+    live.status === "ok" ? parseStackServices(live.stdout ?? "").map((s) => s.name) : [];
   if (services.length === 0) {
-    console.error(`${c.red(sym.err)} nenhum serviço na stack ${CLUSTER_STACK} — o deploy não completou.`);
+    console.error(
+      `${c.red(sym.err)} nenhum serviço na stack ${CLUSTER_STACK} — o deploy não completou.`,
+    );
     process.exit(1);
   }
   await persistClusterState(repo, session, {
@@ -517,9 +586,13 @@ async function runCluster(action: string, arg: string | undefined, opts: { dryRu
     services,
     composePath: "(gerado pelo operador)",
     deployedAt: new Date().toISOString(),
-  }).catch((err) => console.warn(`${c.yellow(sym.warn)} não persisti o estado: ${(err as Error).message}`));
+  }).catch((err) =>
+    console.warn(`${c.yellow(sym.warn)} não persisti o estado: ${(err as Error).message}`),
+  );
 
-  console.log(`\n  ${c.green(sym.ok)} stack ${CLUSTER_STACK} — ${services.length} serviço(s): ${services.join(", ")}`);
+  console.log(
+    `\n  ${c.green(sym.ok)} stack ${CLUSTER_STACK} — ${services.length} serviço(s): ${services.join(", ")}`,
+  );
 }
 
 // ─── portainer ───────────────────────────────────────────────────────
@@ -548,22 +621,39 @@ export function registerDockerCommand(program: Command): void {
 
   const stack = cmd
     .command("stack")
-    .description("Stack NIO unificado (gateway · kong · headroom · mcp · portainer) — docker/docker-compose.yml");
-  stack.command("up", { isDefault: true }).description("Sobe o stack inteiro (build do gateway) + registra o MCP").action(stackUp);
+    .description(
+      "Stack NIO unificado (gateway · kong · headroom · mcp · portainer) — docker/docker-compose.yml",
+    );
+  stack
+    .command("up", { isDefault: true })
+    .description("Sobe o stack inteiro (build do gateway) + registra o MCP")
+    .action(stackUp);
   stack.command("down").description("Derruba o stack inteiro").action(stackDown);
   stack.command("status").description("ps + health dos 5 serviços").action(stackStatus);
 
   const toolkit = cmd
     .command("toolkit")
     .description("Infra NIO: Docker MCP Gateway + Portainer (docker/docker-compose.yml)");
-  toolkit.command("up", { isDefault: true }).description("Sobe a infra e registra o gateway no opencode.json").action(toolkitUp);
-  toolkit.command("down").description("Derruba a infra e desabilita o MCP no opencode.json").action(toolkitDown);
-  toolkit.command("status").description("Estado dos containers + health dos endpoints").action(toolkitStatus);
+  toolkit
+    .command("up", { isDefault: true })
+    .description("Sobe a infra e registra o gateway no opencode.json")
+    .action(toolkitUp);
+  toolkit
+    .command("down")
+    .description("Derruba a infra e desabilita o MCP no opencode.json")
+    .action(toolkitDown);
+  toolkit
+    .command("status")
+    .description("Estado dos containers + health dos endpoints")
+    .action(toolkitStatus);
 
   const headroom = cmd
     .command("headroom")
     .description("Proxy de compressão de contexto — dormente, opcional pro `nio ai`");
-  headroom.command("up", { isDefault: true }).description("Sobe o container do Headroom").action(headroomUp);
+  headroom
+    .command("up", { isDefault: true })
+    .description("Sobe o container do Headroom")
+    .action(headroomUp);
   headroom.command("down").description("Derruba o container do Headroom").action(headroomDown);
   headroom.command("status").description("O Headroom está no ar?").action(headroomStatus);
 
@@ -597,7 +687,9 @@ export function registerDockerCommand(program: Command): void {
 
   cmd
     .command("orquest [instruction]")
-    .description("Orquestra os serviços do projeto via compose, dirigido pelo operador (linguagem natural)")
+    .description(
+      "Orquestra os serviços do projeto via compose, dirigido pelo operador (linguagem natural)",
+    )
     .option("--dry-run", "gera o compose e mostra, sem aplicar")
     .action(runOrquest);
 

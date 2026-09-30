@@ -3,7 +3,7 @@
 // = loop de 10s até Ctrl+C. Auto-install só com `--install` (decisão de escopo).
 import type { Command } from "commander";
 import { loadSession } from "../../lib/auth/cli-session-store.js";
-import { createSessionRepository } from "../../adapters/pg/session-repository.js";
+import { SessionManager } from "../../app/session-manager.js";
 import { createDependencyEventRepository } from "../../adapters/pg/dependency-event-repository.js";
 import { DependencyWatcher, type TickResult } from "../../app/dependency-watcher.js";
 import type { Session } from "../../core/types.js";
@@ -19,7 +19,7 @@ async function requireActiveSession(): Promise<Session> {
   }
   let session: Session | null;
   try {
-    session = await createSessionRepository().findActiveByUser(stored.userId);
+    session = await new SessionManager().findActive(stored.userId);
   } catch (err) {
     console.error(`${c.red(sym.err)} Falha no banco: ${(err as Error).message}`);
     process.exit(1);
@@ -38,13 +38,19 @@ async function requireActiveSession(): Promise<Session> {
 /** Imprime o resultado de um ciclo de scan. */
 function renderTick(result: TickResult): void {
   if (result.recorded.length === 0 && result.missing.length === 0) {
-    console.log(`  ${c.dim(sym.bullet)} nada novo (${result.scanned} deps declaradas, tudo instalado)`);
+    console.log(
+      `  ${c.dim(sym.bullet)} nada novo (${result.scanned} deps declaradas, tudo instalado)`,
+    );
     return;
   }
   for (const dep of result.missing) {
-    const isNew = result.recorded.some((e) => e.dependencyName === dep.name && e.filePath === dep.filePath);
+    const isNew = result.recorded.some(
+      (e) => e.dependencyName === dep.name && e.filePath === dep.filePath,
+    );
     const tag = isNew ? c.yellow("novo") : c.dim("pendente");
-    console.log(`  ${c.yellow(sym.arrow)} ${dep.name} ${c.dim(`(${dep.type} · ${dep.filePath})`)} ${tag}`);
+    console.log(
+      `  ${c.yellow(sym.arrow)} ${dep.name} ${c.dim(`(${dep.type} · ${dep.filePath})`)} ${tag}`,
+    );
   }
   for (const type of result.installed) {
     console.log(`  ${c.green(sym.ok)} instalado: dependências ${type}`);
@@ -61,7 +67,10 @@ function makeWatcher(session: Session, autoInstall: boolean): DependencyWatcher 
 
 async function runScan(opts: { install?: boolean }): Promise<void> {
   const session = await requireActiveSession();
-  section("Dependências", `scan de ${c.dim(session.projectPath)}${opts.install ? " (auto-install)" : ""}`);
+  section(
+    "Dependências",
+    `scan de ${c.dim(session.projectPath)}${opts.install ? " (auto-install)" : ""}`,
+  );
   try {
     const result = await makeWatcher(session, Boolean(opts.install)).tick(session);
     renderTick(result);
@@ -85,10 +94,14 @@ async function runWatch(opts: { install?: boolean }): Promise<void> {
   });
 
   try {
-    await makeWatcher(session, Boolean(opts.install)).watch(session, controller.signal, (result) => {
-      console.log(c.dim(`— ${new Date().toLocaleTimeString()}`));
-      renderTick(result);
-    });
+    await makeWatcher(session, Boolean(opts.install)).watch(
+      session,
+      controller.signal,
+      (result) => {
+        console.log(c.dim(`— ${new Date().toLocaleTimeString()}`));
+        renderTick(result);
+      },
+    );
   } catch (err) {
     console.error(`${c.red(sym.err)} Falha no watch: ${(err as Error).message}`);
     process.exit(1);
@@ -96,7 +109,9 @@ async function runWatch(opts: { install?: boolean }): Promise<void> {
 }
 
 export function registerDepsCommand(program: Command): void {
-  const cmd = program.command("deps").description("Detecta e (opt-in) instala dependências da sessão ativa");
+  const cmd = program
+    .command("deps")
+    .description("Detecta e (opt-in) instala dependências da sessão ativa");
 
   cmd
     .command("scan", { isDefault: true })
