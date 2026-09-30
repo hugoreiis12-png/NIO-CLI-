@@ -68,6 +68,15 @@ jobs:
       - name: Typecheck
         run: bunx tsc --noEmit
 
+      - name: Formatação (Biome)
+        # Só o FORMATTER (whitespace/aspas/wrap) — determinístico, zero achado
+        # pendente agora que o repo foi formatado (§10.1). O LINTER do Biome já
+        # está configurado em biome.json (preset "recommended") mas tem ~400
+        # achados pré-existentes (código real, não estilo) que exigem triagem
+        # própria — não é gate ainda, de propósito, pra não bloquear release por
+        # dívida que já existia. Rode `bunx biome lint .` localmente pra ver.
+        run: bunx biome format .
+
       - name: Build
         run: bun run build
 
