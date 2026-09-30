@@ -81,10 +81,13 @@ export async function compactInput(text: string, deps: CompactDeps = {}): Promis
     const chunks = chunkByTokens(current, maxChunk);
     deps.onProgress?.(chunks.length);
     if (chunks.length <= 1) break; // não dá pra reduzir mais (guard anti-loop)
-    const summaries: string[] = [];
-    for (const chunk of chunks) {
-      summaries.push(stripFence(await complete(chunk, { system: COMPACT_PROMPT })).trim());
-    }
+    // `Promise.all` preserva a ordem do ARRAY, não a de conclusão — o reduce
+    // continua determinístico mesmo que um chunk responda antes do outro.
+    const summaries = await Promise.all(
+      chunks.map(async (chunk) =>
+        stripFence(await complete(chunk, { system: COMPACT_PROMPT })).trim(),
+      ),
+    );
     current = summaries.join('\n\n');
   }
   return current;

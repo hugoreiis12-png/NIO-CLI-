@@ -2,7 +2,10 @@ import { test, expect } from 'bun:test';
 import { chunkByTokens, compactInput } from './map-reduce.js';
 
 test('chunkByTokens: respeita o teto e cobre todo o texto', () => {
-  const text = Array.from({ length: 20 }, (_, i) => `paragrafo numero ${i} com algum conteudo`).join('\n\n');
+  const text = Array.from(
+    { length: 20 },
+    (_, i) => `paragrafo numero ${i} com algum conteudo`,
+  ).join('\n\n');
   const chunks = chunkByTokens(text, 20); // 20 tokens ~= 80 chars por chunk
   expect(chunks.length).toBeGreaterThan(1);
   for (const c of chunks) expect(c.length).toBeLessThanOrEqual(20 * 4);
@@ -52,4 +55,30 @@ test('compactInput: cap de profundidade — não loopa se o resumo continua gran
   });
   expect(calls).toBeGreaterThan(0);
   expect(typeof out).toBe('string'); // termina (não trava) mesmo sem convergir
+});
+test('compactInput: mapeia os chunks em PARALELO, preservando a ordem no reduce', async () => {
+  const big = 'D'.repeat(4000);
+  let emVoo = 0;
+  let pico = 0;
+  let contador = 0;
+  const out = await compactInput(big, {
+    threshold: 100,
+    maxChunkTokens: 100, // ~10 chunks
+    complete: async () => {
+      emVoo++;
+      pico = Math.max(pico, emVoo);
+      const meu = ++contador;
+      // Delay escalonado de propósito: chunks pares terminam antes dos ímpares.
+      // Se o reduce juntasse por ordem de CONCLUSÃO em vez de ordem do array,
+      // R2 apareceria antes de R1 no resultado.
+      await new Promise((r) => setTimeout(r, meu % 2 === 0 ? 5 : 25));
+      emVoo--;
+      return `R${meu}`;
+    },
+  });
+  // Serial nunca teria mais de 1 chamada em voo ao mesmo tempo — é a prova real
+  // de concorrência, não um limiar de tempo (que seria frágil sob CI lento).
+  expect(pico).toBeGreaterThan(1);
+  // Promise.all preserva a ordem do ARRAY de entrada, não a ordem de conclusão.
+  expect(out.startsWith('R1')).toBe(true);
 });
