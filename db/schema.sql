@@ -283,6 +283,81 @@ COMMENT ON TABLE login_ip_events IS 'Auditoria: IPs de login por usuário. Só r
 COMMENT ON TABLE auth_events IS 'Trilha auditável de auth (append-only). Retenção 180 d (gateway). Ver ADR 0012.';
 
 -- ───────────────────────────────────────────────
+-- Tabela: Tasks (execução durável) — migration 0012
+-- ───────────────────────────────────────────────
+-- Uma request do usuário vira unidade de trabalho persistente, executada pelo
+-- `nio-worker`. Checkpoint-and-resume: retoma no primeiro step pendente, não faz
+-- replay. `session_id` é PROVENIÊNCIA (ON DELETE SET NULL) — trocar ou apagar a
+-- sessão não mata a task; por isso `profile` é snapshot.
+CREATE TABLE IF NOT EXISTS tasks (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id    UUID REFERENCES sessions(id) ON DELETE SET NULL,
+    user_id       BIGINT NOT NULL REFERENCES user_cli(id) ON DELETE CASCADE,
+    profile       TEXT NOT NULL CHECK (profile IN ('fullstack','analyst','scientist','dba','qa','bi')),
+    goal          TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','planning','running','waiting_approval','validating','completed','failed','cancelled')),
+    current_step  INTEGER,
+    max_steps     INTEGER NOT NULL DEFAULT 25 CHECK (max_steps > 0),
+    working_set   JSONB NOT NULL DEFAULT '{}',
+    engine_session_id TEXT,
+    result        TEXT,
+    error         TEXT,
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    locked_by     TEXT,
+    locked_at     TIMESTAMPTZ,
+    fence         BIGINT NOT NULL DEFAULT 0, -- fencing token do lease
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at  TIMESTAMPTZ,
+    -- migration 0013: ALTER TABLE anexa no fim — a ordem aqui espelha isso de propósito
+    awaiting_kind    TEXT CHECK (awaiting_kind IN ('approval','question')),
+    awaiting_subject TEXT,
+    approved_tools   JSONB NOT NULL DEFAULT '[]',
+    -- migration 0014: quem executa (agent = worker headless; chat = a TUI)
+    kind             TEXT NOT NULL DEFAULT 'agent' CHECK (kind IN ('agent','chat'))
+);
+
+CREATE INDEX IF NOT EXISTS tasks_queue_idx ON tasks (user_id, created_at) WHERE status = 'pending' AND kind = 'agent';
+CREATE INDEX IF NOT EXISTS tasks_lease_idx ON tasks (locked_at) WHERE status IN ('planning','running','validating');
+CREATE INDEX IF NOT EXISTS tasks_user_idx    ON tasks (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS tasks_session_idx ON tasks (session_id);
+
+DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
+CREATE TRIGGER update_tasks_updated_at
+    BEFORE UPDATE ON tasks
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trilha da execução. (task_id, step_number, attempt) é único: retry acrescenta
+-- linha em vez de sobrescrever — o que falhou na tentativa 1 é o que mais importa.
+CREATE TABLE IF NOT EXISTS task_steps (
+    id           BIGSERIAL PRIMARY KEY,
+    task_id      UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    step_number  INTEGER NOT NULL, -- numeração com folga (10, 20, 30…)
+    attempt      INTEGER NOT NULL DEFAULT 1,
+    name         TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','running','done','failed','skipped')),
+    input        JSONB,
+    output       JSONB,
+    tool_calls   JSONB,
+    tokens_in    INTEGER,
+    tokens_out   INTEGER,
+    error        TEXT,
+    started_at   TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    CONSTRAINT task_steps_unique UNIQUE (task_id, step_number, attempt)
+);
+
+CREATE INDEX IF NOT EXISTS task_steps_task_idx ON task_steps (task_id, step_number, attempt);
+CREATE INDEX IF NOT EXISTS task_steps_pending_idx ON task_steps (task_id, step_number) WHERE status = 'pending';
+
+COMMENT ON TABLE tasks IS 'Execução durável: request do usuário como unidade de trabalho persistente. Estado sobrevive ao processo.';
+COMMENT ON COLUMN tasks.session_id IS 'Proveniência, não escopo: trocar de sessão não pausa a task; apagar a sessão não apaga a task.';
+COMMENT ON COLUMN tasks.fence IS 'Fencing token do lease. Toda escrita do worker exige AND fence = $n — worker zumbi não grava.';
+COMMENT ON TABLE task_steps IS 'Trilha por step. (task_id, step_number, attempt) é único — retry acrescenta linha, não sobrescreve.';
+
+
+-- ───────────────────────────────────────────────
 -- Least-privilege: roles nio_cli / nio_gateway (migration 0008 · TP-1)
 -- ───────────────────────────────────────────────
 -- Banco novo de schema.sql: cria os group roles e os grants. O setup dos LOGIN
@@ -303,3 +378,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON dax_doc_chunk, dax_query_template TO nio
 GRANT USAGE, SELECT ON SEQUENCE dax_doc_chunk_id_seq, dax_query_template_id_seq TO nio_cli;
 GRANT SELECT, INSERT, UPDATE ON agent_lesson TO nio_cli;
 GRANT USAGE, SELECT ON SEQUENCE agent_lesson_id_seq TO nio_cli;
+
+-- nio_worker (migration 0012): executa LLM e shell — NADA de user_cli/auth_sessions.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nio_worker') THEN CREATE ROLE nio_worker NOLOGIN; END IF;
+END $$;
+GRANT USAGE ON SCHEMA public TO nio_worker;
+GRANT SELECT, INSERT, UPDATE ON tasks, task_steps TO nio_worker;
+GRANT USAGE, SELECT ON SEQUENCE task_steps_id_seq TO nio_worker;
+GRANT SELECT ON sessions TO nio_worker;
+GRANT SELECT, INSERT, UPDATE ON tasks, task_steps TO nio_cli;
+GRANT USAGE, SELECT ON SEQUENCE task_steps_id_seq TO nio_cli;
