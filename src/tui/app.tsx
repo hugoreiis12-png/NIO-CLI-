@@ -405,9 +405,37 @@ ${enriched}`;
     }
   };
 
+  /**
+   * Resposta cortada: envia automaticamente um prompt de continuação MESMA SESSÃO.
+   * Não precisa de sessão nova — o problema é UMA geração passando do teto de output,
+   * não o histórico inteiro. Recuperação transparente: o usuário não vê.
+   */
+  const continueFromOutputLength = async () => {
+    const promptContinuar =
+      'Sua resposta anterior foi cortada por exceder o teto de tokens de saída. ' +
+      'Continue EXATAMENTE de onde parou, sem repetir o que já foi dito.';
+    try {
+      setChat((prev) => ({ ...prev, error: null, busy: false }));
+      toast('continuando a resposta cortada…');
+      await handle.client.session.prompt({
+        path: { id: sessionId.current },
+        body: { model, agent: mode, parts: [{ type: 'text', text: promptContinuar }] },
+      });
+    } catch (err) {
+      tlog('recuperação de output length falhou', (err as Error).message);
+      toast('não consegui continuar a resposta — tente de novo', 'warning');
+    }
+  };
+
   // Recupera sozinho: deixar o usuário reenviar só repetiria o mesmo erro.
   useEffect(() => {
     if (chat.error?.name === 'ContextOverflowError') void recoverFromOverflow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.error?.name]);
+
+  // Continua automaticamente de resposta cortada (output length).
+  useEffect(() => {
+    if (chat.error?.name === 'MessageOutputLengthError') void continueFromOutputLength();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat.error?.name]);
 
