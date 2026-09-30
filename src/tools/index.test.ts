@@ -31,6 +31,7 @@ const NIO_CLI_TOOLS = [
   'nio_session_activate',
   'nio_session_create',
   'nio_session_list',
+  'nio_task_approve',
   'nio_validate_plan',
 ];
 

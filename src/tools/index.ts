@@ -19,6 +19,7 @@ import * as fabricQuery from './fabric-query.js';
 import * as fabricSchemaSync from './fabric-schema-sync.js';
 import * as fabricWorkspaces from './fabric-workspaces.js';
 import * as fabricDatasets from './fabric-datasets.js';
+import * as taskApprove from './task-approve.js';
 
 export interface ToolContext {
   /** Identidade v2 resolvida da sessão local (~/.nio/session.json). */
@@ -50,6 +51,7 @@ export const tools: Record<string, ToolModule> = {
   [fabricSchemaSync.definition.name]: fabricSchemaSync,
   [fabricWorkspaces.definition.name]: fabricWorkspaces,
   [fabricDatasets.definition.name]: fabricDatasets,
+  [taskApprove.definition.name]: taskApprove,
 };
 
 export const toolDefinitions: Tool[] = Object.values(tools).map((t) => t.definition);
