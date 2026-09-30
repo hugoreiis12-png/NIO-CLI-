@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { skillsDir } from '../skills/skills.js';
@@ -38,10 +38,62 @@ export interface ExecJob {
   error?: string;
 }
 
+/**
+ * Retenção do histórico de jobs em disco. Sem isto o diretório cresce para
+ * sempre: um job por `/implement`, nunca apagado.
+ *
+ * 7 dias cobre o uso real (consultar o resultado de uma execução recente) sem
+ * virar arquivo morto. O job em si é descartável — o que importa ficou no
+ * worktree e no git.
+ */
+export const EXEC_JOB_RETENTION_DAYS = 7;
+
+/**
+ * Teto do cache em memória. O servidor MCP é long-lived: sem o teto, cada job
+ * da sessão fica retido até o processo morrer. O disco continua sendo a fonte,
+ * então despejar aqui não perde nada.
+ */
+export const MAX_JOBS_IN_MEMORY = 50;
+
 const jobs = new Map<string, ExecJob>();
 
 function jobsDir(): string {
   return homePath('exec-jobs');
+}
+
+/**
+ * Apaga os `.json` mais velhos que a retenção. Best-effort e silencioso: falhar
+ * em limpar não pode atrapalhar uma execução.
+ */
+export function pruneOldJobs(dir: string = jobsDir(), agora: number = Date.now()): number {
+  const corte = agora - EXEC_JOB_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  let apagados = 0;
+  try {
+    for (const nome of readdirSync(dir)) {
+      if (!nome.endsWith('.json')) continue;
+      const alvo = join(dir, nome);
+      try {
+        if (statSync(alvo).mtimeMs < corte) {
+          unlinkSync(alvo);
+          apagados++;
+        }
+      } catch {
+        /* sumiu no meio do caminho — outro processo já limpou */
+      }
+    }
+  } catch {
+    /* diretório ainda não existe */
+  }
+  return apagados;
+}
+
+/** Descarta as entradas mais antigas do cache quando passa do teto. */
+function capMemoria(): void {
+  while (jobs.size > MAX_JOBS_IN_MEMORY) {
+    const maisAntigo = jobs.keys().next();
+    if (maisAntigo.done) return;
+    jobs.delete(maisAntigo.value);
+  }
 }
 
 function jobPath(id: string): string {
@@ -51,6 +103,7 @@ function jobPath(id: string): string {
 /** Persiste o job — o servidor MCP pode reiniciar entre chamadas. */
 function save(job: ExecJob): ExecJob {
   jobs.set(job.id, job);
+  capMemoria();
   try {
     mkdirSync(jobsDir(), { recursive: true });
     writeFileSync(jobPath(job.id), JSON.stringify(job, null, 2) + '\n', 'utf8');
@@ -208,6 +261,7 @@ async function runEngine(job: ExecJob, prompt: string, opts: EngineOpts = {}): P
 }
 
 function newJob(worktree: string): ExecJob {
+  pruneOldJobs();
   return {
     id: randomUUID().slice(0, 8),
     state: 'running',
