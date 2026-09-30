@@ -56,6 +56,15 @@ export interface ProfileDefinition {
   inheritGlobalMcpIds?: string[];
   envVars?: Record<string, string>;
   aliases?: Record<string, string>;
+  /**
+   * Tools que o `nio-worker` pode executar sem aprovação humana. Glob simples
+   * (`nio_fabric_*`); o que não casar põe a task em `waiting_approval`.
+   *
+   * **Obrigatório de propósito**: é o que impede um perfil novo de nascer sem
+   * allowlist e virar auto-aprova-tudo por omissão. Lista vazia é uma escolha
+   * explícita (tudo pede aprovação), não um esquecimento.
+   */
+  autoApprove: string[];
 }
 
 /**

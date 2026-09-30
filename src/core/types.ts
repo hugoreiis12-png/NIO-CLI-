@@ -21,6 +21,41 @@ export type Ide = 'terminal' | 'vscode' | 'cursor' | 'other';
 /** `dependency_events.dependency_type` — ecossistema da dependência detectada. */
 export type DependencyType = 'npm' | 'pip' | 'cargo' | 'gem' | 'composer' | 'unknown';
 
+/**
+ * `tasks.status` — ciclo de vida da execução durável.
+ *
+ * `planning` existe porque os steps não são conhecidos antes de alguém gerá-los;
+ * `waiting_approval` é o human-in-the-loop (vale em todo perfil); e o caminho de
+ * volta a `pending` cobre a lease vencida — sem ele um worker morto trava a task
+ * em `running` para sempre.
+ */
+export type TaskStatus =
+  | 'pending'
+  | 'planning'
+  | 'running'
+  | 'waiting_approval'
+  | 'validating'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+/**
+ * `tasks.awaiting_kind` — por que a task estacionou. Permissão de tool é
+ * destravável com `nio task approve`; pergunta do motor, não (ninguém responde
+ * headless) — a distinção existe pra não prometer uma destrava que não funciona.
+ */
+export type AwaitingKind = 'approval' | 'question';
+
+/**
+ * `tasks.kind` — quem executa. `agent` é do `nio-worker` (headless, permissão
+ * estaciona); `chat` é da TUI, em processo, com humano na frente (permissão vai
+ * ao modal). O worker NUNCA reivindica `chat`: re-executaria o turno do usuário.
+ */
+export type TaskKind = 'agent' | 'chat';
+
+/** `task_steps.status` — a espera por tool vive aqui, não no status da task. */
+export type StepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped';
+
 // ─── Config da sessão (sessions.config JSONB) ──────────────────────────
 
 /**

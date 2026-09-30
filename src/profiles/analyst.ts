@@ -1,6 +1,7 @@
 import type { ProfileDefinition } from '../core/environment.js';
 import { pythonToolchain } from './toolchains.js';
 import { postgresMcp, excelMcp } from './mcps.js';
+import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 
 /**
  * Analyst — análise de dados em Python/SQL. Postgres pro operador consultar +
@@ -15,4 +16,5 @@ export const analystProfile: ProfileDefinition = {
   frameworks: ['pandas', 'jupyter'],
   mcps: [postgresMcp, excelMcp],
   inheritGlobalMcpIds: ['excel'],
+  autoApprove: ANALYTICS_AUTO_APPROVE,
 };

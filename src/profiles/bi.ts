@@ -1,6 +1,7 @@
 import type { ProfileDefinition } from '../core/environment.js';
 import { powerbiMcp, excelMcp } from './mcps.js';
 import { postgresqlClientToolchain, powerbiDesktopToolchain } from './toolchains.js';
+import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 
 /**
  * BI — business intelligence (SQL/DAX, modelagem PowerBI). Toolchains locais
@@ -15,4 +16,5 @@ export const biProfile: ProfileDefinition = {
   frameworks: ['powerbi'],
   mcps: [powerbiMcp, excelMcp],
   inheritGlobalMcpIds: ['excel'],
+  autoApprove: ANALYTICS_AUTO_APPROVE,
 };

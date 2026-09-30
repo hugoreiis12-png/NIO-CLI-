@@ -1,6 +1,7 @@
 import type { ProfileDefinition } from '../core/environment.js';
 import { postgresMcp, excelMcp } from './mcps.js';
 import { postgresqlClientToolchain } from './toolchains.js';
+import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 
 /**
  * Perfil DBA — administração de banco. Primeira definição de ponta a ponta
@@ -22,4 +23,5 @@ export const dbaProfile: ProfileDefinition = {
   inheritGlobalMcpIds: ['excel'],
   envVars: { PGCLIENTENCODING: 'UTF8' },
   aliases: { pg: 'psql' },
+  autoApprove: ANALYTICS_AUTO_APPROVE,
 };

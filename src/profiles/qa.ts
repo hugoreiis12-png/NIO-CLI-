@@ -1,5 +1,6 @@
 import type { ProfileDefinition } from '../core/environment.js';
 import { nodeToolchain } from './toolchains.js';
+import { BASE_AUTO_APPROVE } from './auto-approve.js';
 
 /** QA — testes e qualidade sobre Node (Playwright/Vitest). */
 export const qaProfile: ProfileDefinition = {
@@ -9,4 +10,5 @@ export const qaProfile: ProfileDefinition = {
   frameworks: ['playwright', 'vitest'],
   mcps: [],
   aliases: { e2e: 'npx playwright test' },
+  autoApprove: BASE_AUTO_APPROVE,
 };
