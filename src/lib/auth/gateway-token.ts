@@ -11,9 +11,10 @@
  * corrida de dois processos gerando tokens diferentes ao mesmo tempo.
  */
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile, chmod } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { homePath } from '../../brand.js';
+import { brand, homePath } from '../../brand.js';
+import { hardenSecretFile } from '../secure-file.js';
 
 export const GATEWAY_TOKEN_FILE = homePath('gateway.token');
 
@@ -32,10 +33,12 @@ export async function getOrCreateGatewayToken(file: string = GATEWAY_TOKEN_FILE)
   await mkdir(dirname(file), { recursive: true, mode: 0o700 });
   // `mode` fecha a janela do arquivo novo em 0644 (auditoria L-4).
   await writeFile(file, token + '\n', { encoding: 'utf8', mode: 0o600 });
-  try {
-    await chmod(file, 0o600);
-  } catch {
-    // chmod pode falhar em Windows — ignoramos silenciosamente.
+  const hardened = hardenSecretFile(file);
+  if (hardened.outcome !== 'ok') {
+    console.error(
+      `[${brand.mcpBinName}] AVISO: não consegui restringir "${file}" ao dono ` +
+        `(${hardened.error ?? hardened.outcome}).`,
+    );
   }
   return token;
 }

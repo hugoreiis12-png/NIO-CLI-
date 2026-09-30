@@ -28,7 +28,11 @@ describe('getOrCreateGatewayToken', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+    // `hardenSecretFile` no Windows spawna `icacls` (QP-3) — bem mais caro que o
+    // `chmodSync` que ele substituiu. Isolado passa em ~100ms; sob a suíte cheia
+    // (contenção de processo/disco) já estourou os 5s default. Mesmo raciocínio
+    // do § 11.1: timeout é honestidade sobre o custo de IO, não tapa-buraco.
+  }, 30_000);
 
   test('dois arquivos diferentes geram tokens diferentes', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'nio-gw-token-'));
@@ -39,5 +43,5 @@ describe('getOrCreateGatewayToken', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+  }, 30_000); // idem: 2 spawns de icacls neste teste, mesmo risco de contenção.
 });
