@@ -10,7 +10,7 @@
 import { useCallback, useRef } from 'react';
 import type { Profile } from '../core/types.js';
 import type { ToolCallTrace } from '../core/tasks.js';
-import { beginTurn, endTurn, abortTurn, type TurnRef } from '../app/turn-task.js';
+import { beginTurn, endTurn, abortTurn, delegateTurn, type TurnRef } from '../app/turn-task.js';
 import { loadSession } from '../lib/auth/cli-session-store.js';
 import { tlog } from './debug.js';
 
@@ -28,6 +28,8 @@ export interface TurnTaskApi {
   abort: (motivo: string) => void;
   /** Retorna o ID do turno (task) atual, ou vazio se nenhum em andamento. */
   currentTaskId: () => string;
+  /** Delega a task ao worker (muda status p/ running, persiste no banco). */
+  delegate: (engineSessionId: string) => void;
 }
 
 export interface UseTurnTaskOpts {
@@ -80,5 +82,23 @@ export function useTurnTask({ session }: UseTurnTaskOpts): TurnTaskApi {
     return ref.current?.taskId ?? '';
   }, []);
 
-  return { begin, end, abort, currentTaskId };
+  const delegate = useCallback((engineSessionId: string): void => {
+    const atual = ref.current;
+    if (!atual) return;
+    // Persiste a delegação: task muda pra 'running' no banco
+    // Worker na próxima volta reivindica e retoma via engineSessionId
+    void (async () => {
+      try {
+        const stored = await loadSession();
+        if (!stored) return;
+        // Delega a task: muda status de 'planning' → 'running' e persiste a sessão
+        // do motor para que o worker possa re-attach.
+        await delegateTurn(atual, engineSessionId);
+      } catch (err) {
+        tlog('delegação de turno falhou', (err as Error).message);
+      }
+    })();
+  }, []);
+
+  return { begin, end, abort, currentTaskId, delegate };
 }

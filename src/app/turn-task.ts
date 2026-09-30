@@ -81,6 +81,24 @@ export async function beginTurn(
   }
 }
 
+/** Delega a task ao worker: muda status de 'planning' → 'running' e persiste engineSessionId. */
+export async function delegateTurn(
+  turnRef: TurnRef,
+  engineSessionId: string,
+  deps: TurnTaskDeps = {},
+): Promise<void> {
+  try {
+    const tasks = deps.tasks ?? createTaskRepository();
+    const task = await tasks.findById(turnRef.taskId);
+    if (!task) return;
+    // Transição: status='planning' → 'running' + engineSessionId
+    // Worker vai reivindicar e retomar da sessão do motor
+    await tasks.setStatus(task.id, 'running', task.fence, { engineSessionId });
+  } catch {
+    // Falha não aborta o turno — é best-effort
+  }
+}
+
 /** Fecha o turno com o que o motor produziu. Silencioso em qualquer falha. */
 export async function endTurn(
   ref: TurnRef | null,
