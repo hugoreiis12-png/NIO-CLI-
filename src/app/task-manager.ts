@@ -123,8 +123,14 @@ export class TaskManager {
     return task;
   }
 
-  /** Lista para o usuário. Sem `kinds`, mostra só trabalho de agente — turno
-   *  de chat encheria a listagem com cada mensagem já digitada. */
+  /**
+   * Lista para o usuário. Sem `kinds`, mostra só trabalho de agente — turno
+   * de chat encheria a listagem com cada mensagem já digitada.
+   *
+   * kind='chat': criada por `nio ai` inline. Se BAIXA intensidade: executa na TUI.
+   * Se ALTA intensidade: delegada ao worker (Opção A, durable tasks). Worker
+   * reivindica e retoma do último step DONE via engineSessionId.
+   */
   list(userId: number, opts: ListTasksOpts = {}): Promise<Task[]> {
     return this.repo.listByUser(userId, { kinds: ['agent'], ...opts });
   }
