@@ -8,7 +8,8 @@
     "nio": "dist/cli.js",
     "nio-cli": "dist/mcp-server.js",
     "nio-gateway": "dist/gateway/index.js",
-    "nio-lang": "dist/mcp-server-lang.js"
+    "nio-lang": "dist/mcp-server-lang.js",
+    "nio-worker": "dist/worker.js"
   },
   "files": [
     "dist",
@@ -47,7 +48,7 @@
     "nio"
   ],
   "scripts": {
-    "build": "node --input-type=commonjs -e \"fs=require('fs');fs.rmSync('dist',{recursive:true,force:true})\" && tsc && node --input-type=commonjs -e \"const fs=require('fs');fs.cpSync('src/cli/copy','dist/cli/copy',{recursive:true});for(const f of ['cli.js','mcp-server.js','gateway/index.js','mcp-server-lang.js'])fs.chmodSync('dist/'+f,0o755)\"",
+    "build": "node --input-type=commonjs -e \"fs=require('fs');fs.rmSync('dist',{recursive:true,force:true})\" && tsc && node --input-type=commonjs -e \"const fs=require('fs');fs.cpSync('src/cli/copy','dist/cli/copy',{recursive:true});for(const f of ['cli.js','mcp-server.js','gateway/index.js','mcp-server-lang.js','worker.js'])fs.chmodSync('dist/'+f,0o755)\"",
     "gen:docs": "bun run scripts/gen-reference.ts",
     "db:ping": "bun run scripts/db-ping.ts",
     "db:tls": "bash scripts/db-tls-setup.sh",
