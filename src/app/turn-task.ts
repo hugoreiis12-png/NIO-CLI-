@@ -7,8 +7,10 @@
  * fora do ar não pode derrubar o chat, exatamente como o aprendizado de lições
  * (`learnTurn`) já é tratado na TUI. Falhou → devolve `null` e a vida segue.
  *
- * Quem executa é a própria TUI, em processo, com humano na frente. O
- * `nio-worker` nunca reivindica `kind = 'chat'` (migration 0014).
+ * Execução: se BAIXA intensidade, a TUI executa em processo com humano na frente.
+ * Se ALTA intensidade, a TUI delega — o `nio-worker` reivindica e executa
+ * headless (migration 0014 v2). Historicamente, o worker nunca reivindicava chat;
+ * agora reivindica ambas (agent e chat delegadas).
  */
 import type { StepRepository, TaskRepository, ToolCallTrace } from '../core/tasks.js';
 import type { Profile } from '../core/types.js';

@@ -59,6 +59,11 @@ const PROMPT_CONTINUAR =
 /** Sem política injetada nada roda — o cofre nasce fechado. */
 const DECIDER_PADRAO: PermissionDecider = { decide: () => 'park' };
 
+/** Detecta se é uma chat task delegada (não planejada pelo worker). */
+function isChatDelegated(task: Task): boolean {
+  return task.kind === 'chat' && task.status === 'running';
+}
+
 export interface OpencodeExecutorDeps {
   client: OpencodeClient;
   /** Base do `opencode serve` — a resposta a `question` não está no SDK. */

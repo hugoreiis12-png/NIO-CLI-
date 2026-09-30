@@ -3,15 +3,6 @@
  *
  * É um **encoder**, não uma LLM: transforma texto em vetor de 768 dims pra busca
  * por similaridade. Quem gera o DAX segue sendo o Qwen no vLLM.
- *
- * Três decisões que sustentam este arquivo:
- * - **Import dinâmico com especificador em variável**: o `@huggingface/transformers`
- *   é `optionalDependency`; ausente, o CLI segue funcionando e o RAG responde
- *   `unconfigured`. A variável também evita que o `tsc` exija o módulo instalado.
- * - **Carrega uma vez por processo** (singleton) e **nunca no cold-start** — só na
- *   primeira chamada de embedding.
- * - **Prefixos do E5** (`query:` / `passage:`) são obrigatórios neste modelo;
- *   esquecê-los degrada a recuperação em silêncio.
  */
 import { homePath } from '../../brand.js';
 import { NIO_AI_EMBED_MODEL } from '../../lib/clients/client-configs.js';

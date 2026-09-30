@@ -140,6 +140,21 @@ export function App({
   // Dispara e volta — nunca aguarda o banco (ver use-turn-task).
   const turnTask = useTurnTask({ session });
 
+  // Monitora intensidade (tokens/s) — se dispara threshold, dispara delegação (Fase 3).
+  const intensityMetricsRef = useRef({ startTime: 0, tokensSoFar: 0 });
+  const recordTokens = React.useCallback((delta: number) => {
+    if (intensityMetricsRef.current.startTime === 0) {
+      intensityMetricsRef.current.startTime = Date.now();
+    }
+    intensityMetricsRef.current.tokensSoFar += delta;
+  }, []);
+  const shouldDelegate = React.useCallback(() => {
+    const elapsed = (Date.now() - intensityMetricsRef.current.startTime) / 1000;
+    if (elapsed < 1) return false;
+    const tokensPerSec = intensityMetricsRef.current.tokensSoFar / elapsed;
+    return tokensPerSec > 500; // INTENSITY_THRESHOLD_TOKENS_PER_SEC
+  }, []);
+
   useEffect(() => {
     if (splashMs <= 0) return;
     const t = setTimeout(() => setSplash(false), splashMs);
@@ -438,6 +453,21 @@ ${enriched}`;
     if (chat.error?.name === 'MessageOutputLengthError') void continueFromOutputLength();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat.error?.name]);
+
+  // Rastreia tokens de mensagens completadas — usado para detectar intensidade.
+  useEffect(() => {
+    if (!chat.busy && chat.messages.length > 0) {
+      const ultima = chat.messages[chat.messages.length - 1];
+      if (ultima?.role === 'assistant') {
+        for (const parte of ultima.parts) {
+          if (parte.kind === 'step' && parte.step?.tokensOut) {
+            recordTokens(parte.step.tokensOut);
+          }
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.messages.length, chat.busy]);
 
   // Sprint 5: Tab cicla o modo do agente (build ⇄ plan ⇄ …).
   const cycleMode = (reverse: boolean) => {
