@@ -26,6 +26,8 @@ export interface TurnTaskApi {
   }) => void;
   /** Encerra em falha (interrupção do usuário, erro do motor). */
   abort: (motivo: string) => void;
+  /** Retorna o ID do turno (task) atual, ou vazio se nenhum em andamento. */
+  currentTaskId: () => string;
 }
 
 export interface UseTurnTaskOpts {
@@ -74,5 +76,9 @@ export function useTurnTask({ session }: UseTurnTaskOpts): TurnTaskApi {
     if (atual) void abortTurn(atual, motivo);
   }, []);
 
-  return { begin, end, abort };
+  const currentTaskId = useCallback((): string => {
+    return ref.current?.taskId ?? '';
+  }, []);
+
+  return { begin, end, abort, currentTaskId };
 }

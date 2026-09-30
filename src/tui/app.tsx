@@ -421,6 +421,29 @@ ${enriched}`;
   };
 
   /**
+   * Delegação de request intensa ao worker: persistir checkpoint, parar execução local
+   * e deixar o worker retomar duramente. Sem criar sessão nova (sessão já existe e
+   * será re-attached pelo worker).
+   */
+  const delegateToWorker = async () => {
+    const taskId = turnTask.currentTaskId();
+    if (!taskId || !sessionId.current) return;
+    try {
+      setChat((prev) => ({ ...prev, busy: false }));
+      toast(
+        `delegando pro background… rodando via nio-worker\n\nAcompanhe com:\nnio task show ${taskId.slice(0, 8)}`,
+      );
+      // Checkpoint: parar a execução local. A persistência é feita pelo turnTask,
+      // que dispara best-effort ao banco com status='running' pra que o worker
+      // o reivindique na próxima volta (engineSessionId já está persistido).
+      await handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
+    } catch (err) {
+      tlog('delegação falhou', (err as Error).message);
+      toast('não consegui delegar pro background — tente de novo', 'warning');
+    }
+  };
+
+  /**
    * Resposta cortada: envia automaticamente um prompt de continuação MESMA SESSÃO.
    * Não precisa de sessão nova — o problema é UMA geração passando do teto de output,
    * não o histórico inteiro. Recuperação transparente: o usuário não vê.
@@ -468,6 +491,14 @@ ${enriched}`;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat.messages.length, chat.busy]);
+
+  // Monitora intensidade — se passou do threshold, delega pro worker.
+  useEffect(() => {
+    if (chat.busy && shouldDelegate()) {
+      void delegateToWorker();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.busy, chat.messages.length]);
 
   // Sprint 5: Tab cicla o modo do agente (build ⇄ plan ⇄ …).
   const cycleMode = (reverse: boolean) => {
