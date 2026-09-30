@@ -1,0 +1,3 @@
+[test]
+# Isola a suíte do .env real (§ 11.2) — ver scripts/test-env.ts pro porquê.
+preload = ["./scripts/test-env.ts"]

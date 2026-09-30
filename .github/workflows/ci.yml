@@ -41,6 +41,10 @@ jobs:
 
     env:
       NIO_DATABASE_URL: postgres://postgres:postgres@localhost:5432/nio_cli
+      # § 11.2: o preload de `bun test` (scripts/test-env.ts) apaga NIO_DATABASE_URL
+      # por padrão — só integração de propósito, nunca o .env de um dev sem querer.
+      # O CI declara o opt-in explicitamente: este Postgres É efêmero e descartável.
+      NIO_TEST_DB_OK: "1"
       # ≥ 32 chars + variedade — o gateway rejeita segredo fraco (auditoria H-1).
       # Valor de teste efêmero, não é segredo real.
       JWT_SECRET: ci-only-4f9c2ka7Qh1Zpx8Rbn3Vdw6Tty0Lms5Ej  # nio-allow-secret: efêmero do runner
