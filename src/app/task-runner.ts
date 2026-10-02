@@ -75,8 +75,11 @@ export class TaskRunner {
       if (err instanceof LeasePerdidoError) {
         this.log('lease_lost', { taskId: task.id });
       } else {
-        await this.tasks.fail(task.id, task.fence, mensagemDeErro(err));
         this.log('task_failed', { taskId: task.id, error: mensagemDeErro(err) });
+        // Banco fora aqui não pode pular o `release`: o lease vence e o reclaim cobre.
+        await this.tasks.fail(task.id, task.fence, mensagemDeErro(err)).catch((failErr) => {
+          this.log('task_fail_unrecorded', { taskId: task.id, error: mensagemDeErro(failErr) });
+        });
       }
     } finally {
       parar();

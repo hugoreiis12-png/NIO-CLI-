@@ -100,8 +100,8 @@ export function createTaskRepository(): TaskRepository {
   return {
     async create(input: NewTaskInput): Promise<Task> {
       const res = await query<TaskRow>(
-        `INSERT INTO tasks (session_id, user_id, profile, goal, max_steps, kind)
-              VALUES ($1, $2, $3, $4, COALESCE($5, 25), COALESCE($6, 'agent'))
+        `INSERT INTO tasks (session_id, user_id, profile, goal, max_steps, kind, status)
+              VALUES ($1, $2, $3, $4, COALESCE($5, 25), COALESCE($6, 'agent'), COALESCE($7, 'pending'))
          RETURNING ${TASK_COLS}`,
         [
           input.sessionId,
@@ -110,6 +110,7 @@ export function createTaskRepository(): TaskRepository {
           input.goal,
           input.maxSteps ?? null,
           input.kind ?? null,
+          input.status ?? null,
         ],
       );
       const row = res.rows[0];

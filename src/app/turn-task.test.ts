@@ -4,8 +4,8 @@
  * pelo usuário que só quer conversar.
  */
 import { test, expect } from 'bun:test';
-import { beginTurn, endTurn, abortTurn, resumir } from './turn-task.js';
-import type { StepRepository, TaskRepository, TaskStep } from '../core/tasks.js';
+import { beginTurn, endTurn, abortTurn, delegateTurn, resumir } from './turn-task.js';
+import type { StepRepository, TaskQueue, TaskRepository, TaskStep } from '../core/tasks.js';
 
 function repos(): {
   tasks: TaskRepository;
@@ -65,8 +65,14 @@ test('abre o turno como task chat, com um step só', async () => {
   );
 
   expect(ref).toEqual({ taskId: 'task-1', stepId: 42 });
-  // `kind: chat` é o que impede o worker de re-executar a mensagem do usuário.
-  expect(registro.criadas[0]).toMatchObject({ kind: 'chat', goal: 'liste os arquivos', userId: 7 });
+  // `running` desde o nascimento: a fila só enxerga `pending`, então o worker não
+  // reivindica (nem replaneja por cima do step) um turno que a TUI está executando.
+  expect(registro.criadas[0]).toMatchObject({
+    kind: 'chat',
+    status: 'running',
+    goal: 'liste os arquivos',
+    userId: 7,
+  });
 });
 
 test('NÃO planeja: a mensagem do usuário já é a instrução', async () => {
@@ -129,4 +135,51 @@ test('resumir colapsa espaço e trunca sem cortar no meio da palavra final', () 
   const longo = resumir('x'.repeat(200));
   expect(longo).toHaveLength(120);
   expect(longo.endsWith('…')).toBe(true);
+});
+
+function delegacao(opts: { setStatusOk?: boolean; findById?: unknown } = {}) {
+  const chamadas: string[] = [];
+  const tasks = {
+    findById: async () =>
+      opts.findById === undefined ? { id: 'task-1', fence: 0 } : opts.findById,
+    setStatus: async (id: string, status: string, fence: number, patch: unknown) => {
+      chamadas.push(`setStatus:${status}:${fence}:${JSON.stringify(patch)}`);
+      return opts.setStatusOk ?? true;
+    },
+  } as unknown as TaskRepository;
+  const steps = {
+    reopen: async (id: number) => {
+      chamadas.push(`reopen:${id}`);
+    },
+  } as unknown as StepRepository;
+  const queue = {
+    notifyNew: async () => {
+      chamadas.push('notify');
+    },
+  } as unknown as TaskQueue;
+  return { deps: { tasks, steps, queue }, chamadas };
+}
+
+const REF = { taskId: 'task-1', stepId: 42 };
+
+test('delega: reabre o step ANTES de devolver a task à fila, e acorda o worker', async () => {
+  const { deps, chamadas } = delegacao();
+  expect(await delegateTurn(REF, 'eng-1', deps)).toBe(true);
+  // Ordem é o contrato: task `pending` sem step pendente = worker valida trilha vazia.
+  expect(chamadas).toEqual([
+    'reopen:42',
+    'setStatus:pending:0:{"currentStep":10,"engineSessionId":"eng-1"}',
+    'notify',
+  ]);
+});
+
+test('delega: perdeu a corrida do fence → false e não acorda ninguém', async () => {
+  const { deps, chamadas } = delegacao({ setStatusOk: false });
+  expect(await delegateTurn(REF, 'eng-1', deps)).toBe(false);
+  expect(chamadas).not.toContain('notify');
+});
+
+test('delega: task inexistente ou banco fora → false, sem lançar', async () => {
+  expect(await delegateTurn(REF, 'eng-1', delegacao({ findById: null }).deps)).toBe(false);
+  expect(await delegateTurn(REF, 'eng-1', quebrado)).toBe(false);
 });

@@ -28,8 +28,8 @@ export interface TurnTaskApi {
   abort: (motivo: string) => void;
   /** Retorna o ID do turno (task) atual, ou vazio se nenhum em andamento. */
   currentTaskId: () => string;
-  /** Delega a task ao worker (muda status p/ running, persiste no banco). */
-  delegate: (engineSessionId: string) => void;
+  /** Devolve a task à fila pro worker. `false` = não delegou; segue local. */
+  delegate: (engineSessionId: string) => Promise<boolean>;
 }
 
 export interface UseTurnTaskOpts {
@@ -82,22 +82,19 @@ export function useTurnTask({ session }: UseTurnTaskOpts): TurnTaskApi {
     return ref.current?.taskId ?? '';
   }, []);
 
-  const delegate = useCallback((engineSessionId: string): void => {
+  const delegate = useCallback(async (engineSessionId: string): Promise<boolean> => {
     const atual = ref.current;
-    if (!atual) return;
-    // Persiste a delegação: task muda pra 'running' no banco
-    // Worker na próxima volta reivindica e retoma via engineSessionId
-    void (async () => {
-      try {
-        const stored = await loadSession();
-        if (!stored) return;
-        // Delega a task: muda status de 'planning' → 'running' e persiste a sessão
-        // do motor para que o worker possa re-attach.
-        await delegateTurn(atual, engineSessionId);
-      } catch (err) {
-        tlog('delegação de turno falhou', (err as Error).message);
-      }
-    })();
+    if (!atual) return false;
+    try {
+      const ok = await delegateTurn(atual, engineSessionId);
+      // Delegado, o turno é do worker: soltar o ref impede o `end`/`abort` local
+      // de concluir ou falhar a task por cima dele.
+      if (ok) ref.current = null;
+      return ok;
+    } catch (err) {
+      tlog('delegação de turno falhou', (err as Error).message);
+      return false;
+    }
   }, []);
 
   return { begin, end, abort, currentTaskId, delegate };

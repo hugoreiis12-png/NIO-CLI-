@@ -429,14 +429,16 @@ ${enriched}`;
     const taskId = turnTask.currentTaskId();
     if (!taskId || !sessionId.current) return;
     try {
+      // Persiste ANTES de parar o motor local: se a delegação falhar, a TUI
+      // segue executando em vez de deixar o turno sem dono.
+      if (!(await turnTask.delegate(sessionId.current))) {
+        toast('não consegui delegar pro background — seguindo local', 'warning');
+        return;
+      }
       setChat((prev) => ({ ...prev, busy: false }));
       toast(
         `delegando pro background… rodando via nio-worker\n\nAcompanhe com:\nnio task show ${taskId.slice(0, 8)}`,
       );
-      // Checkpoint duplo:
-      // 1. Persiste a delegação: muda status → 'running' + engineSessionId
-      // 2. Aborta sessão local: evita duas cópias executando
-      turnTask.delegate(sessionId.current);
       await handle.client.session.abort({ path: { id: sessionId.current } }).catch(() => {});
     } catch (err) {
       tlog('delegação falhou', (err as Error).message);

@@ -7,15 +7,17 @@
  * fora do ar não pode derrubar o chat, exatamente como o aprendizado de lições
  * (`learnTurn`) já é tratado na TUI. Falhou → devolve `null` e a vida segue.
  *
- * Execução: se BAIXA intensidade, a TUI executa em processo com humano na frente.
- * Se ALTA intensidade, a TUI delega — o `nio-worker` reivindica e executa
- * headless (migration 0014 v2). Historicamente, o worker nunca reivindicava chat;
- * agora reivindica ambas (agent e chat delegadas).
+ * Execução: se BAIXA intensidade, a TUI executa em processo com humano na frente
+ * e a task nasce `running` — a fila só enxerga `pending`, então o worker não
+ * disputa um turno vivo. Se ALTA intensidade, `delegateTurn` reabre o step e
+ * devolve a task à fila (`pending` + `current_step`), e o `nio-worker` a
+ * reivindica e executa headless sem replanejar.
  */
-import type { StepRepository, TaskRepository, ToolCallTrace } from '../core/tasks.js';
+import type { StepRepository, TaskQueue, TaskRepository, ToolCallTrace } from '../core/tasks.js';
 import type { Profile } from '../core/types.js';
 import { createTaskRepository } from '../adapters/pg/task-repository.js';
 import { createStepRepository } from '../adapters/pg/step-repository.js';
+import { createTaskQueue } from '../adapters/pg/task-queue.js';
 import { STEP_GAP } from './task-manager.js';
 
 /** Teto do texto que vira `goal`/`name`. Colunas são TEXT, mas listagem não é. */
@@ -29,6 +31,7 @@ export interface TurnRef {
 export interface TurnTaskDeps {
   tasks?: TaskRepository;
   steps?: StepRepository;
+  queue?: TaskQueue;
 }
 
 export interface BeginTurnInput {
@@ -69,6 +72,7 @@ export async function beginTurn(
       profile: input.profile,
       goal: resumir(texto),
       kind: 'chat',
+      status: 'running',
     });
     const [step] = await steps.insertAll(task.id, [
       { stepNumber: STEP_GAP, name: resumir(texto, 80), input: { instruction: texto } },
@@ -81,21 +85,33 @@ export async function beginTurn(
   }
 }
 
-/** Delega a task ao worker: muda status de 'planning' → 'running' e persiste engineSessionId. */
+/**
+ * Devolve o turno à fila pro `nio-worker` retomar. `true` = o worker pode
+ * reivindicar; `false` = nada mudou e a TUI deve seguir executando local.
+ *
+ * Ordem importa: o step volta a `pending` ANTES da task, senão o worker poderia
+ * reivindicar e achar a trilha sem step pendente.
+ */
 export async function delegateTurn(
   turnRef: TurnRef,
   engineSessionId: string,
   deps: TurnTaskDeps = {},
-): Promise<void> {
+): Promise<boolean> {
   try {
     const tasks = deps.tasks ?? createTaskRepository();
+    const steps = deps.steps ?? createStepRepository();
     const task = await tasks.findById(turnRef.taskId);
-    if (!task) return;
-    // Transição: status='planning' → 'running' + engineSessionId
-    // Worker vai reivindicar e retomar da sessão do motor
-    await tasks.setStatus(task.id, 'running', task.fence, { engineSessionId });
+    if (!task) return false;
+    await steps.reopen(turnRef.stepId);
+    const queued = await tasks.setStatus(task.id, 'pending', task.fence, {
+      currentStep: STEP_GAP,
+      engineSessionId,
+    });
+    if (!queued) return false;
+    await (deps.queue ?? createTaskQueue()).notifyNew();
+    return true;
   } catch {
-    // Falha não aborta o turno — é best-effort
+    return false; // best-effort: a TUI segue local
   }
 }
 
@@ -115,8 +131,8 @@ export async function endTurn(
       ...(outcome.tokensIn !== undefined ? { tokensIn: outcome.tokensIn } : {}),
       ...(outcome.tokensOut !== undefined ? { tokensOut: outcome.tokensOut } : {}),
     });
-    // `fence` 0: turno de chat não tem lease — quem executa é a TUI, e não há
-    // worker disputando. O `claim` nunca toca em `kind = 'chat'`.
+    // `fence` 0: turno local não tem lease — quem executa é a TUI, e a task nasce
+    // `running`, fora do alcance do `claim`. Delegado, a TUI larga o ref.
     await tasks.complete(ref.taskId, 0, resumir(outcome.text, 2000));
   } catch {
     /* o turno já foi entregue ao usuário; o registro é que ficou para trás */

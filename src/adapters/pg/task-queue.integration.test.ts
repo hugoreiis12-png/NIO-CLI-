@@ -64,6 +64,55 @@ async function semear(qtd: number): Promise<{ userId: number; limpar: () => Prom
   };
 }
 
+/** Usuário descartável + uma task de chat, `pending`, com ou sem step gravado. */
+async function semearChat(
+  delegada: boolean,
+): Promise<{ userId: number; limpar: () => Promise<void> }> {
+  const user = await createUserRepository().create({
+    name: `nio-chat-${randomUUID()}`,
+    password: `pw-${randomUUID()}`,
+  });
+  const tasks = createTaskRepository();
+  const chat = await tasks.create({
+    userId: user.id,
+    sessionId: null,
+    profile: 'qa',
+    goal: 'turno de chat',
+    kind: 'chat',
+  });
+  if (delegada) await tasks.setStatus(chat.id, 'pending', chat.fence, { currentStep: 10 });
+  return {
+    userId: user.id,
+    limpar: async () => {
+      await query('DELETE FROM user_cli WHERE id = $1', [user.id]);
+    },
+  };
+}
+
+dbTest('claim ignora chat sem current_step (turno vivo da TUI)', async () => {
+  if (!temTabela) return;
+  const { userId, limpar } = await semearChat(false);
+  try {
+    expect(await createTaskQueue().claim('worker-a', userId)).toBeNull();
+  } finally {
+    await limpar();
+  }
+});
+
+dbTest('claim leva chat delegada direto pra running, sem replanejar', async () => {
+  if (!temTabela) return;
+  const { userId, limpar } = await semearChat(true);
+  try {
+    const t = await createTaskQueue().claim('worker-a', userId);
+    expect(t?.kind).toBe('chat');
+    // `running` (e não `planning`): o runner pula o Planner e retoma no step pendente.
+    expect(t?.status).toBe('running');
+    expect(t?.fence).toBe(1);
+  } finally {
+    await limpar();
+  }
+});
+
 dbTest('claim concorrente: só um worker leva a task', async () => {
   if (!temTabela) return;
   const { userId, limpar } = await semear(1);
@@ -128,7 +177,6 @@ dbTest('fence velho não grava: worker zumbi é barrado', async () => {
     await limpar();
   }
 });
-
 
 dbTest('crash no meio de um step: o step interrompido volta pra fila junto', async () => {
   if (!temTabela) return;

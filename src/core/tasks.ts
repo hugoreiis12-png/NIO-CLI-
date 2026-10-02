@@ -84,8 +84,10 @@ export interface NewTaskInput {
   profile: Profile;
   goal: string;
   maxSteps?: number;
-  /** Default `agent`. `chat` marca turno da TUI — o worker não reivindica. */
+  /** Default `agent`. `chat` marca turno da TUI (nasce `running`, ver `beginTurn`). */
   kind?: TaskKind;
+  /** Default `pending`. Turno de chat nasce `running` pra fila não enxergá-lo. */
+  status?: TaskStatus;
 }
 
 /** Step a inserir — `attempt` e `status` são do repositório, não do chamador. */

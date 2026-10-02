@@ -55,14 +55,16 @@ export function createTaskQueue(): TaskQueue {
     async claim(workerId: string, userId: number): Promise<Task | null> {
       // `status` no claim preserva o checkpoint-and-resume: task que já tem plano
       // volta pra `running` e retoma no step pendente, não replaneja do zero.
-      // Reivindica AMBAS: kind='agent' (planejadas) e kind='chat' (delegadas da TUI).
+      // Reivindica kind='agent' (planejadas) e kind='chat' DELEGADA (current_step já
+      // gravado pelo `delegateTurn`). Chat sem current_step é turno vivo da TUI.
       const res = await query<TaskRow>(
         `UPDATE tasks
             SET status = CASE WHEN current_step IS NULL THEN 'planning' ELSE 'running' END,
                 locked_by = $1, locked_at = now(), fence = fence + 1
           WHERE id = (
             SELECT id FROM tasks
-             WHERE status = 'pending' AND user_id = $2 AND kind IN ('agent', 'chat')
+             WHERE status = 'pending' AND user_id = $2
+               AND (kind = 'agent' OR (kind = 'chat' AND current_step IS NOT NULL))
              ORDER BY created_at
              FOR UPDATE SKIP LOCKED
              LIMIT 1
