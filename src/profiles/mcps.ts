@@ -5,6 +5,7 @@
  */
 import type { McpSpec } from '../core/environment.js';
 import { DOCKER_MCP_URL } from '../lib/docker/config.js';
+import { N8N_NATIVE_ID, isN8nNativeReadTool } from './n8n-native-tools.js';
 
 /**
  * `nio-lang` — MCP server nativo da CLI que centraliza conhecimento/config das
@@ -162,16 +163,29 @@ export const n8nMcp: McpSpec = {
  * MCP **nativo** do n8n (Settings > Instance-level MCP): endpoint HTTP da própria
  * instância, auth Bearer. URL e token vêm do ambiente via `{env:…}` (verificado no
  * opencode 1.18.33: resolve em `url` e no meio de um header) — nada secreto no arquivo.
- * Os nomes das tools do servidor nativo não foram verificados, então `*` pede
- * aprovação em todas; afrouxe depois de conhecê-las.
  */
 export const N8N_NATIVE_URL_ENV = 'N8N_NATIVE_MCP_URL';
-export const n8nNativeMcp: McpSpec = {
-  id: 'n8n-native',
-  url: `{env:${N8N_NATIVE_URL_ENV}}`,
-  headers: { Authorization: 'Bearer {env:N8N_NATIVE_MCP_TOKEN}' },
-  askTools: ['*'],
-};
+export const N8N_NATIVE_TOKEN_ENV = 'N8N_NATIVE_MCP_TOKEN';
+
+/**
+ * `askTools` é **computado**, não enumerado: pede aprovação em tudo que a instância
+ * expõe e não está na allowlist de leitura. Tool nova/desconhecida cai em `ask` sozinha.
+ * Sem detecção (lista vazia) volta pro `*` — tudo pede, degradação segura.
+ */
+export function buildN8nNativeMcp(detectedTools: readonly string[] = []): McpSpec {
+  const askTools = detectedTools.length
+    ? detectedTools.filter((tool) => !isN8nNativeReadTool(tool))
+    : ['*'];
+  return {
+    id: N8N_NATIVE_ID,
+    url: `{env:${N8N_NATIVE_URL_ENV}}`,
+    headers: { Authorization: `Bearer {env:${N8N_NATIVE_TOKEN_ENV}}` },
+    askTools,
+  };
+}
+
+/** O spec antes de qualquer detecção — é o que o `KNOWN_MCPS` herda por id. */
+export const n8nNativeMcp: McpSpec = buildN8nNativeMcp();
 
 /**
  * Docker MCP Gateway — MCP **remoto** (container `nio-mcp-gateway` do
