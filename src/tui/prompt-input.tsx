@@ -4,7 +4,13 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme, sym } from './theme.js';
-import { applyPaste, tokenLengthAtEnd, type LastPaste, type PasteStore } from './pasted-text.js';
+import {
+  applyPaste,
+  tokenLengthAtEnd,
+  PASTE_COALESCE_MS,
+  type LastPaste,
+  type PasteStore,
+} from './pasted-text.js';
 
 // ─── helpers puros (testados em prompt-input.test.tsx, sem React) ────────────
 
@@ -140,6 +146,8 @@ export function PromptInput({
     setCursor(Math.max(0, Math.min(nextCursor, nextValue.length)));
   };
   const lastPaste = React.useRef<LastPaste | null>(null);
+  /** Último texto que ESTE componente escreveu, pro burst não partir de `value` velho. */
+  const livePaste = React.useRef<{ value: string; cursor: number; at: number } | null>(null);
   const insert = (text: string): void =>
     edit(value.slice(0, cursor) + text + value.slice(cursor), cursor + text.length);
 
@@ -212,10 +220,23 @@ export function PromptInput({
 
       const text = sanitizePaste(input);
       if (!text) return;
+      // `value` vem do pai e chega por re-render: num burst de colagem os chunks seguintes
+      // rodariam sobre texto velho, e o `onChange` do pai sobrescreveria o chunk anterior.
+      // `livePaste` guarda o que já escrevemos; expira junto com a janela do burst.
+      const now = Date.now();
+      const fresh =
+        livePaste.current && now - livePaste.current.at < PASTE_COALESCE_MS
+          ? livePaste.current
+          : null;
+      const base = fresh ?? { value, cursor };
       const pasted =
-        pastes && applyPaste(pastes, value, cursor, text, lastPaste.current, Date.now());
-      if (!pasted) return insert(text);
+        pastes && applyPaste(pastes, base.value, base.cursor, text, lastPaste.current, now);
+      if (!pasted) {
+        livePaste.current = null;
+        return insert(text);
+      }
       lastPaste.current = pasted.last;
+      livePaste.current = { value: pasted.value, cursor: pasted.cursor, at: now };
       edit(pasted.value, pasted.cursor);
     },
     { isActive: active },

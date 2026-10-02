@@ -7,8 +7,12 @@
 /** A partir daqui o texto colado é compactado (o que for menor entra cru no input). */
 export const PASTE_MIN_LINES = 6;
 export const PASTE_MIN_CHARS = 500;
-/** Terminais grandes entregam a colagem em vários chunks seguidos; dentro desta janela viram um só. */
-export const PASTE_COALESCE_MS = 100;
+/**
+ * Terminais entregam a colagem em vários chunks seguidos; dentro desta janela viram um só.
+ * 100ms era curto: entre dois chunks o Ink re-renderiza a TUI inteira, e passando da janela
+ * o chunk seguinte virava um token novo — a colagem aparecia picada em `[#1][#2][#3]`.
+ */
+export const PASTE_COALESCE_MS = 500;
 
 const TOKEN_BODY = String.raw`\[Pasted text #(\d+)(?: \+\d+ lines| · \d+ chars)\]`;
 const TOKEN_ANYWHERE = new RegExp(TOKEN_BODY, 'g');

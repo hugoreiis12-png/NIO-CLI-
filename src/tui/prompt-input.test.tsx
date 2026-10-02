@@ -249,3 +249,24 @@ test('PromptInput: colagem pequena continua entrando como texto normal', async (
   expect(lastFrame()).toContain('linha um');
   expect(lastFrame()).not.toContain('Pasted text');
 });
+
+test('PromptInput: colagem gigante em chunks consecutivos vira UM token, sem perder pedaço', async () => {
+  const store = createPasteStore();
+  const { stdin, lastFrame } = render(<PasteHarness store={store} />);
+  await nap();
+  // Sem nap entre os writes: é assim que o terminal entrega uma colagem grande, e
+  // era aqui que a colagem aparecia picada em [#1][#2][#3] (ou perdia chunk).
+  const pedacos = [0, 1, 2, 3].map((n) =>
+    Array.from({ length: 30 }, (_, i) => `c${n}-linha-${i}`).join('\n'),
+  );
+  for (const p of pedacos) stdin.write(p);
+  await nap(120);
+
+  const frame = lastFrame() ?? '';
+  expect(frame).toContain('[Pasted text #1');
+  expect(frame).not.toContain('#2');
+  expect(frame).not.toContain('c0-linha-0'); // conteúdo não despeja na tela
+
+  const token = /\[Pasted text #1 \+\d+ lines\]/.exec(frame)?.[0] ?? '';
+  expect(expandPastes(token, store.take())).toBe(pedacos.join(''));
+});

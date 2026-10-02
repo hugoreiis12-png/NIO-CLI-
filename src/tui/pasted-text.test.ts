@@ -97,3 +97,30 @@ test('tokenLengthAtEnd: só reconhece token colado no fim do trecho antes do cur
   expect(tokenLengthAtEnd(`${t} oi`)).toBe(0);
   expect(tokenLengthAtEnd('[Pasted text #3 +12 lines')).toBe(0);
 });
+
+test('applyPaste: burst lento (render entre chunks) ainda funde — janela cobre o re-render do Ink', () => {
+  const store = createPasteStore();
+  // 150ms entre chunks: acima dos 100ms antigos, que picavam a colagem em [#1][#2].
+  const a = applyPaste(store, '', 0, lines(40), null, 1_000)!;
+  const b = applyPaste(store, a.value, a.cursor, lines(40), a.last, 1_150)!;
+  const c = applyPaste(store, b.value, b.cursor, lines(40), b.last, 1_400)!;
+  expect(c.value).toMatch(/^\[Pasted text #1 \+\d+ lines\]$/);
+  expect(c.value).not.toContain('#2');
+  expect(expandPastes(c.value, store.take())).toBe(lines(40) + lines(40) + lines(40));
+});
+
+test('applyPaste: base desatualizada cria token novo — é o que o livePaste evita', () => {
+  const store = createPasteStore();
+  const a = applyPaste(store, '', 0, lines(20), null, 1_000)!;
+  // Pai ainda não propagou `value`: o chunk 2 parte do texto velho e vira #2.
+  const stale = applyPaste(store, '', 0, lines(20), a.last, 1_010)!;
+  expect(stale.value).toContain('#2');
+});
+
+test('applyPaste: com a base correta o mesmo burst vira um token só', () => {
+  const store = createPasteStore();
+  const a = applyPaste(store, '', 0, lines(20), null, 1_000)!;
+  const b = applyPaste(store, a.value, a.cursor, lines(20), a.last, 1_010)!;
+  expect(b.value).toMatch(/^\[Pasted text #1 \+\d+ lines\]$/);
+  expect(expandPastes(b.value, store.take())).toBe(lines(20) + lines(20));
+});
