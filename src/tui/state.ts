@@ -64,6 +64,8 @@ export interface PermissionReq {
   /** Os globs que "sempre" salvaria (ex.: `["find *", "sort *"]`). */
   always: string[];
   title: string;
+  /** epoch ms em que chegou por evento SSE — o resync não derruba o que é mais novo que o snapshot. */
+  receivedAt?: number;
 }
 
 /** Uma opção de uma pergunta estruturada (tool `question` do opencode). */
@@ -96,6 +98,8 @@ export interface QuestionReq {
   id: string;
   sessionId: string;
   questions: QuestionItem[];
+  /** idem `PermissionReq.receivedAt`. */
+  receivedAt?: number;
 }
 
 /** Rótulo humano por grupo de permissão. */
@@ -178,16 +182,29 @@ function forgetSettled(settled: Set<string> | undefined, liveIds: ReadonlySet<st
  * pedido, e ele voltava como se fosse novo. O modal reaparecia e não havia como
  * sair — responder de novo só repetia o ciclo.
  */
+/**
+ * Itens da fila local que o `GET` não listou mas chegaram por SSE DEPOIS de o snapshot
+ * começar: o snapshot é anterior a eles, então a ausência não prova que sumiram. Sem
+ * isto o resync apagava o pedido recém-chegado e o modal só voltava ~4s depois, com o
+ * motor parado esperando e o spinner dizendo "executando".
+ */
+function newerThanSnapshot<T extends { receivedAt?: number }>(r: T, snapshotAt?: number): boolean {
+  return snapshotAt !== undefined && r.receivedAt !== undefined && r.receivedAt >= snapshotAt;
+}
+
 export function reconcilePendingPermissions(
   prev: ChatState,
   rawList: Array<Record<string, unknown>> | null,
   settled?: Set<string>,
+  snapshotAt?: number,
 ): ChatState {
   if (rawList === null) return prev; // fetch falhou → mantém a fila (não apaga o modal)
   const live = rawList.map(toPermissionReq).filter((r): r is PermissionReq => r !== null);
   const liveIds = new Set(live.map((r) => r.id));
   forgetSettled(settled, liveIds);
-  const kept = prev.permissions.filter((r) => liveIds.has(r.id));
+  const kept = prev.permissions.filter(
+    (r) => liveIds.has(r.id) || newerThanSnapshot(r, snapshotAt),
+  );
   const known = new Set(kept.map((r) => r.id));
   const added = live.filter((r) => !known.has(r.id) && !settled?.has(r.id));
   if (added.length === 0 && kept.length === prev.permissions.length) return prev;
@@ -228,12 +245,13 @@ export function reconcilePendingQuestions(
   prev: ChatState,
   rawList: Array<Record<string, unknown>> | null,
   settled?: Set<string>,
+  snapshotAt?: number,
 ): ChatState {
   if (rawList === null) return prev; // fetch falhou → mantém a fila (não apaga a pergunta)
   const live = rawList.map(toQuestionReq).filter((r): r is QuestionReq => r !== null);
   const liveIds = new Set(live.map((r) => r.id));
   forgetSettled(settled, liveIds);
-  const kept = prev.questions.filter((r) => liveIds.has(r.id));
+  const kept = prev.questions.filter((r) => liveIds.has(r.id) || newerThanSnapshot(r, snapshotAt));
   const known = new Set(kept.map((r) => r.id));
   const added = live.filter((r) => !known.has(r.id) && !settled?.has(r.id));
   if (added.length === 0 && kept.length === prev.questions.length) return prev;
@@ -444,7 +462,8 @@ function computePart(prev: ChatPart | undefined, raw: RawPart): ChatPart | null 
       tool: {
         name: raw.tool ?? 'tool',
         status: raw.state?.status ?? 'running',
-        input: raw.state?.input,
+        // evento sem `input` (ex.: pending) não pode apagar o comando já conhecido
+        input: raw.state?.input ?? prev?.tool?.input,
         output: String(raw.state?.output ?? raw.state?.error ?? ''),
       },
     };
@@ -497,7 +516,7 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
   if (etype === 'permission.asked' || etype === 'permission.updated') {
     const req = toPermissionReq(p);
     if (req && !state.permissions.some((x) => x.id === req.id)) {
-      state.permissions = [...state.permissions, req];
+      state.permissions = [...state.permissions, { ...req, receivedAt: Date.now() }];
     }
     return state;
   }
@@ -510,7 +529,7 @@ export function applyEvent(prev: ChatState, evt: Event): ChatState {
   if (qtype === 'question.asked' || qtype === 'question.updated') {
     const req = toQuestionReq(p);
     if (req && !state.questions.some((x) => x.id === req.id)) {
-      state.questions = [...state.questions, req];
+      state.questions = [...state.questions, { ...req, receivedAt: Date.now() }];
     }
     return state;
   }

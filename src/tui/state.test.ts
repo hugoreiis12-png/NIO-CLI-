@@ -1023,3 +1023,46 @@ test('Esc do usuário (MessageAbortedError) segue sem mostrar erro', () => {
   expect(s.busy).toBe(false);
   expect(s.error).toBeNull();
 });
+
+test('RACE DO RESYNC — permissão que chegou por SSE depois do snapshot não é apagada', () => {
+  const snapshotAt = 1_000;
+  // snapshot (GET /permission) foi tirado ANTES de p_new existir no servidor → vem vazio
+  const asked = applyEvent(
+    emptyChat,
+    ev('permission.asked', { id: 'p_new', sessionID: 's', permission: 'bash', patterns: ['ls'] }),
+  );
+  const nowStamp = asked.permissions[0]!;
+  const fresh = { ...asked, permissions: [{ ...nowStamp, receivedAt: snapshotAt + 5 }] };
+  expect(reconcilePendingPermissions(fresh, [], undefined, snapshotAt).permissions).toHaveLength(1);
+
+  // já estava na fila ANTES do snapshot e o servidor não lista mais → sai (respondida noutro lugar)
+  const stale = { ...asked, permissions: [{ ...nowStamp, receivedAt: snapshotAt - 5 }] };
+  expect(reconcilePendingPermissions(stale, [], undefined, snapshotAt).permissions).toHaveLength(0);
+
+  // sem snapshotAt o comportamento antigo se mantém
+  expect(reconcilePendingPermissions(fresh, []).permissions).toHaveLength(0);
+});
+
+test('RACE DO RESYNC — mesma regra para perguntas', () => {
+  const snapshotAt = 1_000;
+  const q = { id: 'q1', sessionId: 's', questions: [] };
+  const base = { ...emptyChat, questions: [{ ...q, receivedAt: snapshotAt + 1 }] };
+  expect(reconcilePendingQuestions(base, [], undefined, snapshotAt).questions).toHaveLength(1);
+  const old = { ...emptyChat, questions: [{ ...q, receivedAt: snapshotAt - 1 }] };
+  expect(reconcilePendingQuestions(old, [], undefined, snapshotAt).questions).toHaveLength(0);
+});
+
+test('tool bash: evento posterior sem input NÃO apaga o comando já conhecido', () => {
+  const part = (state: Record<string, unknown>) =>
+    ev('message.part.updated', {
+      part: { type: 'tool', messageID: 'msg_a', id: 'prt_t', tool: 'bash', state },
+    });
+  let s = applyEvent(
+    emptyChat,
+    part({ status: 'pending', input: { command: 'git push --force origin main' } }),
+  );
+  s = applyEvent(s, part({ status: 'running' })); // sem input
+  const tool = s.messages[0]!.parts[0]!.tool!;
+  expect(tool.status).toBe('running');
+  expect(tool.input).toEqual({ command: 'git push --force origin main' });
+});

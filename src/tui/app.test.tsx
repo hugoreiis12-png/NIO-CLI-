@@ -117,6 +117,7 @@ test('App: rascunho do input sobrevive a um overlay (permissão) — Sprint 6', 
   const stream = (async function* () {
     // segura o stream aberto; a gente empurra o evento de permissão via delay
     yield { type: 'message.updated', properties: { info: { id: 'm1', role: 'assistant' } } };
+    yield { type: 'session.status', properties: { status: { type: 'busy' } } };
     await new Promise((r) => setTimeout(r, 40));
     yield {
       type: 'permission.asked',
@@ -147,6 +148,7 @@ test('App: rascunho do input sobrevive a um overlay (permissão) — Sprint 6', 
   const f = lastFrame() ?? '';
   expect(f).toContain('permissão'); // o modal apareceu
   expect(f).toContain('rm -rf build'); // mostra o comando
+  expect(f).toContain('aguardando autorização'); // e não "executando bash" enquanto espera o humano
   expect(f).toContain('meu rascunho pendente'); // e o rascunho continua lá
 
   stdin.write('a'); // responde "permitir uma vez"

@@ -99,6 +99,9 @@ export function CommandRunner({
   );
 }
 
+/** Teto do comando exibido no modal (~5 linhas): cabe em terminal baixo sem estourar o Ink. */
+const COMMAND_MAX_CHARS = 400;
+
 const clip = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
 /**
@@ -131,8 +134,10 @@ export function PermissionModal({
   // `ls -la` achando que é isso, quando o real era `cd x && rm y`, é o pior
   // desfecho possível. Melhor dizer que a informação é parcial do que fingir.
   const parcial = !req.command;
+  const cmd = req.command ?? '';
+  const hidden = Math.max(0, cmd.length - COMMAND_MAX_CHARS);
   const detail: string[] = req.command
-    ? [`$ ${req.command}`]
+    ? [`$ ${cmd.slice(0, COMMAND_MAX_CHARS)}`]
     : req.patterns.length
       ? req.patterns.slice(0, 4)
       : [sym.warn + ' o engine não informou o que é este pedido'];
@@ -144,11 +149,19 @@ export function PermissionModal({
         {queued > 1 ? <Text color={theme.dim}>{`  (+${queued - 1} na fila)`}</Text> : null}
       </Text>
       {detail.map((d, i) => (
-        <Text key={i} color={theme.text} wrap="truncate-end">
+        // Comando completo, quebrando linha: cortar em 78 col escondia o fim do
+        // pipe/`&&` justamente onde mora o que o humano precisa ver antes de aprovar.
+        <Text key={i} color={theme.text} wrap={req.command ? 'wrap' : 'truncate-end'}>
           {'  '}
-          {clip(d, 78)}
+          {req.command ? d : clip(d, 78)}
         </Text>
       ))}
+      {hidden > 0 && (
+        <Text color={theme.warn} wrap="truncate-end">
+          {'  '}
+          {sym.warn} +{hidden} caracteres não exibidos — negue se não puder conferir
+        </Text>
+      )}
       {parcial && (
         <Text color={theme.warn} wrap="truncate-end">
           {'  '}

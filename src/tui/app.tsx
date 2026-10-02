@@ -44,6 +44,7 @@ import {
   replyErrorDetail,
   emptyChat,
   type ChatState,
+  permGroupLabel,
 } from './state.js';
 import {
   listPrimaryAgents,
@@ -162,12 +163,18 @@ export function App({
   }, [splashMs]);
 
   // spinner — marca o início do processamento (pro tempo decorrido) e tica o frame
+  const awaitingPermission = chat.permissions.length > 0;
+  useEffect(() => {
+    if (chat.busy) busyStartedAt.current = Date.now();
+  }, [chat.busy]);
   useEffect(() => {
     if (!chat.busy) return;
-    busyStartedAt.current = Date.now();
+    // Modal aberto: sem tick. Cada tick redesenha o Ink inteiro e, com o modal por cima
+    // do live, o frame passa das linhas do terminal e o bloco do bash pisca/some.
+    if (awaitingPermission) return;
     const t = setInterval(() => setFrame((f) => f + 1), 90);
     return () => clearInterval(t);
-  }, [chat.busy]);
+  }, [chat.busy, awaitingPermission]);
 
   /** Re-sincroniza com o server (fonte da verdade): status + mensagens. */
   /**
@@ -182,6 +189,7 @@ export function App({
   const resync = React.useCallback(async () => {
     const id = sessionId.current;
     if (!id) return;
+    const snapshotAt = Date.now(); // antes dos fetches: SSE posterior a isto não é apagado
     try {
       const [st, msgs, perms, ques] = await Promise.all([
         handle.client.session.status(),
@@ -194,9 +202,15 @@ export function App({
       const raw = ((msgs as { data?: unknown[] }).data ?? []) as Parameters<typeof syncMessages>[1];
       setChat((prev) =>
         reconcilePendingQuestions(
-          reconcilePendingPermissions(syncMessages(prev, raw, busy), perms, settledPerms.current),
+          reconcilePendingPermissions(
+            syncMessages(prev, raw, busy),
+            perms,
+            settledPerms.current,
+            snapshotAt,
+          ),
           ques,
           settledQuestions.current,
+          snapshotAt,
         ),
       );
     } catch (err) {
@@ -653,6 +667,9 @@ ${enriched}`;
   // fase atual (reflete o que o opencode está fazendo) — mostrada no StatusLine
   const phase = useMemo(() => {
     if (chat.retry) return `tentando de novo (${chat.retry.attempt})`;
+    // O motor deixa o tool `running` enquanto espera o humano: sem isto o status mente.
+    const waiting = chat.permissions[0];
+    if (waiting) return `aguardando autorização · ${permGroupLabel(waiting.kind)}`;
     const parts = live?.parts ?? [];
     const tool = parts.find(
       (p) => p.kind === 'tool' && (p.tool?.status === 'running' || p.tool?.status === 'pending'),
@@ -663,7 +680,7 @@ ${enriched}`;
     if (hasText) return 'escrevendo';
     if (hasReasoning) return 'raciocinando';
     return 'pensando';
-  }, [live, chat.retry]);
+  }, [live, chat.retry, chat.permissions]);
   // tempo decorrido (o frame do spinner força o re-render ~11×/s enquanto busy)
   const elapsed = chat.busy
     ? Math.max(0, Math.floor((Date.now() - busyStartedAt.current) / 1000))
