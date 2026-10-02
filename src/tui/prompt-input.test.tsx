@@ -3,6 +3,7 @@ import React from 'react';
 import { Text } from 'ink';
 import { render } from 'ink-testing-library';
 import { waitForText } from './test-utils.js';
+import { createPasteStore, expandPastes, type PasteStore } from './pasted-text.js';
 import {
   PromptInput,
   layoutRows,
@@ -178,4 +179,73 @@ test('PromptInput: disabled — digita mas Enter não envia', async () => {
   await nap();
   expect(lastFrame()).toContain('oi');
   expect(lastFrame()).not.toContain('SUBMITTED');
+});
+
+// ─── colagem grande vira token ──────────────────────────────────────
+
+const GRANDE = Array.from({ length: 40 }, (_, i) => `linha-secreta-${i}`).join('\n');
+
+function PasteHarness({ store }: { store: PasteStore }) {
+  const [value, setValue] = React.useState('');
+  const [submitted, setSubmitted] = React.useState<string | null>(null);
+  return (
+    <>
+      <PromptInput
+        value={value}
+        onChange={setValue}
+        onSubmit={(v) => setSubmitted(v)}
+        width={40}
+        pastes={store}
+      />
+      {submitted !== null && <Text>{`SUBMITTED[${submitted}]`}</Text>}
+    </>
+  );
+}
+
+test('PromptInput: colagem grande aparece como [Pasted text #1 +40 lines], sem despejar o texto', async () => {
+  const store = createPasteStore();
+  const { stdin, lastFrame } = render(<PasteHarness store={store} />);
+  await nap();
+  stdin.write(GRANDE);
+  await nap();
+  expect(lastFrame()).toContain('[Pasted text #1 +40 lines]');
+  expect(lastFrame()).not.toContain('linha-secreta-3');
+});
+
+test('PromptInput: Enter envia o token e o store guarda o texto real', async () => {
+  const store = createPasteStore();
+  const { stdin, lastFrame } = render(<PasteHarness store={store} />);
+  await nap();
+  stdin.write('veja: ');
+  await nap();
+  stdin.write(GRANDE);
+  await nap();
+  stdin.write('\r');
+  await nap();
+  expect(lastFrame()).toContain('SUBMITTED[veja: [Pasted text #1 +40 lines]]');
+  expect(expandPastes('[Pasted text #1 +40 lines]', store.take())).toBe(GRANDE);
+});
+
+test('PromptInput: backspace apaga o token inteiro de uma vez', async () => {
+  const store = createPasteStore();
+  const { stdin, lastFrame } = render(<PasteHarness store={store} />);
+  await nap();
+  stdin.write('abc ');
+  await nap();
+  stdin.write(GRANDE);
+  await nap();
+  stdin.write('\x7f');
+  await nap();
+  expect(lastFrame()).not.toContain('Pasted text');
+  expect(lastFrame()).toContain('abc');
+});
+
+test('PromptInput: colagem pequena continua entrando como texto normal', async () => {
+  const store = createPasteStore();
+  const { stdin, lastFrame } = render(<PasteHarness store={store} />);
+  await nap();
+  stdin.write('linha um\nlinha dois');
+  await nap();
+  expect(lastFrame()).toContain('linha um');
+  expect(lastFrame()).not.toContain('Pasted text');
 });

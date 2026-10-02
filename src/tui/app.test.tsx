@@ -558,3 +558,28 @@ test('emenda NÃO solicitada pelo usuário nem pela TUI segue sendo abortada', a
   unmount();
   expect(espiao.aborts).toBe(1);
 });
+
+test('App: colagem grande vira token no campo e no eco, mas o motor recebe o texto INTEIRO', async () => {
+  let sentBody: { parts?: Array<{ type: string; text?: string }> } | undefined;
+  const h = fakeHandle({ onPrompt: (b) => (sentBody = b as typeof sentBody) });
+  const colado = Array.from({ length: 30 }, (_, i) => `registro-${i}: valor ${i * 7}`).join('\n');
+  const { lastFrame, stdin, unmount } = render(
+    <App handle={h} program={buildProgram()} cwd="/tmp/proj" session={null} splashMs={0} />,
+  );
+  await new Promise((r) => setTimeout(r, 40));
+  stdin.write(colado);
+  await new Promise((r) => setTimeout(r, 30));
+  const campo = lastFrame() ?? '';
+  expect(campo).toContain('[Pasted text #1 +30 lines]');
+  expect(campo).not.toContain('registro-12');
+
+  stdin.write('\r');
+  await new Promise((r) => setTimeout(r, 60));
+  const texto = sentBody?.parts?.find((p) => p.type === 'text')?.text ?? '';
+  expect(texto).toContain('registro-0: valor 0');
+  expect(texto).toContain('registro-29: valor 203');
+  expect(texto).not.toContain('[Pasted text');
+  expect(lastFrame() ?? '').toContain('[Pasted text #1 +30 lines]'); // o eco no histórico fica curto
+  expect(lastFrame() ?? '').not.toContain('registro-12');
+  unmount();
+});

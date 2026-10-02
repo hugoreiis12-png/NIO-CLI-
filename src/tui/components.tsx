@@ -8,6 +8,7 @@ import { Box, Text } from 'ink';
 import { theme, sym } from './theme.js';
 import { Markdown } from './markdown.js';
 import { PromptInput } from './prompt-input.js';
+import type { PasteStore } from './pasted-text.js';
 import { filterPalette, type PaletteItem } from './palette-source.js';
 import {
   messageUsage,
@@ -519,6 +520,7 @@ export function InputBox({
   options = [],
   width = 80,
   maxItems = 6,
+  pastes,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -535,6 +537,8 @@ export function InputBox({
   width?: number;
   /** teto de itens na droplist — o App encolhe quando a tela é curta. */
   maxItems?: number;
+  /** Store das colagens compactadas — o App expande no envio. */
+  pastes?: PasteStore;
 }): React.ReactElement {
   const [sel, setSel] = React.useState(0);
   const [optSel, setOptSel] = React.useState(0);
@@ -600,6 +604,7 @@ export function InputBox({
         disabled={disabled}
         active={active}
         width={width}
+        pastes={pastes}
         placeholder={
           disabled
             ? '(pode digitar; envia quando a resposta terminar)'

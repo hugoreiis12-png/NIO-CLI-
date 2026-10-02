@@ -60,6 +60,7 @@ import {
 } from '../lib/clients/client-configs.js';
 import { compactInput } from '../lib/exec/map-reduce.js';
 import { buildAttachedInput, detectPaths } from './attachments.js';
+import { createPasteStore, expandPastes } from './pasted-text.js';
 import { buildHandoffDigest } from './context-recovery.js';
 import { warmPrefixCache, eventSessionId } from './warmup.js';
 import { buildLedger, ledgerTotal, hasWorkInFlight } from './token-ledger.js';
@@ -112,6 +113,7 @@ export function App({
   const modelLabel = model ? model.modelID : 'big-pickle';
   const [chat, setChat] = useState<ChatState>(emptyChat);
   const [overlay, setOverlay] = useState<Overlay>({ kind: 'none' });
+  const pastes = useRef(createPasteStore()); // colagens grandes compactadas no input; expandem no `send`
   const [draft, setDraft] = useState(''); // rascunho do input — no App pra sobreviver a overlays (Sprint 6)
   const [showReasoning, setShowReasoning] = useState(false); // Sprint 3: Ctrl-R expande o raciocínio
   const [modes, setModes] = useState<string[]>(['build', 'plan']); // Sprint 5: agentes primários (Tab cicla)
@@ -354,6 +356,7 @@ export function App({
   const send = async (text: string) => {
     if (!sessionId.current) return;
     setDraft('');
+    const pasted = pastes.current.take(); // tokens `[Pasted text #n]` do rascunho → conteúdo real
     userTurnActive.current = true; // este turno foi pedido pelo usuário → não abortar
     setChat((prev) => pushUserMessage(prev, text)); // eco mostra o texto ORIGINAL
     turnTask.begin(text); // registra o turno com o texto do usuário, não o enriquecido
@@ -382,6 +385,9 @@ ${enriched}`;
       tlog('recall de lições falhou', (err as Error).message);
     }
     // Map-reduce: input grande é compactado (lossy) antes de enviar; erro → manda cru.
+    // As colagens voltam só aqui: o eco, o registro do turno e a busca de anexos/lições
+    // acima trabalham com o token curto, não com o texto colado.
+    enriched = expandPastes(enriched, pasted);
     let payload = enriched;
     try {
       payload = await compactInput(enriched, {
@@ -762,6 +768,7 @@ ${enriched}`;
         active={inputActive}
         palette={palette}
         onSubmit={send}
+        pastes={pastes.current}
         onDispatch={onDispatch}
         onCycleMode={cycleMode}
         options={overlayUp ? [] : options}

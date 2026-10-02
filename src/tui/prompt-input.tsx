@@ -4,6 +4,7 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme, sym } from './theme.js';
+import { applyPaste, tokenLengthAtEnd, type LastPaste, type PasteStore } from './pasted-text.js';
 
 // ─── helpers puros (testados em prompt-input.test.tsx, sem React) ────────────
 
@@ -108,6 +109,8 @@ export interface PromptInputProps {
   maxRows?: number;
   placeholder?: string;
   borderColor?: string;
+  /** Colagem grande vira `[Pasted text #n +L lines]`; o texto real fica aqui até o envio. */
+  pastes?: PasteStore;
 }
 
 export function PromptInput({
@@ -123,6 +126,7 @@ export function PromptInput({
   maxRows = 6,
   placeholder = '',
   borderColor = theme.accent,
+  pastes,
 }: PromptInputProps): React.ReactElement {
   const [cursor, setCursor] = React.useState(value.length);
   // o pai pode zerar/encolher `value` (ex.: após enviar) — reancora o cursor.
@@ -135,6 +139,7 @@ export function PromptInput({
     onChange(nextValue);
     setCursor(Math.max(0, Math.min(nextCursor, nextValue.length)));
   };
+  const lastPaste = React.useRef<LastPaste | null>(null);
   const insert = (text: string): void =>
     edit(value.slice(0, cursor) + text + value.slice(cursor), cursor + text.length);
 
@@ -185,6 +190,9 @@ export function PromptInput({
 
       if (key.backspace || key.delete) {
         if (cursor === 0) return;
+        // token de colagem some inteiro: apagar char a char deixaria um token quebrado
+        const tokenLen = pastes ? tokenLengthAtEnd(value.slice(0, cursor)) : 0;
+        if (tokenLen > 0) return edit(value.slice(0, cursor - tokenLen) + value.slice(cursor), cursor - tokenLen);
         return edit(value.slice(0, cursor - 1) + value.slice(cursor), cursor - 1);
       }
 
@@ -202,7 +210,11 @@ export function PromptInput({
       if (key.ctrl || key.meta) return;
 
       const text = sanitizePaste(input);
-      if (text) insert(text);
+      if (!text) return;
+      const pasted = pastes && applyPaste(pastes, value, cursor, text, lastPaste.current, Date.now());
+      if (!pasted) return insert(text);
+      lastPaste.current = pasted.last;
+      edit(pasted.value, pasted.cursor);
     },
     { isActive: active },
   );
