@@ -87,7 +87,7 @@
   "optionalDependencies": {
     "@huggingface/transformers": "^4.3.0"
   },
-  "//overrides": "Força versões corrigidas em transitivas vulneráveis (auditoria QP, 2026-09-30): adm-zip vem duplicado pelo onnxruntime-node num range antigo, fast-uri/ip-address vêm do @modelcontextprotocol/sdk (transporte HTTP — NIO usa só stdio). Não deixa o `bun audit` zerado sozinho — os 2-3 vulns restantes (xlsx em devDependencies, uuid via exceljs) são de outra origem e estão documentados/aceitos em docs/security/fourth-pass.md.",
+  "//overrides": "Força versões corrigidas em transitivas vulneráveis (auditoria QP, 2026-09-30): adm-zip vem duplicado pelo onnxruntime-node num range antigo, fast-uri/ip-address vêm do @modelcontextprotocol/sdk (transporte HTTP — em uso desde o cliente do MCP nativo do n8n, `adapters/n8n/native-client.ts`; os servers da NIO seguem em stdio). Não deixa o `bun audit` zerado sozinho — os 2-3 vulns restantes (xlsx em devDependencies, uuid via exceljs) são de outra origem e estão documentados/aceitos em docs/security/fourth-pass.md.",
   "overrides": {
     "adm-zip": "^0.6.1",
     "fast-uri": "^3.1.8",
