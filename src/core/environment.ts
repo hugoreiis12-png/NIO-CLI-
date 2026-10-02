@@ -20,6 +20,13 @@ export interface McpSpec {
   command?: string[];
   url?: string;
   environment?: Record<string, string>;
+  /** Só remoto: headers da request. Aceita `{env:VAR}` — o opencode resolve na leitura. */
+  headers?: Record<string, string>;
+  /**
+   * Tools que exigem aprovação humana (`permission: ask`), pelo nome SEM o prefixo do
+   * server — o config grava `<id>_<tool>`. Aceita `*`. O resto fica no default do cliente.
+   */
+  askTools?: string[];
 }
 
 /** Um toolchain/linguagem a garantir no host. */

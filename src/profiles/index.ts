@@ -16,7 +16,15 @@ import { analystProfile } from './analyst.js';
 import { scientistProfile } from './scientist.js';
 import { qaProfile } from './qa.js';
 import { biProfile } from './bi.js';
-import { nioLangMcp, postgresMcp, powerbiMcp, excelMcp, n8nMcp, dockerGatewayMcp } from './mcps.js';
+import {
+  nioLangMcp,
+  postgresMcp,
+  powerbiMcp,
+  excelMcp,
+  n8nMcp,
+  n8nNativeMcp,
+  dockerGatewayMcp,
+} from './mcps.js';
 import { nodeToolchain, pythonToolchain } from './toolchains.js';
 
 /** Catálogo completo dos 6 perfis (`sessions.profile`). */
@@ -64,5 +72,7 @@ export const KNOWN_TOOLCHAINS: Record<string, ToolchainSpec> = Object.fromEntrie
 );
 
 export const KNOWN_MCPS: Record<string, McpSpec> = Object.fromEntries(
-  [nioLangMcp, postgresMcp, powerbiMcp, excelMcp, n8nMcp, dockerGatewayMcp].map((m) => [m.id, m]),
+  [nioLangMcp, postgresMcp, powerbiMcp, excelMcp, n8nMcp, n8nNativeMcp, dockerGatewayMcp].map(
+    (m) => [m.id, m],
+  ),
 );

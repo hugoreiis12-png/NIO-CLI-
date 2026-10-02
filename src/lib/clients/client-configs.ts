@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { backupFile, readJson, writeJson } from '../file-merge.js';
 import { brand, envName, env } from '../../brand.js';
 import type { McpSpec } from '../../core/environment.js';
+import { hasMissingAskRules, withMcpAskRules } from './mcp-permissions.js';
 
 const MCP_COMMAND = brand.mcpBinName;
 
@@ -160,6 +161,7 @@ interface OpencodeServerEntry {
   command?: string[];
   url?: string;
   environment?: Record<string, string>;
+  headers?: Record<string, string>;
   enabled?: boolean;
 }
 
@@ -417,7 +419,13 @@ export const DEFAULT_OPENCODE_PERMISSION: Record<string, unknown> = {
 /** Monta a entrada OpenCode de um MCP, preservando campos do usuário. Remoto (`spec.url`) → `type: 'remote'`. */
 function opencodeMcpEntry(spec: McpSpec, current?: OpencodeServerEntry): OpencodeServerEntry {
   if (spec.url) {
-    return { type: 'remote', ...current, url: spec.url, enabled: true };
+    return {
+      type: 'remote',
+      ...current,
+      url: spec.url,
+      enabled: true,
+      ...(spec.headers ? { headers: { ...current?.headers, ...spec.headers } } : {}),
+    };
   }
   const entry: OpencodeServerEntry = {
     type: 'local',
@@ -592,6 +600,7 @@ export function planOpencodeUpdate(
     mcpsOk &&
     providerOk &&
     Boolean(existing.permission) &&
+    !hasMissingAskRules(existing.permission, profileMcps) &&
     Boolean(existing.compaction) &&
     Boolean(existing.watcher);
 
@@ -610,7 +619,11 @@ export function planOpencodeUpdate(
   }
 
   let next: Record<string, unknown> = { ...existing, model: NIO_OPERATOR_MODEL, mcp: nextMcp };
-  if (!existing.permission) next.permission = DEFAULT_OPENCODE_PERMISSION; // Sprint 7.5 — nunca sobrescreve
+  // Sprint 7.5 — nunca sobrescreve o do usuário; só acrescenta o `ask` das tools de MCP que mexem em estado
+  next.permission = withMcpAskRules(
+    existing.permission ?? DEFAULT_OPENCODE_PERMISSION,
+    profileMcps,
+  );
   if (!existing.compaction) next.compaction = DEFAULT_OPENCODE_COMPACTION; // janela apertada — nunca sobrescreve
   if (!existing.watcher) next.watcher = DEFAULT_OPENCODE_WATCHER; // nunca sobrescreve
   next = clearOpencodeProviderBaseURL(next); // limpa qualquer hijack legado no provider `opencode`

@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { excelMcp } from '../../profiles/mcps.js';
+import { excelMcp, nioLangMcp, n8nMcp, n8nNativeMcp } from '../../profiles/mcps.js';
 import { buildNioOpencodeConfig, profileModeledMcps } from './nio-oc-config.js';
 import { NIO_OPERATOR_MODEL, NIO_AI_PROVIDER } from './client-configs.js';
 import { createProfileCatalog } from '../../profiles/index.js';
@@ -131,4 +131,19 @@ test('def do usuário no global vence a modelada (não sobrescreve configuraçã
   const cfg = buildNioOpencodeConfig({ mcp: { excel: meu } }, [excelMcp], ['excel']);
   const mcp = cfg.mcp as Record<string, { command?: string[] }>;
   expect(mcp.excel?.command).toEqual(['meu-excel']);
+});
+
+test('buildNioOpencodeConfig: headers do remoto e ask do nio-lang/n8n entram no config do NIO', () => {
+  const cfg = buildNioOpencodeConfig(
+    { permission: { bash: 'ask' } },
+    [nioLangMcp, n8nMcp, n8nNativeMcp],
+    [],
+  );
+  const mcp = cfg.mcp as Record<string, any>;
+  expect(mcp['n8n-native'].headers.Authorization).toBe('Bearer {env:N8N_NATIVE_MCP_TOKEN}');
+  expect(mcp['n8n-native'].url).toBe('{env:N8N_NATIVE_MCP_URL}');
+  const perm = cfg.permission as Record<string, string>;
+  expect(perm['nio-lang_nio_lang_n8n_write']).toBe('ask');
+  expect(perm['n8n_n8n_manage_credentials']).toBe('ask');
+  expect(perm.bash).toBe('ask');
 });

@@ -19,6 +19,7 @@ import type { McpSpec, ProfileDefinition } from '../../core/environment.js';
 import { nioLangMcp, resolveFabricMcps, excelMcp } from '../../profiles/mcps.js';
 import { createProfileCatalog } from '../../profiles/index.js';
 import type { Profile } from '../../core/types.js';
+import { withMcpAskRules } from './mcp-permissions.js';
 import {
   NIO_OPERATOR_MODEL,
   NIO_AI_PROVIDER,
@@ -141,7 +142,14 @@ const KNOWN_MCPS: Record<string, McpSpec | undefined> = { [excelMcp.id]: excelMc
 
 /** Entry de MCP no formato do opencode a partir de um `McpSpec`. */
 function mcpEntry(spec: McpSpec): Record<string, unknown> {
-  if (spec.url) return { type: 'remote', url: spec.url, enabled: true };
+  if (spec.url) {
+    return {
+      type: 'remote',
+      url: spec.url,
+      enabled: true,
+      ...(spec.headers ? { headers: spec.headers } : {}),
+    };
+  }
   return {
     type: 'local',
     command: spec.command,
@@ -211,7 +219,7 @@ export function buildNioOpencodeConfig(
     tools: mergeToolBudget(global.tools),
     // Saída de tool gigante entra no contexto e fica lá o resto da sessão.
     tool_output: global.tool_output ?? toolOutputLimits(),
-    permission: global.permission ?? DEFAULT_OPENCODE_PERMISSION,
+    permission: withMcpAskRules(global.permission ?? DEFAULT_OPENCODE_PERMISSION, modeledMcps),
     compaction: global.compaction ?? DEFAULT_OPENCODE_COMPACTION,
     watcher: global.watcher ?? DEFAULT_OPENCODE_WATCHER,
   };

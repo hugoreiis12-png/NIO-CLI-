@@ -1,4 +1,5 @@
 import { test, expect } from 'bun:test';
+import { n8nMcp, n8nNativeMcp } from '../../profiles/mcps.js';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -278,4 +279,33 @@ test('mcpServerJsPath sobe DOIS níveis (§10.4) — não um, como no bug antigo
 
   expect(mcpServerJsPath()).toBe(esperado);
   expect(mcpServerJsPath()).not.toBe(bugAntigo);
+});
+
+test('installOpencodeGlobal: n8n → ask nas tools que mexem em estado, preserva o permission do usuário e é idempotente', () => {
+  const d = mkdtempSync(join(tmpdir(), 'nio-n8n-'));
+  const p = join(d, 'opencode.json');
+  writeFileSync(
+    p,
+    JSON.stringify({ permission: { bash: 'allow', n8n_n8n_delete_workflow: 'deny' } }),
+  );
+
+  installOpencodeGlobal([n8nMcp, n8nNativeMcp], p, '');
+  const cfg = JSON.parse(readFileSync(p, 'utf8'));
+  expect(cfg.permission.bash).toBe('allow'); // do usuário
+  expect(cfg.permission['n8n_n8n_delete_workflow']).toBe('deny'); // do usuário vence
+  expect(cfg.permission['n8n_n8n_create_workflow']).toBe('ask'); // nossa
+  expect(cfg.permission['n8n_n8n_search_nodes']).toBeUndefined(); // leitura livre
+  expect(cfg.mcp.n8n.environment).toEqual({ MCP_MODE: 'stdio', LOG_LEVEL: 'error' });
+  // remoto: URL e token são referências {env:…}, nunca o valor
+  expect(cfg.mcp['n8n-native']).toMatchObject({
+    type: 'remote',
+    url: '{env:N8N_NATIVE_MCP_URL}',
+    headers: { Authorization: 'Bearer {env:N8N_NATIVE_MCP_TOKEN}' },
+  });
+
+  const antes = readFileSync(p, 'utf8');
+  installOpencodeGlobal([n8nMcp, n8nNativeMcp], p, '');
+  expect(readFileSync(p, 'utf8')).toBe(antes);
+
+  rmSync(d, { recursive: true, force: true });
 });

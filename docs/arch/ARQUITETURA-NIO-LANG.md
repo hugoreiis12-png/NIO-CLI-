@@ -73,6 +73,26 @@ context7). O `LanguageConfigurator` é a peça nova de scaffolding, disparada no
   `opencode.json` quando o dev escolhe n8n, **não** dobrado dentro do `nio-lang`
   (federar tools de server externo é mais frágil que registrá-lo).
 
+#### Emenda — tools REST de n8n dentro do `nio-lang` (decidido pelo usuário)
+- **Decisão:** o `nio-lang` ganha `nio_lang_n8n` (leitura) e `nio_lang_n8n_write`
+  (ativar/desativar workflow), que falam com a API pública do n8n (`/api/v1`, header
+  `X-N8N-API-KEY`). O §5 acima continua valendo pro **n8n-mcp** (não é dobrado aqui);
+  as tools REST são código nosso, não federação de server externo.
+- **Alternativas descartadas:** só registrar o n8n-mcp (não dá controle de escrita no
+  nosso lado); tool única com `confirm: true` (o próprio modelo preenche a flag).
+- **Porque duas tools:** a de escrita é a única marcada `ask` (`McpSpec.askTools` →
+  `permission` do opencode). Ler nunca pede aprovação; mudar estado sempre pede.
+- **Trade-off aceito:** o `nio-lang` deixa de ser 100% sem segredo — usa
+  `N8N_API_URL`/`N8N_API_KEY` do ambiente do usuário (nunca gravados em arquivo).
+- **Limite conhecido:** a API pública não tem "executar workflow"; não há ação `run`.
+  O `ask` só é garantido pelo schema do config; que o opencode o **aplique** a tools de
+  MCP não foi verificado de ponta a ponta (rodar um turno real e conferir o modal).
+- **Segredos:** `McpSpec.environment` é texto puro no `opencode.json` e `''` apaga a
+  chave herdada do shell — por isso o n8n-mcp só leva `MCP_MODE`/`LOG_LEVEL`, e o MCP
+  nativo (`n8n-native`) usa `{env:N8N_NATIVE_MCP_URL}` / `Bearer {env:N8N_NATIVE_MCP_TOKEN}`.
+- **Reverte-se assim:** remover as duas tools de `mcp-server-lang.ts` e `askTools` dos
+  specs; nada de schema nem migration.
+
 ## Papel de cada repo
 
 | Repo | Camada A (MCP tooling) | Camada B (ambiente) | Como entra |

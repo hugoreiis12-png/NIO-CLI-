@@ -15,6 +15,8 @@ import { DOCKER_MCP_URL } from '../lib/docker/config.js';
 export const nioLangMcp: McpSpec = {
   id: 'nio-lang',
   command: ['nio-lang'],
+  // Única tool do nio-lang que muda estado fora da máquina (ativa/desativa workflow n8n).
+  askTools: ['nio_lang_n8n_write'],
 };
 
 /**
@@ -124,12 +126,51 @@ export const excelMcp: McpSpec = {
  * n8n-mcp (czlonkowski) — MCP server de n8n (docs de nodes/workflows). Registrado
  * como MCP **próprio** (é server de verdade, não dobra no `nio-lang`) quando o
  * usuário escolhe a linguagem `n8n` no wizard fullstack. Roda **sem auth** para
- * as tools de documentação; `N8N_API_URL`/`N8N_API_KEY` (opcionais) habilitam as
- * de gerenciar workflow ao vivo. Pacote npm verificado: `n8n-mcp` (bin stdio).
+ * as tools de documentação; `N8N_API_URL`/`N8N_API_KEY` habilitam as de gerenciar
+ * workflow ao vivo. Pacote npm verificado: `n8n-mcp` (bin stdio).
+ *
+ * **Segredo NÃO entra aqui**: `environment` é gravado em texto puro no
+ * `opencode.json`, e `''` sobrescreveria (apagaria) a chave que o usuário já tem no
+ * shell. O processo herda `N8N_API_URL`/`N8N_API_KEY` do ambiente.
+ *
+ * `askTools`: tudo que escreve, executa, apaga ou toca em credencial pede aprovação.
+ * Leitura/documentação ficam livres. Nomes conforme o README do n8n-mcp.
  */
 export const n8nMcp: McpSpec = {
   id: 'n8n',
   command: ['npx', '-y', 'n8n-mcp'],
+  environment: { MCP_MODE: 'stdio', LOG_LEVEL: 'error' },
+  askTools: [
+    'n8n_create_workflow',
+    'n8n_update_full_workflow',
+    'n8n_update_partial_workflow',
+    'n8n_delete_workflow',
+    'n8n_autofix_workflow',
+    'n8n_workflow_versions',
+    'n8n_deploy_template',
+    'n8n_test_workflow',
+    'n8n_executions',
+    'n8n_evaluations',
+    'n8n_manage_folders',
+    'n8n_manage_datatable',
+    'n8n_manage_credentials',
+    'n8n_manage_agents',
+  ],
+};
+
+/**
+ * MCP **nativo** do n8n (Settings > Instance-level MCP): endpoint HTTP da própria
+ * instância, auth Bearer. URL e token vêm do ambiente via `{env:…}` (verificado no
+ * opencode 1.18.33: resolve em `url` e no meio de um header) — nada secreto no arquivo.
+ * Os nomes das tools do servidor nativo não foram verificados, então `*` pede
+ * aprovação em todas; afrouxe depois de conhecê-las.
+ */
+export const N8N_NATIVE_URL_ENV = 'N8N_NATIVE_MCP_URL';
+export const n8nNativeMcp: McpSpec = {
+  id: 'n8n-native',
+  url: `{env:${N8N_NATIVE_URL_ENV}}`,
+  headers: { Authorization: 'Bearer {env:N8N_NATIVE_MCP_TOKEN}' },
+  askTools: ['*'],
 };
 
 /**
