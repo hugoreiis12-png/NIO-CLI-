@@ -4,7 +4,7 @@ import { brand } from "../../brand.js";
 import { animateMatrixLogo } from "../../matrix-logo.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { c, sym } from "../../lib/colors.js";
-import { MIN_PASSWORD_LENGTH } from "../../gateway/auth/password.js";
+import { MIN_PASSWORD_LENGTH } from "../../gateway/auth/password-policy.js";
 import {
   gatewayLogin,
   gatewayLogout,

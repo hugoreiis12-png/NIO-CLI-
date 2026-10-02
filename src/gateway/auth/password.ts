@@ -8,16 +8,41 @@
  * (memória 19 MiB, 2 iterações, paralelismo 1), ajustáveis por env
  * (`NIO_ARGON2_*`, ADR 0011 §C). Pepper via o `secret` do argon2 (§A).
  */
-import { hash, verify } from '@node-rs/argon2';
 import type { Algorithm } from '@node-rs/argon2';
 import { currentPepperId, pepperFor } from './secrets.js';
+import { MIN_PASSWORD_LENGTH } from './password-policy.js';
 
 // `Algorithm` do @node-rs/argon2 é um `const enum` ambiente, que `isolatedModules`
 // proíbe acessar por valor. Usamos o literal com cast (Argon2id === 2).
 const ARGON2ID = 2 as Algorithm;
 
-/** Piso de tamanho da senha de usuário (NIST SP 800-63B — mín. 8 p/ senha escolhida). */
-export const MIN_PASSWORD_LENGTH = 8;
+/** Reexportado por compatibilidade — a fonte é `./password-policy.js`. */
+export { MIN_PASSWORD_LENGTH };
+
+/** Cache do binding nativo: só o módulo resolvido entra, falha nunca é memoizada. */
+let binding: typeof import('@node-rs/argon2') | null = null;
+
+/**
+ * Carrega `@node-rs/argon2` sob demanda — `import type` acima é erasado, então
+ * nenhum consumidor paga o binding só por importar este módulo.
+ */
+async function argon2(): Promise<typeof import('@node-rs/argon2')> {
+  if (binding) return binding;
+  try {
+    binding = await import('@node-rs/argon2');
+    return binding;
+  } catch (cause) {
+    throw new Error(BINDING_AUSENTE, { cause });
+  }
+}
+
+/** A mensagem do napi manda apagar o package-lock.json — que este pacote não publica. */
+const BINDING_AUSENTE =
+  'O binário nativo do argon2 (@node-rs/argon2) não foi encontrado — sem ele o nio-gateway ' +
+  'não consegue hashear nem conferir senha.\n' +
+  'Causa provável: o bug do npm com dependências opcionais (npm/cli#4828) deixou o pacote ' +
+  'da sua plataforma de fora da instalação.\n' +
+  'Correção: npm i -g @nio-cli/cli --force';
 
 /** Um flag numérico de env com default. */
 function envInt(name: string, fallback: number): number {
@@ -54,6 +79,7 @@ export async function hashPassword(plain: string): Promise<PasswordHash> {
   }
   const pepperId = currentPepperId();
   const secret = pepperFor(pepperId);
+  const { hash } = await argon2();
   const phc = await hash(plain, { ...currentArgon2Options(), ...(secret ? { secret } : {}) });
   return { phc, pepperId };
 }
@@ -68,6 +94,9 @@ export async function verifyPassword(
   plain: string,
   pepperId: number,
 ): Promise<boolean> {
+  // Fora do `try`: binding ausente é falha de instalação e precisa propagar —
+  // engolido aqui viraria "senha incorreta" e mandaria o usuário caçar fantasma.
+  const { verify } = await argon2();
   try {
     const secret = pepperFor(pepperId);
     return await verify(storedHash, plain, secret ? { secret } : undefined);
