@@ -71,3 +71,26 @@ test('sem tool desconhecida passando por omissão', () => {
   const policy = createApprovalPolicy();
   expect(policy.decide('ferramenta_que_nao_existe', 'fullstack')).toBe('park');
 });
+
+test('n8n: leitura do MCP nativo roda livre no fullstack, escrita estaciona', () => {
+  const policy = createApprovalPolicy();
+  expect(policy.decide('n8n-native_search_workflows', 'fullstack')).toBe('allow');
+  expect(policy.decide('n8n-native_get_workflow_details', 'fullstack')).toBe('allow');
+  expect(policy.decide('nio_lang_n8n', 'fullstack')).toBe('allow');
+  expect(policy.decide('n8n-native_execute_workflow', 'fullstack')).toBe('park');
+  expect(policy.decide('n8n-native_test_workflow', 'fullstack')).toBe('park');
+  expect(policy.decide('nio_lang_n8n_write', 'fullstack')).toBe('park');
+});
+
+test('n8n: tool nativa desconhecida estaciona (falha-fechado, sem curinga na allowlist)', () => {
+  const policy = createApprovalPolicy();
+  expect(policy.decide('n8n-native_get_tool_que_nao_existe', 'fullstack')).toBe('park');
+  expect(policy.decide('n8n-native_delete_agent', 'fullstack')).toBe('park');
+});
+
+test('n8n não vaza para os outros perfis', () => {
+  const policy = createApprovalPolicy();
+  for (const profile of ['qa', 'bi', 'analyst', 'dba', 'scientist'] as const) {
+    expect(policy.decide('n8n-native_search_workflows', profile)).toBe('park');
+  }
+});

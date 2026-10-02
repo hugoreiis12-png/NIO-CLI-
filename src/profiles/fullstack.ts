@@ -1,6 +1,6 @@
 import type { ProfileDefinition } from '../core/environment.js';
 import { nodeToolchain } from './toolchains.js';
-import { BASE_AUTO_APPROVE } from './auto-approve.js';
+import { FULLSTACK_AUTO_APPROVE } from './auto-approve.js';
 
 /** Fullstack — front + back em TS/JS sobre Node. */
 export const fullstackProfile: ProfileDefinition = {
@@ -9,5 +9,5 @@ export const fullstackProfile: ProfileDefinition = {
   toolchains: [nodeToolchain],
   frameworks: ['react', 'next', 'express'],
   mcps: [],
-  autoApprove: BASE_AUTO_APPROVE,
+  autoApprove: FULLSTACK_AUTO_APPROVE,
 };
