@@ -192,7 +192,8 @@ export function PromptInput({
         if (cursor === 0) return;
         // token de colagem some inteiro: apagar char a char deixaria um token quebrado
         const tokenLen = pastes ? tokenLengthAtEnd(value.slice(0, cursor)) : 0;
-        if (tokenLen > 0) return edit(value.slice(0, cursor - tokenLen) + value.slice(cursor), cursor - tokenLen);
+        if (tokenLen > 0)
+          return edit(value.slice(0, cursor - tokenLen) + value.slice(cursor), cursor - tokenLen);
         return edit(value.slice(0, cursor - 1) + value.slice(cursor), cursor - 1);
       }
 
@@ -211,7 +212,8 @@ export function PromptInput({
 
       const text = sanitizePaste(input);
       if (!text) return;
-      const pasted = pastes && applyPaste(pastes, value, cursor, text, lastPaste.current, Date.now());
+      const pasted =
+        pastes && applyPaste(pastes, value, cursor, text, lastPaste.current, Date.now());
       if (!pasted) return insert(text);
       lastPaste.current = pasted.last;
       edit(pasted.value, pasted.cursor);

@@ -27,8 +27,14 @@ test('contagem ignora a quebra final e o token tem dois formatos', () => {
 });
 
 test('expandPastes: devolve o conteúdo; id desconhecido fica como está', () => {
-  const contents = new Map([[1, 'AAA'], [2, 'BBB']]);
-  const out = expandPastes('veja [Pasted text #1 +9 lines] e [Pasted text #2 · 700 chars] e [Pasted text #7 +3 lines]', contents);
+  const contents = new Map([
+    [1, 'AAA'],
+    [2, 'BBB'],
+  ]);
+  const out = expandPastes(
+    'veja [Pasted text #1 +9 lines] e [Pasted text #2 · 700 chars] e [Pasted text #7 +3 lines]',
+    contents,
+  );
   expect(out).toBe('veja AAA e BBB e [Pasted text #7 +3 lines]');
 });
 
