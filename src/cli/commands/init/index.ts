@@ -23,7 +23,7 @@ import {
   type LanguageSelection,
 } from "../../../app/language-configurator.js";
 import { createLanguageCatalog } from "../../../adapters/lang/language-catalog.js";
-import { n8nMcp, n8nNativeMcp, N8N_NATIVE_URL_ENV } from "../../../profiles/mcps.js";
+import { registerN8nMcps } from "./n8n-step.js";
 import type { LanguageId } from "../../../core/lang.js";
 import type { EnvironmentConfig } from "../../../core/types.js";
 import { pickLanguages, pickLanguageChoices } from "./lang-step.js";
@@ -183,26 +183,8 @@ async function resolveSessionSetup(
   // Pré-configuração de linguagens — só no perfil fullstack (com preview+confirm).
   if (profile === "fullstack") {
     const selected = await preConfigureLanguages();
-    // n8n escolhido → registra o n8n-mcp como MCP próprio (docs de nodes/workflows) e,
-    // se a instância expôs o MCP nativo (URL no ambiente), o nativo também.
     if (selected.includes("n8n")) {
-      const wanted = [n8nMcp, ...(process.env[N8N_NATIVE_URL_ENV]?.trim() ? [n8nNativeMcp] : [])];
-      const added = wanted.filter((w) => !mcps.some((m) => m.id === w.id));
-      if (added.length > 0) {
-        mcps = [...mcps, ...added];
-        if (envConfig) {
-          const cfgMcps = Array.from(
-            new Set([...(envConfig.mcps ?? []), ...added.map((a) => a.id)]),
-          );
-          await manager.updateConfig(session.id, { ...envConfig, mcps: cfgMcps });
-        }
-        console.log(`  ${c.green(sym.ok)} registrado: ${added.map((a) => a.id).join(", ")}.`);
-        if (!process.env.N8N_API_KEY?.trim()) {
-          console.log(
-            `  ${c.dim("exporte N8N_API_URL e N8N_API_KEY pra habilitar o gerenciamento ao vivo")}`,
-          );
-        }
-      }
+      mcps = await registerN8nMcps({ mcps, envConfig, manager, sessionId: session.id });
     }
   }
 

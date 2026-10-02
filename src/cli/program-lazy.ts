@@ -81,6 +81,7 @@ const MODULES: ReadonlyArray<{ names: readonly string[]; load: () => Promise<Reg
   },
   { names: ["ai"], load: async () => (await import("./commands/ai.js")).registerAiCommand },
   { names: ["task"], load: async () => (await import("./commands/task.js")).registerTaskCommand },
+  { names: ["n8n"], load: async () => (await import("./commands/n8n.js")).registerN8nCommand },
 ];
 
 /** Comandos-folha: nome e descrição aqui, módulo só quando executa. */
