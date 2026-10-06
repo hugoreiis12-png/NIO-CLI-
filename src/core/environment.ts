@@ -39,6 +39,12 @@ export interface ToolchainSpec {
    */
   detect?: string[];
   /**
+   * Nome de binário resolvido no **PATH** (não em caminho fixo). Para ferramenta
+   * cujo destino de instalação varia por método — `uv` cai em `Scripts/` do pip,
+   * no winget ou em `~/.local/bin`, e glob absoluto não cobre os três.
+   */
+  detectBinary?: string;
+  /**
    * Plano de instalação, executado via `spawnSync` SEM shell (args em array).
    * Ausente = detectável mas não instalável pela CLI (só orienta).
    */

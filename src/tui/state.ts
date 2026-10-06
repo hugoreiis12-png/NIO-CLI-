@@ -503,6 +503,58 @@ function applyRawPart(parts: ChatPart[], raw: RawPart): ChatPart[] {
   return arr;
 }
 
+/** Um `message.part.delta` do motor — texto incremental de um part. */
+export interface PartDelta {
+  messageID: string;
+  partID: string;
+  /** Campo do part que o delta alimenta; só `text`/`reasoning` são renderizados. */
+  field: string;
+  delta: string;
+}
+
+/** `field` do delta → `kind` do part. Campo fora daqui é ignorado (snapshot cobre). */
+const DELTA_KINDS: Record<string, ChatPart['kind'] | undefined> = {
+  text: 'text',
+  reasoning: 'reasoning',
+};
+
+/** COW: concatena `delta` no part `id`, criando-o se o delta chegou antes do snapshot. */
+function appendDelta(
+  parts: ChatPart[],
+  id: string,
+  kind: ChatPart['kind'],
+  delta: string,
+): ChatPart[] {
+  const i = parts.findIndex((p) => p.id === id);
+  if (i < 0) return [...parts, { id, kind, text: delta }];
+  const arr = parts.slice();
+  arr[i] = { ...parts[i]!, text: parts[i]!.text + delta };
+  return arr;
+}
+
+/**
+ * Aplica um lote de deltas coalescidos (ver `delta-buffer.ts`).
+ *
+ * Os deltas dão fluidez; a **autoridade segue sendo o snapshot**: quando
+ * `message.part.updated` chega, `computePart` reescreve `text` com o valor cheio do
+ * motor, então qualquer drift acumulado aqui é reconciliado sem caso especial.
+ */
+export function applyDeltas(prev: ChatState, deltas: readonly PartDelta[]): ChatState {
+  let messages = prev.messages;
+  for (const d of deltas) {
+    const kind = DELTA_KINDS[d.field];
+    if (!kind || !d.messageID || !d.partID || !d.delta) continue;
+    messages = withMessage(
+      withoutPending(messages, d.messageID),
+      d.messageID,
+      'assistant',
+      (parts) => appendDelta(parts, d.partID, kind, d.delta),
+    );
+  }
+  if (messages === prev.messages) return prev; // nada aplicável: não força re-render
+  return { ...prev, messages };
+}
+
 /** Aplica um evento ao estado (o caller passa o `prev`; devolve uma cópia nova). */
 export function applyEvent(prev: ChatState, evt: Event): ChatState {
   const state: ChatState = { ...prev };

@@ -1,5 +1,7 @@
 import { test, expect } from 'bun:test';
+import type { PartDelta } from './state.js';
 import {
+  applyDeltas,
   shouldAbortCompaction,
   toolAttempts,
   failedTools,
@@ -1065,4 +1067,60 @@ test('tool bash: evento posterior sem input NÃO apaga o comando já conhecido',
   const tool = s.messages[0]!.parts[0]!.tool!;
   expect(tool.status).toBe('running');
   expect(tool.input).toEqual({ command: 'git push --force origin main' });
+});
+
+const delta = (field: string, text: string, partID = 'prt_1'): PartDelta => ({
+  messageID: 'msg_d',
+  partID,
+  field,
+  delta: text,
+});
+
+test('applyDeltas: deltas de texto concatenam no part, criando-o se o snapshot não veio', () => {
+  const s = applyDeltas(emptyChat, [delta('text', 'Olá'), delta('text', ' mundo')]);
+  const parts = s.messages.at(-1)!.parts;
+  expect(parts).toHaveLength(1);
+  expect(parts[0]!.kind).toBe('text');
+  expect(parts[0]!.text).toBe('Olá mundo');
+});
+
+test('applyDeltas: `field: reasoning` vira part de raciocínio, separado do texto', () => {
+  const s = applyDeltas(emptyChat, [
+    delta('reasoning', 'pensando...', 'prt_r'),
+    delta('text', 'resposta', 'prt_t'),
+  ]);
+  const parts = s.messages.at(-1)!.parts;
+  expect(parts.find((p) => p.kind === 'reasoning')!.text).toBe('pensando...');
+  expect(parts.find((p) => p.kind === 'text')!.text).toBe('resposta');
+});
+
+test('applyDeltas: field desconhecido e delta vazio são ignorados SEM novo objeto de estado', () => {
+  // Identidade preservada = o Ink não redesenha de graça.
+  expect(applyDeltas(emptyChat, [delta('tool_input', '{}')])).toBe(emptyChat);
+  expect(applyDeltas(emptyChat, [delta('text', '')])).toBe(emptyChat);
+  expect(applyDeltas(emptyChat, [])).toBe(emptyChat);
+});
+
+test('ACEITE: o snapshot é a autoridade — part.updated reconcilia em cima dos deltas', () => {
+  // Deltas dão fluidez e podem driftar; o texto cheio do motor tem a última palavra.
+  let s = applyDeltas(emptyChat, [delta('text', 'parci')]);
+  expect(s.messages.at(-1)!.parts[0]!.text).toBe('parci');
+  s = applyEvent(
+    s,
+    ev('message.part.updated', {
+      part: { id: 'prt_1', messageID: 'msg_d', type: 'text', text: 'parcial completo' },
+    }),
+  );
+  const textos = s.messages.at(-1)!.parts.filter((p) => p.kind === 'text');
+  expect(textos).toHaveLength(1); // reconciliou o MESMO part, não criou um segundo
+  expect(textos[0]!.text).toBe('parcial completo');
+});
+
+test('ACEITE: snapshot sem `text` não apaga o que os deltas já montaram', () => {
+  let s = applyDeltas(emptyChat, [delta('text', 'mantém isto')]);
+  s = applyEvent(
+    s,
+    ev('message.part.updated', { part: { id: 'prt_1', messageID: 'msg_d', type: 'text' } }),
+  );
+  expect(s.messages.at(-1)!.parts[0]!.text).toBe('mantém isto');
 });

@@ -50,6 +50,20 @@ export const pythonToolchain: ToolchainSpec = {
   ],
 };
 
+/**
+ * `uv` (astral) — pré-requisito do MCP `excel`, que sobe por `uvx excel-mcp-server`.
+ * Vive nos 4 perfis analytics porque todos declaram o `excelMcp`: sem `uv` no host o
+ * MCP é escrito no config, falha ao subir e o Excel simplesmente não aparece.
+ *
+ * Detectado por PATH, não por glob: o pip instala em `Scripts/` do Python do usuário,
+ * o winget em outro lugar e o instalador standalone em `~/.local/bin`.
+ */
+export const uvToolchain: ToolchainSpec = {
+  id: 'uv',
+  detectBinary: 'uvx',
+  install: wingetInstall('astral-sh.uv'),
+};
+
 /** Cliente `psql` — SQL local pros perfis `dba` e `bi`. Extraído do `dba.ts`. */
 export const postgresqlClientToolchain: ToolchainSpec = {
   id: 'postgresql-client',

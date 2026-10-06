@@ -1,6 +1,6 @@
 import type { ProfileDefinition } from '../core/environment.js';
 import { powerbiMcp, excelMcp } from './mcps.js';
-import { postgresqlClientToolchain, powerbiDesktopToolchain } from './toolchains.js';
+import { postgresqlClientToolchain, powerbiDesktopToolchain, uvToolchain } from './toolchains.js';
 import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 
 /**
@@ -12,7 +12,7 @@ import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 export const biProfile: ProfileDefinition = {
   profile: 'bi',
   languages: ['sql', 'dax'],
-  toolchains: [postgresqlClientToolchain, powerbiDesktopToolchain],
+  toolchains: [postgresqlClientToolchain, powerbiDesktopToolchain, uvToolchain],
   frameworks: ['powerbi'],
   mcps: [powerbiMcp, excelMcp],
   inheritGlobalMcpIds: ['excel'],

@@ -15,12 +15,12 @@ import {
   StreamableHTTPError,
 } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { brand } from '../../brand.js';
+import { isTransportTrusted, PLAIN_HTTP_HINT } from '../../lib/url-trust.js';
 import { VERSION } from '../../version.js';
 
 const MCP_PATH = '/mcp-server/http';
 const TIMEOUT_MS = 20_000;
 const MAX_PAGES = 20;
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 export interface N8nNativeDeps {
   fetch?: typeof fetch;
@@ -47,9 +47,9 @@ export function normalizeNativeUrl(raw: string): string | { error: string } {
   } catch {
     return { error: `URL inválida: "${trimmed.slice(0, 40)}".` };
   }
-  const secure =
-    url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname));
-  if (!secure) return { error: 'a URL precisa ser https (http só em localhost).' };
+  if (!isTransportTrusted(url)) {
+    return { error: `a URL precisa ser https — ${PLAIN_HTTP_HINT}.` };
+  }
   const root = url.href.replace(/\/+$/, '').replace(new RegExp(`${MCP_PATH}$`), '');
   return `${root}${MCP_PATH}`;
 }

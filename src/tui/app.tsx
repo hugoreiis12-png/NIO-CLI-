@@ -27,8 +27,10 @@ import { QuestionModal } from './question-modal.js';
 import { useTurnTask } from './use-turn-task.js';
 import { summarizeTurn } from './turn-summary.js';
 import { buildPalette, type PaletteItem } from './palette-source.js';
+import { createDeltaBuffer } from './delta-buffer.js';
 import {
   applyEvent,
+  applyDeltas,
   contextUsage,
   shouldCompact,
   pendingQuestion,
@@ -136,6 +138,8 @@ export function App({
   /** Chars do prompt em voo — vira o `pending` do livro-caixa. 0 = nada pendente. */
   const inFlightChars = useRef(0);
   const warmupSessionId = useRef(''); // sessão descartável do aquecimento — eventos dela são ignorados
+  // Deltas de token coalescidos: fluidez do stream sem um redraw do Ink por token.
+  const deltas = useRef(createDeltaBuffer((batch) => setChat((prev) => applyDeltas(prev, batch))));
   const compactingRef = useRef(false); // Frente 5 — já disparou a compactação proativa? (evita duplicar)
 
   const [splash, setSplash] = useState(splashMs > 0);
@@ -257,7 +261,22 @@ export function App({
           continue;
         }
         const et = evt.type as string;
-        if (et === 'message.part.delta') continue; // ruído: o snapshot vem em message.part.updated
+        if (et === 'message.part.delta') {
+          // Antes: descartado, e o texto andava só nos 7 snapshots da resposta. O
+          // buffer dá a fluidez de token sem pagar um redraw do Ink por delta.
+          const d = (evt as { properties?: Record<string, unknown> }).properties ?? {};
+          if (warmupSessionId.current && eventSessionId(d) === warmupSessionId.current) continue;
+          deltas.current.push({
+            messageID: String(d.messageID ?? ''),
+            partID: String(d.partID ?? ''),
+            field: String(d.field ?? ''),
+            delta: String(d.delta ?? ''),
+          });
+          continue;
+        }
+        // Qualquer outro evento pode mudar o mesmo part que os deltas estão montando:
+        // esvazia antes, pra o snapshot reconciliar em cima do texto já aplicado.
+        deltas.current.flushNow();
         // Sprint — "respondeu = parou": o turno do usuário fecha no idle; se o motor
         // emenda OUTRO turno (compactação/continuação) sem prompt novo, encerra e fica idle.
         const props = (evt as { properties?: Record<string, unknown> }).properties ?? {};
@@ -313,6 +332,7 @@ export function App({
     return () => {
       alive = false;
       ac.abort();
+      deltas.current.stop();
     };
   }, [splash, handle, cwd, resync]);
 

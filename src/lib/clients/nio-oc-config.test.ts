@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { excelMcp, nioLangMcp, n8nMcp, n8nNativeMcp } from '../../profiles/mcps.js';
-import { buildNioOpencodeConfig, profileModeledMcps } from './nio-oc-config.js';
+import { buildNioOpencodeConfig, missingMcpBinaries, profileModeledMcps } from './nio-oc-config.js';
 import { NIO_OPERATOR_MODEL, NIO_AI_PROVIDER } from './client-configs.js';
 import { createProfileCatalog } from '../../profiles/index.js';
 import type { McpSpec } from '../../core/environment.js';
@@ -146,4 +146,19 @@ test('buildNioOpencodeConfig: headers do remoto e ask do nio-lang/n8n entram no 
   expect(perm['nio-lang_nio_lang_n8n_write']).toBe('ask');
   expect(perm['n8n_n8n_manage_credentials']).toBe('ask');
   expect(perm.bash).toBe('ask');
+});
+
+test('missingMcpBinaries: acusa o MCP local cujo launcher não está no PATH', () => {
+  const gaps = missingMcpBinaries({
+    excel: { type: 'local', command: ['binario-que-nao-existe-xyz-123', 'stdio'] },
+    ok: { type: 'local', command: ['node', '-v'] },
+  });
+  expect(gaps).toEqual([{ id: 'excel', binary: 'binario-que-nao-existe-xyz-123' }]);
+});
+
+test('missingMcpBinaries: MCP remoto não tem binário — fica fora do aviso', () => {
+  const gaps = missingMcpBinaries({
+    docker: { type: 'remote', url: 'http://127.0.0.1:8811/mcp' },
+  });
+  expect(gaps).toEqual([]);
 });

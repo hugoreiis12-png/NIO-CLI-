@@ -1,5 +1,5 @@
 import type { ProfileDefinition } from '../core/environment.js';
-import { pythonToolchain } from './toolchains.js';
+import { pythonToolchain, uvToolchain } from './toolchains.js';
 import { excelMcp } from './mcps.js';
 import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 
@@ -8,7 +8,7 @@ import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 export const scientistProfile: ProfileDefinition = {
   profile: 'scientist',
   languages: ['python'],
-  toolchains: [pythonToolchain],
+  toolchains: [pythonToolchain, uvToolchain],
   frameworks: ['jupyter', 'numpy', 'pytorch'],
   mcps: [excelMcp],
   inheritGlobalMcpIds: ['excel'],

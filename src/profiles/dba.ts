@@ -1,6 +1,6 @@
 import type { ProfileDefinition } from '../core/environment.js';
 import { postgresMcp, excelMcp } from './mcps.js';
-import { postgresqlClientToolchain } from './toolchains.js';
+import { postgresqlClientToolchain, uvToolchain } from './toolchains.js';
 import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 
 /**
@@ -17,7 +17,7 @@ import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 export const dbaProfile: ProfileDefinition = {
   profile: 'dba',
   languages: ['sql'],
-  toolchains: [postgresqlClientToolchain],
+  toolchains: [postgresqlClientToolchain, uvToolchain],
   frameworks: [],
   mcps: [postgresMcp, excelMcp],
   inheritGlobalMcpIds: ['excel'],

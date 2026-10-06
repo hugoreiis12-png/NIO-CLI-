@@ -252,8 +252,16 @@ function envNum(name: string, dflt: number): number {
  */
 export const NIO_AI_CONTEXT = envNum('AI_CONTEXT', 65536);
 
-/** Teto de tokens de saída reservados dentro da janela. Override `NIO_AI_OUTPUT`. */
-export const NIO_AI_OUTPUT = envNum('AI_OUTPUT', 2048);
+/**
+ * Teto de tokens de saída reservados dentro da janela. Override `NIO_AI_OUTPUT`.
+ *
+ * 8192, não 2048: o modelo do backend é de **reasoning**, e no vLLM os tokens de
+ * raciocínio saem deste mesmo teto. Medido contra o backend em 2026-10-02, numa
+ * pergunta técnica real: com 2048 o raciocínio consumiu 2048/2048, `content` voltou
+ * VAZIO e `finish_reason: 'length'` — a TUI renderizava tela branca. Com 4096 a
+ * resposta vinha truncada; com 8192, `finish_reason: 'stop'` e resposta íntegra.
+ */
+export const NIO_AI_OUTPUT = envNum('AI_OUTPUT', 8192);
 
 /**
  * Margem sobre a janela real, porque o orçamento do OpenCode é **estimado** e o do
@@ -298,7 +306,11 @@ export function declaredContextWindow(context: number, output: number): number {
  * Chain-of-thought (reasoning) do modelo nos caminhos headless (`nio exec`/`plan`/
  * `validate-plan`). **Off por padrão**: em tarefa determinística o "pensar" só soma
  * ~2x de latência e pode esvaziar o output (o raciocínio consome o teto antes da
- * resposta). Reabilite com `NIO_AI_THINK=true`. Não afeta a TUI (roteia pelo opencode).
+ * resposta). Reabilite com `NIO_AI_THINK=true`.
+ *
+ * A TUI não passa por aqui (roteia pelo opencode), mas **sofre do mesmo problema** por
+ * outra via: o opencode só repassa o teto, e o vLLM serve o reasoning de dentro dele.
+ * Lá a defesa é o tamanho de `NIO_AI_OUTPUT`, não este flag.
  */
 export const NIO_AI_THINK = /^(1|true|yes|on)$/i.test((env('AI_THINK') ?? '').trim());
 

@@ -7,13 +7,14 @@
  *
  * **Nunca lança** (contrato do port): qualquer falha vira `status: 'failed'`.
  */
-import { spawnSyncPortable } from '../../lib/proc.js';
+import { binaryOnPath, spawnSyncPortable } from '../../lib/proc.js';
 import { globExists } from '../../lib/deps/dependency-install.js';
 import type { EnsureResult, ToolchainGateway, ToolchainSpec } from '../../core/environment.js';
 
-/** Detectado no disco por qualquer um dos globs de `detect`. */
+/** Presente por glob de `detect` OU por `detectBinary` resolvido no PATH. */
 function isPresent(spec: ToolchainSpec): boolean {
-  return Boolean(spec.detect && spec.detect.some(globExists));
+  if (spec.detect?.some(globExists)) return true;
+  return Boolean(spec.detectBinary && binaryOnPath(spec.detectBinary));
 }
 
 function ensure(spec: ToolchainSpec): EnsureResult {
@@ -36,7 +37,9 @@ function ensure(spec: ToolchainSpec): EnsureResult {
   if (res.status !== 0) {
     return { id: spec.id, status: 'failed', error: `instalador saiu com código ${res.status}` };
   }
-  // Confirma que a instalação de fato materializou o toolchain (quando há `detect`).
+  // Só confirma quando há `detect` de filesystem: o PATH deste processo foi lido no
+  // spawn e não enxerga o diretório que o instalador acabou de acrescentar, então
+  // reconferir um `detectBinary` aqui acusaria falha numa instalação que deu certo.
   if (spec.detect && !isPresent(spec)) {
     return {
       id: spec.id,

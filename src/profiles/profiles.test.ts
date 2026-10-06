@@ -73,11 +73,37 @@ test('ProfileCatalog.get: perfil inexistente lança erro claro', () => {
 test('bi materializa toolchains locais (psql + Power BI Desktop)', () => {
   const catalog = createProfileCatalog();
   const ids = catalog.get('bi').toolchains.map((t) => t.id);
-  expect(ids).toEqual(['postgresql-client', 'powerbi-desktop']);
+  // `toContain` e não lista exata: o perfil também carrega o `uv` do MCP excel, e
+  // este teste é sobre os toolchains LOCAIS de BI, não sobre o conjunto fechado.
+  expect(ids).toContain('postgresql-client');
+  expect(ids).toContain('powerbi-desktop');
 });
 
 test('dba reusa o postgresql-client centralizado', () => {
   const catalog = createProfileCatalog();
   const ids = catalog.get('dba').toolchains.map((t) => t.id);
   expect(ids).toContain('postgresql-client');
+});
+
+test('uv acompanha o excel: os 4 perfis analytics declaram o toolchain do `uvx`', () => {
+  // O excel sobe por `uvx excel-mcp-server`. Sem `uv` no host o MCP é escrito no
+  // config, morre no spawn e desaparece sem aviso — foi o que aconteceu numa
+  // máquina nova. Quem declara o MCP precisa declarar o pré-requisito.
+  const catalog = createProfileCatalog();
+  for (const p of ['analyst', 'bi', 'scientist', 'dba'] as Profile[]) {
+    const def = catalog.get(p);
+    expect(def.mcps.some((m) => m.id === 'excel')).toBe(true);
+    expect(def.toolchains.some((t) => t.id === 'uv')).toBe(true);
+  }
+  for (const p of ['fullstack', 'qa'] as Profile[]) {
+    expect(catalog.get(p).toolchains.some((t) => t.id === 'uv')).toBe(false);
+  }
+});
+
+test('o toolchain uv detecta por PATH, não por glob — o destino do uv varia por instalador', () => {
+  const uv = createProfileCatalog()
+    .get('analyst')
+    .toolchains.find((t) => t.id === 'uv');
+  expect(uv?.detectBinary).toBe('uvx');
+  expect(uv?.detect).toBeUndefined();
 });

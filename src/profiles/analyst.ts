@@ -1,5 +1,5 @@
 import type { ProfileDefinition } from '../core/environment.js';
-import { pythonToolchain } from './toolchains.js';
+import { pythonToolchain, uvToolchain } from './toolchains.js';
 import { postgresMcp, excelMcp } from './mcps.js';
 import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 
@@ -12,7 +12,7 @@ import { ANALYTICS_AUTO_APPROVE } from './auto-approve.js';
 export const analystProfile: ProfileDefinition = {
   profile: 'analyst',
   languages: ['python', 'sql'],
-  toolchains: [pythonToolchain],
+  toolchains: [pythonToolchain, uvToolchain],
   frameworks: ['pandas', 'jupyter'],
   mcps: [postgresMcp, excelMcp],
   inheritGlobalMcpIds: ['excel'],

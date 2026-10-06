@@ -309,3 +309,12 @@ test('installOpencodeGlobal: n8n → ask nas tools que mexem em estado, preserva
 
   rmSync(d, { recursive: true, force: true });
 });
+
+test('NIO_AI_OUTPUT acomoda o reasoning do modelo — 2048 esvaziava o content', () => {
+  // Medido contra o backend: numa pergunta técnica real o raciocínio sozinho gastou
+  // 2048/2048 tokens, `content` voltou vazio e `finish_reason` foi 'length'. O teto é
+  // orçamento COMPARTILHADO entre reasoning e resposta; abaixo de 4096 não fecha.
+  expect(NIO_AI_OUTPUT).toBeGreaterThanOrEqual(4096);
+  // E o teto maior não pode reabrir o loop de auto-compactação.
+  expect(contextConfigWarning(NIO_AI_CONTEXT, NIO_AI_OUTPUT)).toBeNull();
+});

@@ -13,6 +13,7 @@ import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { writeJson } from '../file-merge.js';
+import { binaryOnPath } from '../proc.js';
 import { mergeToolBudget } from './tool-budget.js';
 import { brand, envName } from '../../brand.js';
 import type { McpSpec, ProfileDefinition } from '../../core/environment.js';
@@ -235,6 +236,31 @@ export interface NioConfigResult {
   path: string;
   /** Ids de `inheritGlobalMcpIds` que não existem no global — o caller avisa. */
   missingInherited: string[];
+  /** MCPs declarados cujo launcher não está no PATH — subiriam e morreriam calados. */
+  missingBinaries: McpBinaryGap[];
+}
+
+/** Um MCP declarado e o binário que falta pra ele subir. */
+export interface McpBinaryGap {
+  id: string;
+  binary: string;
+}
+
+/**
+ * MCP local escrito no config mas sem launcher no host. É o modo de falha que custou
+ * uma sessão: o `excel` saía declarado e correto, o `uvx` não existia na máquina, e o
+ * MCP sumia sem uma linha de diagnóstico. Só `type: 'local'` — remoto não tem binário.
+ */
+export function missingMcpBinaries(mcp: Record<string, unknown>): McpBinaryGap[] {
+  const gaps: McpBinaryGap[] = [];
+  for (const [id, entry] of Object.entries(mcp)) {
+    const command = (entry as { command?: unknown }).command;
+    if (!Array.isArray(command)) continue;
+    const binary = command[0];
+    if (typeof binary !== 'string' || binaryOnPath(binary)) continue;
+    gaps.push({ id, binary });
+  }
+  return gaps;
 }
 
 /**
@@ -259,5 +285,11 @@ export function installNioOpencodeConfig(profile: Profile | null): NioConfigResu
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(nioOperatorInstructionPath(), NIO_OPERATOR_INSTRUCTION, 'utf8'); // pt-BR obrigatório
   writeJson(path, cfg);
-  return { xdgDir: nioXdgConfigDir(), path, missingInherited };
+  const mcp = (cfg.mcp ?? {}) as Record<string, unknown>;
+  return {
+    xdgDir: nioXdgConfigDir(),
+    path,
+    missingInherited,
+    missingBinaries: missingMcpBinaries(mcp),
+  };
 }

@@ -14,6 +14,7 @@ import { loadSession } from '../lib/auth/cli-session-store.js';
 import { SessionManager } from '../app/session-manager.js';
 import { buildProgram } from '../cli/program.js';
 import { c, sym } from '../lib/colors.js';
+import { brand } from '../brand.js';
 import { startOpencode } from './opencode.js';
 import { App } from './app.js';
 
@@ -63,7 +64,7 @@ export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
   // os MCPs do perfil (evita herdar excel/powerbi/etc. — ~50k tokens de schema por
   // request) e redireciona o XDG_CONFIG_HOME (o serve o herda via process.env).
   try {
-    const { xdgDir, missingInherited } = installNioOpencodeConfig(
+    const { xdgDir, missingInherited, missingBinaries } = installNioOpencodeConfig(
       (session?.profile as Profile) ?? null,
     );
     process.env.XDG_CONFIG_HOME = xdgDir;
@@ -71,6 +72,13 @@ export async function launchNioTui({ cwd }: { cwd: string }): Promise<number> {
     if (missingInherited.length > 0) {
       console.log(
         `  ${c.yellow(sym.warn)} MCP(s) do perfil ausentes no seu global (ignorados): ${missingInherited.join(', ')}`,
+      );
+    }
+    // Declarado mas sem launcher no host: antes disso o MCP só não aparecia.
+    for (const gap of missingBinaries) {
+      console.log(
+        `  ${c.yellow(sym.warn)} MCP ${gap.id} não vai subir: \`${gap.binary}\` não está no PATH. ` +
+          `Rode \`${brand.name} deps\` ou instale o pré-requisito.`,
       );
     }
     // Modo do Power BI explícito: sem isto o usuário não sabe se está falando com o

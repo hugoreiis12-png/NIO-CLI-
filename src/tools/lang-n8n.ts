@@ -8,9 +8,13 @@
  *
  * Credenciais só do env (`N8N_API_URL`, `N8N_API_KEY`); a chave nunca entra em
  * mensagem de erro. Handlers puros: `fetch` e env injetáveis pra teste.
+ *
+ * O protocolo da URL é decidido por `lib/url-trust`: https sempre, http só em
+ * localhost ou IP de rede privada (instância self-hosted na LAN).
  */
 import type { Tool, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { jsonResult, errorResult } from '../lib/tool-result.js';
+import { isTransportTrusted, PLAIN_HTTP_HINT } from '../lib/url-trust.js';
 
 const READ_ACTIONS = [
   'list_workflows',
@@ -27,7 +31,6 @@ const ERROR_BODY_CHARS = 300;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const CURSOR_RE = /^[A-Za-z0-9+/=_-]{1,512}$/;
 const STATUS_RE = /^[a-z]{1,20}$/;
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 export const readDefinition: Tool = {
   name: 'nio_lang_n8n',
@@ -77,7 +80,7 @@ interface N8nConfig {
   key: string;
 }
 
-/** `N8N_API_URL` → base `…/api/v1`. Aceita a URL da instância com ou sem o sufixo. */
+/** `N8N_API_URL` → base `…/api/v1`. Aceita a instância com ou sem o sufixo, http ou https. */
 function readConfig(env: NodeJS.ProcessEnv): N8nConfig | string {
   const rawUrl = env.N8N_API_URL?.trim();
   const key = env.N8N_API_KEY?.trim();
@@ -90,9 +93,7 @@ function readConfig(env: NodeJS.ProcessEnv): N8nConfig | string {
   } catch {
     return `N8N_API_URL inválida: "${rawUrl.slice(0, 40)}".`;
   }
-  const seguro =
-    url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname));
-  if (!seguro) return 'N8N_API_URL precisa ser https (http só em localhost).';
+  if (!isTransportTrusted(url)) return `N8N_API_URL precisa ser https — ${PLAIN_HTTP_HINT}.`;
   const root = url.href.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
   return { base: `${root}/api/v1`, key };
 }

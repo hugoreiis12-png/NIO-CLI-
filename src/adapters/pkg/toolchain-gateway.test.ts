@@ -51,3 +51,18 @@ test('ensure: instalador materializa o detect → installed', async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('ensure: detectBinary resolvido no PATH → present (sem glob de filesystem)', async () => {
+  // `node` roda esta suíte, então está no PATH por definição — âncora sem mock.
+  const res = await createToolchainGateway().ensure({ id: 'uv-like', detectBinary: 'node' });
+  expect(res.status).toBe('present');
+});
+
+test('ensure: detectBinary ausente no PATH e sem install → failed, não present', async () => {
+  const res = await createToolchainGateway().ensure({
+    id: 'uv-like',
+    detectBinary: 'binario-que-nao-existe-xyz-123',
+  });
+  expect(res.status).toBe('failed');
+  expect(res.error).toMatch(/sem plano/);
+});

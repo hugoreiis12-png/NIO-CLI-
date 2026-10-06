@@ -74,7 +74,7 @@ test('N8N_API_URL já com /api/v1 não duplica o sufixo', async () => {
   expect(chamadas[0]!.url).toBe('https://n8n.example.com/api/v1/executions/e1');
 });
 
-test('URL insegura é recusada; http só em loopback', async () => {
+test('URL insegura é recusada; http em loopback e LAN passa', async () => {
   const fetchSpy: Chamada[] = [];
   const f = fakeFetch(200, {}, fetchSpy);
   const remoto = await handleLangN8n(
@@ -87,6 +87,13 @@ test('URL insegura é recusada; http só em loopback', async () => {
     { env: { ...ENV, N8N_API_URL: 'http://localhost:5678' }, fetch: f },
   );
   expect(local.isError).toBeUndefined();
+  // ACEITE: instância self-hosted num IP de LAN fala http sem exigir TLS.
+  const lan = await handleLangN8n(
+    { action: 'list_workflows' },
+    { env: { ...ENV, N8N_API_URL: 'http://192.168.1.50:5678' }, fetch: f },
+  );
+  expect(lan.isError).toBeUndefined();
+  expect(fetchSpy.at(-1)!.url).toStartWith('http://192.168.1.50:5678/api/v1/');
 });
 
 test('ids e parâmetros maliciosos não viram caminho nem query', async () => {

@@ -67,11 +67,15 @@ test('normalizeNativeUrl: aceita com e sem o sufixo, idempotente, sem barra dupl
   expect(normalizeNativeUrl(`${URL_BASE}/mcp-server/http`)).toBe(`${URL_BASE}/mcp-server/http`);
 });
 
-test('normalizeNativeUrl: recusa http fora de loopback, aceita localhost, recusa lixo', () => {
+test('normalizeNativeUrl: recusa http público, aceita localhost e LAN, recusa lixo', () => {
   expect(normalizeNativeUrl('http://n8n.example.com')).toEqual({
-    error: 'a URL precisa ser https (http só em localhost).',
+    error: 'a URL precisa ser https — http só em localhost ou IP de rede privada (LAN).',
   });
   expect(normalizeNativeUrl('http://localhost:5678')).toBe('http://localhost:5678/mcp-server/http');
+  // Mesma política do `nio_lang_n8n`: instância self-hosted num IP de LAN.
+  expect(normalizeNativeUrl('http://192.168.1.50:5678')).toBe(
+    'http://192.168.1.50:5678/mcp-server/http',
+  );
   expect(normalizeNativeUrl('nao-e-url')).toHaveProperty('error');
   expect(normalizeNativeUrl('   ')).toEqual({ error: 'URL vazia.' });
 });

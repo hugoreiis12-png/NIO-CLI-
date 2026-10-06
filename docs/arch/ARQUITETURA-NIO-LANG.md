@@ -84,6 +84,12 @@ context7). O `LanguageConfigurator` é a peça nova de scaffolding, disparada no
   `permission` do opencode). Ler nunca pede aprovação; mudar estado sempre pede.
 - **Trade-off aceito:** o `nio-lang` deixa de ser 100% sem segredo — usa
   `N8N_API_URL`/`N8N_API_KEY` do ambiente do usuário (nunca gravados em arquivo).
+- **Protocolo da URL:** política única em `lib/url-trust.ts`, compartilhada com o MCP
+  nativo (`adapters/n8n/native-client.ts`). `https` em qualquer host; `http` só em
+  `localhost` ou IP literal de rede privada (RFC1918, loopback, link-local, ULA) —
+  cobre a instância self-hosted na LAN sem deixar a chave trafegar em texto puro na
+  internet. Nome de host privado (`n8n.local`) **não** é liberado: dependeria da
+  resolução DNS/mDNS, que um vizinho de rede responde no lugar do servidor.
 - **Limite conhecido:** a API pública não tem "executar workflow"; não há ação `run`.
   O `ask` só é garantido pelo schema do config; que o opencode o **aplique** a tools de
   MCP não foi verificado de ponta a ponta (rodar um turno real e conferir o modal).
