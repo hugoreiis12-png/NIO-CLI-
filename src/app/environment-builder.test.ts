@@ -112,3 +112,59 @@ test('build sem recipe: recipeWarnings vazio, sem extra', async () => {
   expect(env.recipeWarnings).toEqual([]);
   expect(env.config.extra).toBeUndefined();
 });
+
+const PERFIS: Profile[] = ['fullstack', 'analyst', 'scientist', 'dba', 'qa', 'bi'];
+const URL_VELHA = 'postgresql://u:p@192.168.0.250:5432/postgres';
+const URL_NOVO = 'postgresql://u:p@192.168.0.142:5432/postgres';
+const PG_URL_VARS = ['NIO_PG_VELHA_URL', 'NIO_PG_NOVO_URL'] as const;
+
+/** Devolve a var ao valor anterior — `undefined` significa apagar, não setar `''`. */
+function restaura(snapshot: Record<string, string | undefined>): void {
+  for (const [key, valor] of Object.entries(snapshot)) {
+    if (valor === undefined) delete process.env[key];
+    else process.env[key] = valor;
+  }
+}
+
+/**
+ * Roda `fn` com as URLs dos Postgres de infra presentes (`urls`) ou ausentes, e
+ * **restaura** o env depois. Sem isto a mutação vaza pros outros arquivos da
+ * suíte — `bun test` compartilha o processo entre eles.
+ */
+async function comEnvDePg(urls: string[] | null, fn: () => Promise<void>): Promise<void> {
+  const antes = Object.fromEntries(PG_URL_VARS.map((k) => [k, process.env[k]]));
+  PG_URL_VARS.forEach((key, i) => {
+    if (urls) process.env[key] = urls[i];
+    else delete process.env[key];
+  });
+  try {
+    await fn();
+  } finally {
+    restaura(antes);
+  }
+}
+
+test('build: os MCPs de infra entram em TODOS os 6 perfis', async () => {
+  const esperados = ['postgres-velha', 'postgres-novo', 'dax-staff-local', 'bi-gateway-portainer'];
+  await comEnvDePg([URL_VELHA, URL_NOVO], async () => {
+    for (const perfil of PERFIS) {
+      // Gateway fake: o foco é a composição dos MCPs, não instalar toolchain de verdade.
+      const env = await new EnvironmentBuilder(undefined, fakeGateway('present')).build(perfil);
+      for (const id of esperados) {
+        expect(
+          env.mcps.some((m) => m.id === id),
+          `${perfil} perdeu ${id}`,
+        ).toBe(true);
+        expect(env.config.mcps, `${perfil} não persistiu ${id}`).toContain(id);
+      }
+    }
+  });
+});
+
+test('build: sem a env var da URL, os Postgres de infra ficam fora (os remotos ficam)', async () => {
+  await comEnvDePg(null, async () => {
+    const env = await new EnvironmentBuilder(undefined, fakeGateway('present')).build('qa');
+    expect(env.mcps.some((m) => m.id === 'postgres-velha')).toBe(false);
+    expect(env.mcps.some((m) => m.id === 'dax-staff-local')).toBe(true);
+  });
+});

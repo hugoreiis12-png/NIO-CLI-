@@ -25,6 +25,7 @@ import {
   n8nNativeMcp,
   dockerGatewayMcp,
 } from './mcps.js';
+import { infraMcps } from './mcps-infra.js';
 import { nodeToolchain, pythonToolchain } from './toolchains.js';
 
 /** Catálogo completo dos 6 perfis (`sessions.profile`). */
@@ -72,7 +73,14 @@ export const KNOWN_TOOLCHAINS: Record<string, ToolchainSpec> = Object.fromEntrie
 );
 
 export const KNOWN_MCPS: Record<string, McpSpec> = Object.fromEntries(
-  [nioLangMcp, postgresMcp, powerbiMcp, excelMcp, n8nMcp, n8nNativeMcp, dockerGatewayMcp].map(
-    (m) => [m.id, m],
-  ),
+  [
+    nioLangMcp,
+    postgresMcp,
+    powerbiMcp,
+    excelMcp,
+    n8nMcp,
+    n8nNativeMcp,
+    dockerGatewayMcp,
+    ...infraMcps(),
+  ].map((m) => [m.id, m]),
 );

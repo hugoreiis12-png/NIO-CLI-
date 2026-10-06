@@ -25,13 +25,20 @@ import type {
 import { createProfileCatalog, KNOWN_TOOLCHAINS, KNOWN_MCPS } from '../profiles/index.js';
 import { createToolchainGateway } from '../adapters/pkg/toolchain-gateway.js';
 import { nioLangMcp } from '../profiles/mcps.js';
+import { infraMcps } from '../profiles/mcps-infra.js';
 
 /**
  * MCPs presentes em TODO perfil, mesclados antes dos específicos (dedupe por
- * `id`, o perfil vence se repetir). Hoje: o `nio-lang` (server nativo de
- * linguagens), base de todos os perfis. Novo perfil herda isto automaticamente.
+ * `id`, o perfil vence se repetir). O `nio-lang` (server nativo de linguagens)
+ * mais os de infra do time (`mcps-infra.ts`). Novo perfil herda isto
+ * automaticamente.
+ *
+ * Função, não constante: os de infra dependem de env var (a URL com credencial
+ * não mora no fonte) e um módulo que lê env no topo congela o valor no import.
  */
-const BASE_MCPS: McpSpec[] = [nioLangMcp];
+function baseMcps(): McpSpec[] {
+  return [nioLangMcp, ...infraMcps()];
+}
 
 /** Junta base + perfil, sem duplicar por `id` (o perfil vence se repetir). */
 function mergeMcps(base: McpSpec[], profile: McpSpec[]): McpSpec[] {
@@ -91,7 +98,7 @@ export class EnvironmentBuilder {
       .map((r) => r.id);
 
     // MCPs: base + perfil + os da recipe.
-    let mcps = mergeMcps(BASE_MCPS, def.mcps);
+    let mcps = mergeMcps(baseMcps(), def.mcps);
     if (recipe) {
       const extra: McpSpec[] = [];
       for (const id of recipe.mcpIds) {

@@ -163,6 +163,7 @@ interface OpencodeServerEntry {
   environment?: Record<string, string>;
   headers?: Record<string, string>;
   enabled?: boolean;
+  timeout?: number;
 }
 
 /**
@@ -430,6 +431,8 @@ export const DEFAULT_OPENCODE_PERMISSION: Record<string, unknown> = {
 
 /** Monta a entrada OpenCode de um MCP, preservando campos do usuário. Remoto (`spec.url`) → `type: 'remote'`. */
 function opencodeMcpEntry(spec: McpSpec, current?: OpencodeServerEntry): OpencodeServerEntry {
+  // `timeout` só entra quando o spec declara — ausente, fica o default do cliente.
+  const timeout = spec.timeout !== undefined ? { timeout: spec.timeout } : {};
   if (spec.url) {
     return {
       type: 'remote',
@@ -437,6 +440,7 @@ function opencodeMcpEntry(spec: McpSpec, current?: OpencodeServerEntry): Opencod
       url: spec.url,
       enabled: true,
       ...(spec.headers ? { headers: { ...current?.headers, ...spec.headers } } : {}),
+      ...timeout,
     };
   }
   const entry: OpencodeServerEntry = {
@@ -444,6 +448,7 @@ function opencodeMcpEntry(spec: McpSpec, current?: OpencodeServerEntry): Opencod
     ...current,
     command: spec.command,
     enabled: true,
+    ...timeout,
   };
   if (spec.environment) {
     entry.environment = { ...current?.environment, ...spec.environment };
@@ -451,9 +456,14 @@ function opencodeMcpEntry(spec: McpSpec, current?: OpencodeServerEntry): Opencod
   return entry;
 }
 
-/** Uma entrada de MCP já está OK no `opencode.json`? (command/url batem, não desabilitada) */
+/**
+ * Uma entrada de MCP já está OK no `opencode.json`? (command/url batem, timeout
+ * declarado está gravado, não desabilitada). Sem o `timeout` aqui, mudar o teto
+ * no spec nunca chegaria ao arquivo — o `alreadyConfigured` barraria a escrita.
+ */
 function opencodeMcpOk(spec: McpSpec, cur?: OpencodeServerEntry): boolean {
   if (!cur || cur.enabled === false) return false;
+  if (spec.timeout !== undefined && cur.timeout !== spec.timeout) return false;
   return spec.url ? cur.url === spec.url : cur.command?.[0] === spec.command?.[0];
 }
 

@@ -23,6 +23,11 @@ export interface McpSpec {
   /** Só remoto: headers da request. Aceita `{env:VAR}` — o opencode resolve na leitura. */
   headers?: Record<string, string>;
   /**
+   * Teto de espera do handshake/request, em ms. Ausente = default do cliente. MCP
+   * em LAN ou que compila na 1ª chamada precisa de mais folga que o default.
+   */
+  timeout?: number;
+  /**
    * Tools que exigem aprovação humana (`permission: ask`), pelo nome SEM o prefixo do
    * server — o config grava `<id>_<tool>`. Aceita `*`. O resto fica no default do cliente.
    */

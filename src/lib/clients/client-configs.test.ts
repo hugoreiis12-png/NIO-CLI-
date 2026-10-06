@@ -318,3 +318,41 @@ test('NIO_AI_OUTPUT acomoda o reasoning do modelo — 2048 esvaziava o content',
   // E o teto maior não pode reabrir o loop de auto-compactação.
   expect(contextConfigWarning(NIO_AI_CONTEXT, NIO_AI_OUTPUT)).toBeNull();
 });
+
+const REMOTE_TIMEOUT_MCP: McpSpec = {
+  id: 'bi-gw',
+  url: 'http://10.0.0.1:8011/mcp',
+  timeout: 120_000,
+};
+const LOCAL_TIMEOUT_MCP: McpSpec = { ...PG_MCP, id: 'pg-lan', timeout: 30_000 };
+
+type McpMap = Record<string, { timeout?: number; type?: string } | undefined>;
+
+/** Entrada de MCP do config planejado — falha o teste se o id não foi gravado. */
+function entrada(next: Record<string, unknown>, id: string): { timeout?: number; type?: string } {
+  const found = (next.mcp as McpMap)[id];
+  if (!found) throw new Error(`o config planejado não tem o MCP "${id}"`);
+  return found;
+}
+
+test('planOpencodeUpdate: grava o timeout declarado no spec (local e remoto)', () => {
+  const { next } = planOpencodeUpdate({}, NIO_ENTRY, [LOCAL_TIMEOUT_MCP, REMOTE_TIMEOUT_MCP]);
+  expect(entrada(next, 'pg-lan').timeout).toBe(30_000);
+  expect(entrada(next, 'pg-lan').type).toBe('local');
+  expect(entrada(next, 'bi-gw').timeout).toBe(120_000);
+  expect(entrada(next, 'bi-gw').type).toBe('remote');
+});
+
+test('planOpencodeUpdate: spec sem timeout não inventa a chave', () => {
+  const { next } = planOpencodeUpdate({}, NIO_ENTRY, [PG_MCP]);
+  expect('timeout' in entrada(next, 'postgres')).toBe(false);
+});
+
+test('planOpencodeUpdate: mudar o timeout do spec reescreve o arquivo', () => {
+  const { next } = planOpencodeUpdate({}, NIO_ENTRY, [REMOTE_TIMEOUT_MCP]);
+  expect(planOpencodeUpdate(next, NIO_ENTRY, [REMOTE_TIMEOUT_MCP]).alreadyConfigured).toBe(true);
+  const maior = { ...REMOTE_TIMEOUT_MCP, timeout: 180_000 };
+  const replan = planOpencodeUpdate(next, NIO_ENTRY, [maior]);
+  expect(replan.alreadyConfigured).toBe(false);
+  expect(entrada(replan.next, 'bi-gw').timeout).toBe(180_000);
+});
