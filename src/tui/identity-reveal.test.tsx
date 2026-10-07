@@ -4,6 +4,7 @@ import { render } from 'ink-testing-library';
 import { envName } from '../brand.js';
 import { IDENTITY } from './identity.js';
 import { spriteSize, useIdentity, type Identity } from './identity-reveal.js';
+import { waitForText } from './test-utils.js';
 
 const NO_ANIM = envName('NO_ANIM');
 let saved: string | undefined;
@@ -41,6 +42,16 @@ function Harness({
 const card = (frames: string[]): string => frames.find((f) => f.includes('Eu sou')) ?? '';
 
 const tick = (ms = 60): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Espera a cena liberar o input — o `setCurrent(null)` só repinta no tick seguinte. */
+async function waitInactive(seen: { identity?: Identity }, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (seen.identity?.active === false) return;
+    await tick(10);
+  }
+  throw new Error(`a cena não liberou o input em ${timeoutMs}ms`);
+}
 
 test('spriteSize: medium com folga, ícone no aperto, só texto no minúsculo', () => {
   expect(spriteSize(40, 100)).toBe('medium');
@@ -89,14 +100,12 @@ test('animada: começa em suspense (sem a fala) e o Esc pula pro final', async (
   const { lastFrame, frames, stdin } = render(
     <Harness text="Quem é você?" rows={40} columns={100} seen={seen} />,
   );
-  await tick(1300);
-  const meio = lastFrame() ?? '';
-  expect(meio).toContain('Algu');
+  // Polling, não `tick(1300)`: o `t` avança por quadro, e quadro perdido atrasa a cena.
+  const meio = await waitForText(lastFrame, 'Algu', { timeoutMs: 8000 });
   expect(meio).not.toContain(`Eu sou o ${IDENTITY.agent}`);
   expect(seen.identity?.active).toBe(true);
 
   stdin.write('\u001B');
-  await tick(300);
+  await waitInactive(seen);
   expect(card(frames)).toContain(`Eu sou o ${IDENTITY.agent}.`);
-  expect(seen.identity?.active).toBe(false);
-});
+}, 15_000);

@@ -10,6 +10,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    // Só os globais de Node: @types extra fora do bun.lock mudaria o typecheck local.
+    "types": ["node"],
     "isolatedModules": true,
     "declaration": false,
     "sourceMap": true,

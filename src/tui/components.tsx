@@ -10,6 +10,7 @@ import { Markdown } from './markdown.js';
 import { PromptInput } from './prompt-input.js';
 import type { PasteStore } from './pasted-text.js';
 import { filterPalette, type PaletteItem } from './palette-source.js';
+import { LIVE_TOOLS_SHOWN } from './live-layout.js';
 import {
   messageUsage,
   summarizeToolInput,
@@ -364,7 +365,7 @@ export function LiveMessage({
   const reasoningFlat = reasoningRaw.replace(/\s+/g, ' ');
   const reasoningLines = reasoningRaw.split('\n').filter((l) => l.trim());
   const allTools = message.parts.filter((p) => p.kind === 'tool');
-  const tools = allTools.slice(-4); // só as últimas na área viva; o histórico tem todas
+  const tools = allTools.slice(-LIVE_TOOLS_SHOWN); // o histórico tem todas
   const toolsHidden = allTools.length - tools.length;
   const forks = message.parts.filter((p) => p.kind === 'fork'); // sub-agentes disparados
   // orça a altura: chrome (todo + tools + rodapé + raciocínio) sai do budget de texto

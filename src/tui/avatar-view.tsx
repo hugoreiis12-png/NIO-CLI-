@@ -24,8 +24,16 @@ export type AvatarSize = 'icon' | 'medium';
 const FRAME_COLS = 22;
 /** Intervalo do tick do spinner do App (`setFrame` a cada 90 ms). */
 const APP_TICK_MS = 90;
-/** Abaixo disso o ícone (7 linhas) + status + input + rodapé + área viva não cabem. */
-export const MIN_TERMINAL_ROWS = 32;
+/** Linhas de terminal do ícone: sprite de 28 px reduzido 2×2 e pintado em meio-bloco. */
+export const ICON_ROWS = SPRITE_H / 4;
+/**
+ * Abaixo disso o ícone não cabe junto do chrome da sessão (área viva + status +
+ * input + rodapé). Acima de 24 de propósito: 24 é o fallback de `useTerminalSize`
+ * quando o stdout não informa altura — tamanho suposto não ganha 7 linhas de sprite.
+ */
+export const MIN_TERMINAL_ROWS = 26;
+/** Portão único de altura — o App desconta `ICON_ROWS` da área viva quando ele passa. */
+export const avatarFits = (rows: number): boolean => rows >= MIN_TERMINAL_ROWS;
 
 type Pixel = string | null;
 interface Run {
@@ -133,8 +141,8 @@ export function AvatarFrame({
 }
 
 /**
- * Ícone acima do "pensando". Some quando o turno não está raciocinando ou o
- * terminal é baixo demais — nunca empurra o input pra fora da tela.
+ * Ícone acima do status. Fica de pé o turno inteiro (quem decide é o `active` do
+ * App); some em terminal baixo — nunca empurra o input pra fora da tela.
  */
 export function ThinkingAvatar({
   active,
@@ -145,7 +153,7 @@ export function ThinkingAvatar({
   frame: number;
   rows: number;
 }): React.ReactElement | null {
-  if (!active || rows < MIN_TERMINAL_ROWS) return null;
+  if (!active || !avatarFits(rows)) return null;
   const g = motionAllowed() ? Math.floor((frame * APP_TICK_MS) / ANIM.frameMs) : ANIM.settleSeed;
   const { step, i } = motionAllowed()
     ? stepAt(g)

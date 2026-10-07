@@ -10,8 +10,9 @@ import type { Command } from 'commander';
 import { renderMatrixLogo } from '../matrix-logo.js';
 import { tlog } from './debug.js';
 import { theme } from './theme.js';
-import { ThinkingAvatar } from './avatar-view.js';
+import { ICON_ROWS, ThinkingAvatar, avatarFits } from './avatar-view.js';
 import { useIdentity } from './identity-reveal.js';
+import { liveMessageLines, roomForAvatar } from './live-layout.js';
 import {
   Footer,
   MessageView,
@@ -746,7 +747,15 @@ ${enriched}`;
   // teto da área viva — encolhe quando a droplist `/` abre, pro total (live +
   // status + input + droplist + rodapé) caber e não corromper o Ink.
   const paletteMaxItems = Math.max(3, Math.min(6, rows - 16));
-  const liveMax = Math.max(3, Math.floor(rows * 0.45) - (paletteOpen ? paletteMaxItems + 3 : 0));
+  const liveCap = Math.max(3, Math.floor(rows * 0.45) - (paletteOpen ? paletteMaxItems + 3 : 0));
+  // O personagem cede, o conteúdo não: ele acompanha o turno enquanto a resposta
+  // ainda couber SEM as linhas dele, e sai de cena quando o texto precisa da tela.
+  const avatarUp =
+    chat.busy &&
+    !overlayUp &&
+    avatarFits(rows) &&
+    roomForAvatar(live ? liveMessageLines(live) : 1, liveCap, ICON_ROWS);
+  const liveMax = avatarUp ? Math.max(3, liveCap - ICON_ROWS) : liveCap;
   const inputActive = !overlayUp;
 
   // layout tipo Claude Code (Sprint 4): fluxo vertical, sem sidebar, rodapé de 1–2 linhas.
@@ -767,11 +776,7 @@ ${enriched}`;
         />
       )}
       <DiffSummary changes={chat.diff} />
-      <ThinkingAvatar
-        active={chat.busy && (phase === 'pensando' || phase === 'raciocinando')}
-        frame={frame}
-        rows={rows}
-      />
+      <ThinkingAvatar active={avatarUp} frame={frame} rows={rows} />
       <StatusLine busy={chat.busy} frame={frame} seconds={elapsed} label={phase} />
       {chat.error && <ErrorBlock error={chat.error} />}
       <Toasts toasts={chat.toasts} />
