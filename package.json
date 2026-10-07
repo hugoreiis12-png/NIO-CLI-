@@ -61,6 +61,7 @@
     "dev:mcp": "bun run src/mcp-server.ts",
     "dev:gateway": "bun run src/gateway/index.ts",
     "dev:lang": "bun run src/mcp-server-lang.ts",
+    "preview:avatar": "bun run scripts/preview-avatar.tsx",
     "dev:docker": "docker compose -f docker/docker-compose.yml up --build",
     "prepublishOnly": "npm run build"
   },

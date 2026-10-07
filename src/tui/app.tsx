@@ -10,6 +10,8 @@ import type { Command } from 'commander';
 import { renderMatrixLogo } from '../matrix-logo.js';
 import { tlog } from './debug.js';
 import { theme } from './theme.js';
+import { ThinkingAvatar } from './avatar-view.js';
+import { useIdentity } from './identity-reveal.js';
 import {
   Footer,
   MessageView,
@@ -146,6 +148,7 @@ export function App({
   // Trilha do turno em `tasks` (kind=chat): mesma persistência do worker.
   // Dispara e volta — nunca aguarda o banco (ver use-turn-task).
   const turnTask = useTurnTask({ session });
+  const identity = useIdentity(rows, columns); // "Quem é você?" → cena local, não vai pro modelo
 
   // Monitora intensidade (tokens/s) — se dispara threshold, dispara delegação (Fase 3).
   const intensityMetricsRef = useRef({ startTime: 0, tokensSoFar: 0 });
@@ -376,6 +379,7 @@ export function App({
   const send = async (text: string) => {
     if (!sessionId.current) return;
     setDraft('');
+    if (identity.tryStart(text)) return;
     const pasted = pastes.current.take(); // tokens `[Pasted text #n]` do rascunho → conteúdo real
     userTurnActive.current = true; // este turno foi pedido pelo usuário → não abortar
     setChat((prev) => pushUserMessage(prev, text)); // eco mostra o texto ORIGINAL
@@ -734,7 +738,7 @@ ${enriched}`;
     );
   }
 
-  const disabled = chat.busy || !ready;
+  const disabled = chat.busy || !ready || identity.active;
   const pendingPerm = chat.permissions[0] ?? null;
   const pendingQ = !pendingPerm ? (chat.questions[0] ?? null) : null; // permissão tem prioridade
   const overlayUp = overlay.kind !== 'none' || !!pendingPerm || !!pendingQ;
@@ -750,6 +754,8 @@ ${enriched}`;
     <Box flexDirection="column" width={columns}>
       <Static items={finished}>{(m) => <MessageView key={m.id} message={m} />}</Static>
 
+      {identity.node}
+
       {live && (
         <LiveMessage
           message={live}
@@ -761,6 +767,11 @@ ${enriched}`;
         />
       )}
       <DiffSummary changes={chat.diff} />
+      <ThinkingAvatar
+        active={chat.busy && (phase === 'pensando' || phase === 'raciocinando')}
+        frame={frame}
+        rows={rows}
+      />
       <StatusLine busy={chat.busy} frame={frame} seconds={elapsed} label={phase} />
       {chat.error && <ErrorBlock error={chat.error} />}
       <Toasts toasts={chat.toasts} />
