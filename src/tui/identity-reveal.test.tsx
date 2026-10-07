@@ -7,13 +7,17 @@ import { spriteSize, useIdentity, type Identity } from './identity-reveal.js';
 import { waitForText } from './test-utils.js';
 
 const NO_ANIM = envName('NO_ANIM');
-let saved: string | undefined;
+/** `motionAllowed` desliga a animação por DOIS motivos — o teste controla os dois. */
+const MOTION_KEYS = [NO_ANIM, 'CI'] as const;
+const saved = new Map<string, string | undefined>();
 beforeEach(() => {
-  saved = process.env[NO_ANIM];
+  for (const key of MOTION_KEYS) saved.set(key, process.env[key]);
 });
 afterEach(() => {
-  if (saved === undefined) delete process.env[NO_ANIM];
-  else process.env[NO_ANIM] = saved;
+  for (const [key, value] of saved) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 function Harness({
@@ -95,7 +99,7 @@ test('pergunta comum não dispara a cena', async () => {
 });
 
 test('animada: começa em suspense (sem a fala) e o Esc pula pro final', async () => {
-  delete process.env[NO_ANIM];
+  for (const key of MOTION_KEYS) delete process.env[key]; // sem isso o CI pula a cena inteira
   const seen: { started?: boolean; identity?: Identity } = {};
   const { lastFrame, frames, stdin } = render(
     <Harness text="Quem é você?" rows={40} columns={100} seen={seen} />,
